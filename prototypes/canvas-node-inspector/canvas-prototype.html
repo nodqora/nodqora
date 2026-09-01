@@ -1,0 +1,1984 @@
+<title>Nodqora Canvas Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+/* this gets exported as style.css and can be used for the default theming */
+/* these are the necessary styles for React/Svelte Flow, they get used by base.css and style.css */
+.react-flow {
+  direction: ltr;
+
+  --xy-edge-stroke-default: #b1b1b7;
+  --xy-edge-stroke-width-default: 1;
+  --xy-edge-stroke-selected-default: #555;
+
+  --xy-connectionline-stroke-default: #b1b1b7;
+  --xy-connectionline-stroke-width-default: 1;
+
+  --xy-attribution-background-color-default: rgba(255, 255, 255, 0.5);
+
+  --xy-minimap-background-color-default: #fff;
+  --xy-minimap-mask-background-color-default: rgba(240, 240, 240, 0.6);
+  --xy-minimap-mask-stroke-color-default: transparent;
+  --xy-minimap-mask-stroke-width-default: 1;
+  --xy-minimap-node-background-color-default: #e2e2e2;
+  --xy-minimap-node-stroke-color-default: transparent;
+  --xy-minimap-node-stroke-width-default: 2;
+
+  --xy-background-color-default: transparent;
+  --xy-background-pattern-dots-color-default: #91919a;
+  --xy-background-pattern-lines-color-default: #eee;
+  --xy-background-pattern-cross-color-default: #e2e2e2;
+  background-color: var(--xy-background-color, var(--xy-background-color-default));
+  --xy-node-color-default: inherit;
+  --xy-node-border-default: 1px solid #1a192b;
+  --xy-node-background-color-default: #fff;
+  --xy-node-group-background-color-default: rgba(240, 240, 240, 0.25);
+  --xy-node-boxshadow-hover-default: 0 1px 4px 1px rgba(0, 0, 0, 0.08);
+  --xy-node-boxshadow-selected-default: 0 0 0 0.5px #1a192b;
+  --xy-node-border-radius-default: 3px;
+
+  --xy-handle-background-color-default: #1a192b;
+  --xy-handle-border-color-default: #fff;
+
+  --xy-selection-background-color-default: rgba(0, 89, 220, 0.08);
+  --xy-selection-border-default: 1px dotted rgba(0, 89, 220, 0.8);
+
+  --xy-controls-button-background-color-default: #fefefe;
+  --xy-controls-button-background-color-hover-default: #f4f4f4;
+  --xy-controls-button-color-default: inherit;
+  --xy-controls-button-color-hover-default: inherit;
+  --xy-controls-button-border-color-default: #eee;
+  --xy-controls-box-shadow-default: 0 0 2px 1px rgba(0, 0, 0, 0.08);
+
+  --xy-edge-label-background-color-default: #ffffff;
+  --xy-edge-label-color-default: inherit;
+  --xy-resize-background-color-default: #3367d9;
+}
+.react-flow.dark {
+  --xy-edge-stroke-default: #3e3e3e;
+  --xy-edge-stroke-width-default: 1;
+  --xy-edge-stroke-selected-default: #727272;
+
+  --xy-connectionline-stroke-default: #b1b1b7;
+  --xy-connectionline-stroke-width-default: 1;
+
+  --xy-attribution-background-color-default: rgba(150, 150, 150, 0.25);
+
+  --xy-minimap-background-color-default: #141414;
+  --xy-minimap-mask-background-color-default: rgba(60, 60, 60, 0.6);
+  --xy-minimap-mask-stroke-color-default: transparent;
+  --xy-minimap-mask-stroke-width-default: 1;
+  --xy-minimap-node-background-color-default: #2b2b2b;
+  --xy-minimap-node-stroke-color-default: transparent;
+  --xy-minimap-node-stroke-width-default: 2;
+
+  --xy-background-color-default: #141414;
+  --xy-background-pattern-dots-color-default: #555;
+  --xy-background-pattern-lines-color-default: #333;
+  --xy-background-pattern-cross-color-default: #333;
+  --xy-node-color-default: #f8f8f8;
+  --xy-node-border-default: 1px solid #3c3c3c;
+  --xy-node-background-color-default: #1e1e1e;
+  --xy-node-group-background-color-default: rgba(240, 240, 240, 0.25);
+  --xy-node-boxshadow-hover-default: 0 1px 4px 1px rgba(255, 255, 255, 0.08);
+  --xy-node-boxshadow-selected-default: 0 0 0 0.5px #999;
+
+  --xy-handle-background-color-default: #bebebe;
+  --xy-handle-border-color-default: #1e1e1e;
+
+  --xy-selection-background-color-default: rgba(200, 200, 220, 0.08);
+  --xy-selection-border-default: 1px dotted rgba(200, 200, 220, 0.8);
+
+  --xy-controls-button-background-color-default: #2b2b2b;
+  --xy-controls-button-background-color-hover-default: #3e3e3e;
+  --xy-controls-button-color-default: #f8f8f8;
+  --xy-controls-button-color-hover-default: #fff;
+  --xy-controls-button-border-color-default: #5b5b5b;
+  --xy-controls-box-shadow-default: 0 0 2px 1px rgba(0, 0, 0, 0.08);
+
+  --xy-edge-label-background-color-default: #141414;
+  --xy-edge-label-color-default: #f8f8f8;
+}
+.react-flow__background {
+  background-color: var(--xy-background-color-props, var(--xy-background-color, var(--xy-background-color-default)));
+  pointer-events: none;
+  z-index: -1;
+}
+.react-flow__container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+.react-flow__pane {
+  z-index: 1;
+  touch-action: none;
+}
+.react-flow__pane.draggable {
+    cursor: grab;
+  }
+.react-flow__pane.dragging {
+    cursor: grabbing;
+  }
+.react-flow__pane.selection {
+    cursor: pointer;
+  }
+.react-flow__viewport {
+  transform-origin: 0 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.react-flow__renderer {
+  z-index: 4;
+}
+.react-flow__selection {
+  z-index: 6;
+}
+.react-flow__nodesselection-rect:focus,
+.react-flow__nodesselection-rect:focus-visible {
+  outline: none;
+}
+.react-flow__edge-path {
+  stroke: var(--xy-edge-stroke, var(--xy-edge-stroke-default));
+  stroke-width: var(--xy-edge-stroke-width, var(--xy-edge-stroke-width-default));
+  fill: none;
+}
+.react-flow__connection-path {
+  stroke: var(--xy-connectionline-stroke, var(--xy-connectionline-stroke-default));
+  stroke-width: var(--xy-connectionline-stroke-width, var(--xy-connectionline-stroke-width-default));
+  fill: none;
+}
+.react-flow .react-flow__edges {
+  position: absolute;
+}
+.react-flow .react-flow__edges svg {
+    overflow: visible;
+    position: absolute;
+    pointer-events: none;
+  }
+.react-flow__edge {
+  pointer-events: visibleStroke;
+}
+.react-flow__edge.selectable {
+    cursor: pointer;
+  }
+.react-flow__edge.animated path {
+    stroke-dasharray: 5;
+    animation: dashdraw 0.5s linear infinite;
+  }
+.react-flow__edge.animated path.react-flow__edge-interaction {
+    stroke-dasharray: none;
+    animation: none;
+  }
+.react-flow__edge.inactive {
+    pointer-events: none;
+  }
+.react-flow__edge.selected,
+  .react-flow__edge:focus,
+  .react-flow__edge:focus-visible {
+    outline: none;
+  }
+.react-flow__edge.selected .react-flow__edge-path,
+  .react-flow__edge.selectable:focus .react-flow__edge-path,
+  .react-flow__edge.selectable:focus-visible .react-flow__edge-path {
+    stroke: var(--xy-edge-stroke-selected, var(--xy-edge-stroke-selected-default));
+  }
+.react-flow__edge-textwrapper {
+    pointer-events: all;
+  }
+.react-flow__edge .react-flow__edge-text {
+    pointer-events: none;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+  }
+/* Arrowhead marker styles - use CSS custom properties as default */
+.react-flow__arrowhead polyline {
+  stroke: var(--xy-edge-stroke, var(--xy-edge-stroke-default));
+}
+.react-flow__arrowhead polyline.arrowclosed {
+  fill: var(--xy-edge-stroke, var(--xy-edge-stroke-default));
+}
+.react-flow__connection {
+  pointer-events: none;
+}
+.react-flow__connection .animated {
+    stroke-dasharray: 5;
+    animation: dashdraw 0.5s linear infinite;
+  }
+svg.react-flow__connectionline {
+  z-index: 1001;
+  overflow: visible;
+  position: absolute;
+}
+.react-flow__nodes {
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.react-flow__node {
+  position: absolute;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  pointer-events: all;
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  cursor: default;
+}
+.react-flow__node.selectable {
+    cursor: pointer;
+  }
+.react-flow__node.draggable {
+    cursor: grab;
+    pointer-events: all;
+  }
+.react-flow__node.draggable.dragging {
+      cursor: grabbing;
+    }
+.react-flow__nodesselection {
+  z-index: 3;
+  transform-origin: left top;
+  pointer-events: none;
+}
+.react-flow__nodesselection-rect {
+    position: absolute;
+    pointer-events: all;
+    cursor: grab;
+  }
+.react-flow__handle {
+  position: absolute;
+  pointer-events: none;
+  min-width: 5px;
+  min-height: 5px;
+  width: 6px;
+  height: 6px;
+  background-color: var(--xy-handle-background-color, var(--xy-handle-background-color-default));
+  border: 1px solid var(--xy-handle-border-color, var(--xy-handle-border-color-default));
+  border-radius: 100%;
+}
+.react-flow__handle.connectingfrom {
+    pointer-events: all;
+  }
+.react-flow__handle.connectionindicator {
+    pointer-events: all;
+    cursor: crosshair;
+  }
+.react-flow__handle-bottom {
+    top: auto;
+    left: 50%;
+    bottom: 0;
+    transform: translate(-50%, 50%);
+  }
+.react-flow__handle-top {
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+.react-flow__handle-left {
+    top: 50%;
+    left: 0;
+    transform: translate(-50%, -50%);
+  }
+.react-flow__handle-right {
+    top: 50%;
+    right: 0;
+    transform: translate(50%, -50%);
+  }
+.react-flow__edgeupdater {
+  cursor: move;
+  pointer-events: all;
+}
+.react-flow__pane.selection .react-flow__panel {
+  pointer-events: none;
+}
+.react-flow__panel {
+  position: absolute;
+  z-index: 5;
+  margin: 15px;
+}
+.react-flow__panel.top {
+    top: 0;
+  }
+.react-flow__panel.bottom {
+    bottom: 0;
+  }
+.react-flow__panel.top.center, .react-flow__panel.bottom.center {
+      left: 50%;
+      transform: translateX(-15px) translateX(-50%);
+    }
+.react-flow__panel.left {
+    left: 0;
+  }
+.react-flow__panel.right {
+    right: 0;
+  }
+.react-flow__panel.left.center, .react-flow__panel.right.center {
+      top: 50%;
+      transform: translateY(-15px) translateY(-50%);
+    }
+.react-flow__attribution {
+  font-size: 10px;
+  background: var(--xy-attribution-background-color, var(--xy-attribution-background-color-default));
+  padding: 2px 3px;
+  margin: 0;
+}
+.react-flow__attribution a {
+    text-decoration: none;
+    color: #999;
+  }
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+}
+.react-flow__edgelabel-renderer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  left: 0;
+  top: 0;
+}
+.react-flow__viewport-portal {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+.react-flow__minimap {
+  background: var(
+    --xy-minimap-background-color-props,
+    var(--xy-minimap-background-color, var(--xy-minimap-background-color-default))
+  );
+}
+.react-flow__minimap-svg {
+    display: block;
+  }
+.react-flow__minimap-mask {
+    fill: var(
+      --xy-minimap-mask-background-color-props,
+      var(--xy-minimap-mask-background-color, var(--xy-minimap-mask-background-color-default))
+    );
+    stroke: var(
+      --xy-minimap-mask-stroke-color-props,
+      var(--xy-minimap-mask-stroke-color, var(--xy-minimap-mask-stroke-color-default))
+    );
+    stroke-width: var(
+      --xy-minimap-mask-stroke-width-props,
+      var(--xy-minimap-mask-stroke-width, var(--xy-minimap-mask-stroke-width-default))
+    );
+  }
+.react-flow__minimap-node {
+    fill: var(
+      --xy-minimap-node-background-color-props,
+      var(--xy-minimap-node-background-color, var(--xy-minimap-node-background-color-default))
+    );
+    stroke: var(
+      --xy-minimap-node-stroke-color-props,
+      var(--xy-minimap-node-stroke-color, var(--xy-minimap-node-stroke-color-default))
+    );
+    stroke-width: var(
+      --xy-minimap-node-stroke-width-props,
+      var(--xy-minimap-node-stroke-width, var(--xy-minimap-node-stroke-width-default))
+    );
+  }
+.react-flow__background-pattern.dots {
+    fill: var(
+      --xy-background-pattern-color-props,
+      var(--xy-background-pattern-color, var(--xy-background-pattern-dots-color-default))
+    );
+  }
+.react-flow__background-pattern.lines {
+    stroke: var(
+      --xy-background-pattern-color-props,
+      var(--xy-background-pattern-color, var(--xy-background-pattern-lines-color-default))
+    );
+  }
+.react-flow__background-pattern.cross {
+    stroke: var(
+      --xy-background-pattern-color-props,
+      var(--xy-background-pattern-color, var(--xy-background-pattern-cross-color-default))
+    );
+  }
+.react-flow__controls {
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--xy-controls-box-shadow, var(--xy-controls-box-shadow-default));
+}
+.react-flow__controls.horizontal {
+    flex-direction: row;
+  }
+.react-flow__controls-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 26px;
+    width: 26px;
+    padding: 4px;
+    border: none;
+    background: var(--xy-controls-button-background-color, var(--xy-controls-button-background-color-default));
+    border-bottom: 1px solid
+      var(
+        --xy-controls-button-border-color-props,
+        var(--xy-controls-button-border-color, var(--xy-controls-button-border-color-default))
+      );
+    color: var(
+      --xy-controls-button-color-props,
+      var(--xy-controls-button-color, var(--xy-controls-button-color-default))
+    );
+    cursor: pointer;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+  }
+.react-flow__controls-button svg {
+      width: 100%;
+      max-width: 12px;
+      max-height: 12px;
+      fill: currentColor;
+    }
+.react-flow__edge.updating .react-flow__edge-path {
+      stroke: #777;
+    }
+.react-flow__edge-text {
+    font-size: 10px;
+  }
+.react-flow__node.selectable:focus,
+  .react-flow__node.selectable:focus-visible {
+    outline: none;
+  }
+.react-flow__node-input,
+.react-flow__node-default,
+.react-flow__node-output,
+.react-flow__node-group {
+  padding: 10px;
+  border-radius: var(--xy-node-border-radius, var(--xy-node-border-radius-default));
+  width: 150px;
+  font-size: 12px;
+  color: var(--xy-node-color, var(--xy-node-color-default));
+  text-align: center;
+  border: var(--xy-node-border, var(--xy-node-border-default));
+  background-color: var(--xy-node-background-color, var(--xy-node-background-color-default));
+}
+.react-flow__node-input.selectable:hover, .react-flow__node-default.selectable:hover, .react-flow__node-output.selectable:hover, .react-flow__node-group.selectable:hover {
+      box-shadow: var(--xy-node-boxshadow-hover, var(--xy-node-boxshadow-hover-default));
+    }
+.react-flow__node-input.selectable.selected,
+    .react-flow__node-input.selectable:focus,
+    .react-flow__node-input.selectable:focus-visible,
+    .react-flow__node-default.selectable.selected,
+    .react-flow__node-default.selectable:focus,
+    .react-flow__node-default.selectable:focus-visible,
+    .react-flow__node-output.selectable.selected,
+    .react-flow__node-output.selectable:focus,
+    .react-flow__node-output.selectable:focus-visible,
+    .react-flow__node-group.selectable.selected,
+    .react-flow__node-group.selectable:focus,
+    .react-flow__node-group.selectable:focus-visible {
+      box-shadow: var(--xy-node-boxshadow-selected, var(--xy-node-boxshadow-selected-default));
+    }
+.react-flow__node-group {
+  background-color: var(--xy-node-group-background-color, var(--xy-node-group-background-color-default));
+}
+.react-flow__nodesselection-rect,
+.react-flow__selection {
+  background: var(--xy-selection-background-color, var(--xy-selection-background-color-default));
+  border: var(--xy-selection-border, var(--xy-selection-border-default));
+}
+.react-flow__nodesselection-rect:focus,
+  .react-flow__nodesselection-rect:focus-visible,
+  .react-flow__selection:focus,
+  .react-flow__selection:focus-visible {
+    outline: none;
+  }
+.react-flow__controls-button:hover {
+      background: var(
+        --xy-controls-button-background-color-hover-props,
+        var(--xy-controls-button-background-color-hover, var(--xy-controls-button-background-color-hover-default))
+      );
+      color: var(
+        --xy-controls-button-color-hover-props,
+        var(--xy-controls-button-color-hover, var(--xy-controls-button-color-hover-default))
+      );
+    }
+.react-flow__controls-button:disabled {
+      pointer-events: none;
+    }
+.react-flow__controls-button:disabled svg {
+        fill-opacity: 0.4;
+      }
+.react-flow__controls-button:last-child {
+    border-bottom: none;
+  }
+.react-flow__controls.horizontal .react-flow__controls-button {
+    border-bottom: none;
+    border-right: 1px solid
+      var(
+        --xy-controls-button-border-color-props,
+        var(--xy-controls-button-border-color, var(--xy-controls-button-border-color-default))
+      );
+  }
+.react-flow__controls.horizontal .react-flow__controls-button:last-child {
+    border-right: none;
+  }
+.react-flow__resize-control {
+  position: absolute;
+}
+.react-flow__resize-control.left,
+.react-flow__resize-control.right {
+  cursor: ew-resize;
+}
+.react-flow__resize-control.top,
+.react-flow__resize-control.bottom {
+  cursor: ns-resize;
+}
+.react-flow__resize-control.top.left,
+.react-flow__resize-control.bottom.right {
+  cursor: nwse-resize;
+}
+.react-flow__resize-control.bottom.left,
+.react-flow__resize-control.top.right {
+  cursor: nesw-resize;
+}
+/* handle styles */
+.react-flow__resize-control.handle {
+  width: 5px;
+  height: 5px;
+  border: 1px solid #fff;
+  border-radius: 1px;
+  background-color: var(--xy-resize-background-color, var(--xy-resize-background-color-default));
+  translate: -50% -50%;
+}
+.react-flow__resize-control.handle.left {
+  left: 0;
+  top: 50%;
+}
+.react-flow__resize-control.handle.right {
+  left: 100%;
+  top: 50%;
+}
+.react-flow__resize-control.handle.top {
+  left: 50%;
+  top: 0;
+}
+.react-flow__resize-control.handle.bottom {
+  left: 50%;
+  top: 100%;
+}
+.react-flow__resize-control.handle.top.left {
+  left: 0;
+}
+.react-flow__resize-control.handle.bottom.left {
+  left: 0;
+}
+.react-flow__resize-control.handle.top.right {
+  left: 100%;
+}
+.react-flow__resize-control.handle.bottom.right {
+  left: 100%;
+}
+/* line styles */
+.react-flow__resize-control.line {
+  border-color: var(--xy-resize-background-color, var(--xy-resize-background-color-default));
+  border-width: 0;
+  border-style: solid;
+}
+.react-flow__resize-control.line.left,
+.react-flow__resize-control.line.right {
+  width: 1px;
+  transform: translate(-50%, 0);
+  top: 0;
+  height: 100%;
+}
+.react-flow__resize-control.line.left {
+  left: 0;
+  border-left-width: 1px;
+}
+.react-flow__resize-control.line.right {
+  left: 100%;
+  border-right-width: 1px;
+}
+.react-flow__resize-control.line.top,
+.react-flow__resize-control.line.bottom {
+  height: 1px;
+  transform: translate(0, -50%);
+  left: 0;
+  width: 100%;
+}
+.react-flow__resize-control.line.top {
+  top: 0;
+  border-top-width: 1px;
+}
+.react-flow__resize-control.line.bottom {
+  border-bottom-width: 1px;
+  top: 100%;
+}
+.react-flow__edge-textbg {
+  fill: var(--xy-edge-label-background-color, var(--xy-edge-label-background-color-default));
+}
+.react-flow__edge-text {
+  fill: var(--xy-edge-label-color, var(--xy-edge-label-color-default));
+}
+
+</style>
+
+<style>
+/* ============================================================
+   PROTOTYPE — throwaway. Answers issue #7 only.
+   Three variants of the Nodqora canvas + node inspector over
+   the reference pipeline (docs/reference-pipeline.md),
+   switchable via ?variant= and the bottom bar.
+   ============================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  --ground: #F4F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F7;
+  --line: #DBE2EC;
+  --line-strong: #BFCBDA;
+  --ink: #0F1724;
+  --ink-2: #3B4A5E;
+  --muted: #66768C;
+  --accent: #2F5FD0;
+  --accent-soft: #E5EBFA;
+  --canvas: #EAEFF5;
+  --canvas-dot: #CBD5E1;
+  --shadow: 0 1px 2px rgba(15,23,36,.06), 0 8px 24px rgba(15,23,36,.08);
+  --shadow-lift: 0 2px 4px rgba(15,23,36,.08), 0 16px 40px rgba(15,23,36,.14);
+
+  --h-healthy: #157F4C;   --h-healthy-bg: #E1F2E9;
+  --h-degraded: #A66808;  --h-degraded-bg: #FAEDD8;
+  --h-unhealthy: #BE352C; --h-unhealthy-bg: #FBE5E3;
+  --h-unknown: #6D7C8E;   --h-unknown-bg: #EBEFF4;
+  --h-disabled: #67509E;  --h-disabled-bg: #EEE8F8;
+
+  --lane-a: #F2F5FA;
+  --lane-b: #F7F3FA;
+  --lane-c: #F3F4F6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0B1017;
+    --surface: #141B25;
+    --surface-2: #1A2330;
+    --line: #26313F;
+    --line-strong: #3A4859;
+    --ink: #E2E9F2;
+    --ink-2: #B2BFD0;
+    --muted: #8494A8;
+    --accent: #7398F2;
+    --accent-soft: #1A2842;
+    --canvas: #0E141C;
+    --canvas-dot: #212B39;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+    --shadow-lift: 0 2px 4px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.6);
+
+    --h-healthy: #47BE87;   --h-healthy-bg: #123021;
+    --h-degraded: #DFA23C;  --h-degraded-bg: #32250E;
+    --h-unhealthy: #EF7269; --h-unhealthy-bg: #37191A;
+    --h-unknown: #7F8EA2;   --h-unknown-bg: #1C242E;
+    --h-disabled: #A88DDF;  --h-disabled-bg: #221B34;
+
+    --lane-a: #121A25;
+    --lane-b: #181523;
+    --lane-c: #14181F;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0B1017;
+  --surface: #141B25;
+  --surface-2: #1A2330;
+  --line: #26313F;
+  --line-strong: #3A4859;
+  --ink: #E2E9F2;
+  --ink-2: #B2BFD0;
+  --muted: #8494A8;
+  --accent: #7398F2;
+  --accent-soft: #1A2842;
+  --canvas: #0E141C;
+  --canvas-dot: #212B39;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+  --shadow-lift: 0 2px 4px rgba(0,0,0,.5), 0 16px 40px rgba(0,0,0,.6);
+
+  --h-healthy: #47BE87;   --h-healthy-bg: #123021;
+  --h-degraded: #DFA23C;  --h-degraded-bg: #32250E;
+  --h-unhealthy: #EF7269; --h-unhealthy-bg: #37191A;
+  --h-unknown: #7F8EA2;   --h-unknown-bg: #1C242E;
+  --h-disabled: #A88DDF;  --h-disabled-bg: #221B34;
+
+  --lane-a: #121A25;
+  --lane-b: #181523;
+  --lane-c: #14181F;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100dvh; display: flex; flex-direction: column; }
+
+.mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.eyebrow {
+  font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- top rail (shared across variants) ---------- */
+
+.rail {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 20px;
+  padding: 0 16px; height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+}
+.rail-brand { display: flex; flex-direction: column; gap: 1px; padding-right: 4px; }
+.rail-brand b { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+.rail-spacer { flex: 1; }
+.rail-group { display: flex; align-items: center; gap: 8px; }
+.rail-group > .eyebrow { white-space: nowrap; }
+
+.seg { display: flex; background: var(--surface-2); border-radius: 7px; padding: 2px; gap: 2px; }
+.seg button {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 4px 10px; border-radius: 5px; font-size: 12.5px; font-weight: 500;
+  color: var(--ink-2); white-space: nowrap;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(15,23,36,.12); font-weight: 600; }
+.seg button:disabled { opacity: .38; cursor: not-allowed; }
+
+.toggle {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); border-radius: 7px;
+  padding: 5px 10px; font-size: 12.5px; font-weight: 500;
+}
+.toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.toggle .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.toggle[aria-pressed="true"] .dot { background: var(--accent); }
+
+.counts { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.counts b { color: var(--ink-2); font-weight: 600; }
+
+/* ---------- canvas ---------- */
+
+.stage { flex: 1; min-height: 0; position: relative; display: flex; }
+.canvas-wrap { flex: 1; min-width: 0; position: relative; background: var(--canvas); }
+.react-flow__attribution { display: none; }
+.react-flow__node { font-family: inherit; }
+.react-flow__handle { opacity: 0; pointer-events: none; }
+.react-flow__controls-button {
+  background: var(--surface); border-bottom: 1px solid var(--line); fill: var(--ink-2);
+}
+.react-flow__controls-button:hover { background: var(--surface-2); }
+.react-flow__minimap { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.react-flow__edge-text { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; fill: var(--muted); }
+.react-flow__edge-textbg { fill: var(--canvas); }
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge-path, .react-flow__edge.animated path { animation: none !important; }
+  * { transition: none !important; }
+}
+
+/* ---------- health glyph ---------- */
+
+.hg { flex: 0 0 auto; display: block; }
+.h-HEALTHY   { color: var(--h-healthy); }
+.h-DEGRADED  { color: var(--h-degraded); }
+.h-UNHEALTHY { color: var(--h-unhealthy); }
+.h-UNKNOWN   { color: var(--h-unknown); }
+.h-DISABLED  { color: var(--h-disabled); }
+.bg-HEALTHY   { background: var(--h-healthy-bg); }
+.bg-DEGRADED  { background: var(--h-degraded-bg); }
+.bg-UNHEALTHY { background: var(--h-unhealthy-bg); }
+.bg-UNKNOWN   { background: var(--h-unknown-bg); }
+.bg-DISABLED  { background: var(--h-disabled-bg); }
+.bd-HEALTHY   { border-color: var(--h-healthy); }
+.bd-DEGRADED  { border-color: var(--h-degraded); }
+.bd-UNHEALTHY { border-color: var(--h-unhealthy); }
+.bd-UNKNOWN   { border-color: var(--h-unknown); }
+.bd-DISABLED  { border-color: var(--h-disabled); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 7px 2px 5px; border-radius: 20px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+}
+
+/* ---------- dimming for upstream/downstream ---------- */
+.n-off { opacity: .26; filter: saturate(.4); }
+.n-up   { box-shadow: 0 0 0 2px var(--accent), var(--shadow) !important; }
+.n-down { box-shadow: 0 0 0 2px var(--h-degraded), var(--shadow) !important; }
+.n-self { box-shadow: 0 0 0 3px var(--ink), var(--shadow-lift) !important; }
+
+/* ===================== VARIANT A — Flowline ===================== */
+
+.a-node {
+  width: 210px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; cursor: pointer;
+  transition: box-shadow .12s ease, opacity .12s ease;
+}
+.a-node:hover { box-shadow: var(--shadow-lift); }
+.a-body { display: flex; gap: 9px; padding: 10px 11px; align-items: flex-start; }
+.a-rail { width: 4px; align-self: stretch; flex: 0 0 4px; }
+.a-icon { width: 22px; height: 22px; flex: 0 0 22px; color: var(--muted); margin-top: 1px; }
+.a-text { min-width: 0; flex: 1; }
+.a-name {
+  font-size: 13px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.a-type { font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.a-foot {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 7px 11px 8px 24px; border-top: 1px solid var(--line); background: var(--surface-2);
+}
+.a-metric { font-size: 10.5px; color: var(--ink-2); }
+.a-src { font-size: 9px; letter-spacing: .04em; color: var(--muted); text-transform: lowercase; }
+
+/* ---------- variant A inspector: right drawer ---------- */
+.drawer {
+  flex: 0 0 372px; width: 372px; background: var(--surface);
+  border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0;
+}
+.drawer-scroll { overflow-y: auto; padding: 0 0 28px; }
+
+/* ===================== VARIANT B — Lanes ===================== */
+
+.b-chip {
+  width: 178px; display: flex; align-items: stretch; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 1px 1px rgba(15,23,36,.05); overflow: hidden;
+  transition: box-shadow .12s ease, opacity .12s ease;
+}
+.b-chip:hover { box-shadow: var(--shadow); }
+.b-bar { width: 5px; flex: 0 0 5px; }
+.b-in { padding: 7px 9px; min-width: 0; flex: 1; }
+.b-name {
+  font-size: 12px; font-weight: 500; letter-spacing: -.005em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.b-sub { font-size: 10px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+.b-declared { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--line-strong); border-radius: 3px; padding: 0 3px; }
+
+.b-lane-label {
+  position: absolute; left: 0; padding: 6px 10px; pointer-events: none;
+  display: flex; align-items: baseline; gap: 8px; z-index: 4;
+}
+.b-lane-label b { font-size: 11.5px; font-weight: 600; }
+.b-lane-label span { font-size: 10.5px; color: var(--muted); }
+
+/* ---------- variant B inspector: bottom panel ---------- */
+.panel {
+  flex: 0 0 auto; background: var(--surface); border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(15,23,36,.06);
+  display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 0;
+  max-height: 300px; overflow: hidden;
+}
+.panel-col { padding: 14px 18px; overflow-y: auto; border-left: 1px solid var(--line); }
+.panel-col:first-child { border-left: 0; }
+
+/* ===================== VARIANT C — Console ===================== */
+
+.c-node {
+  width: 250px; cursor: pointer; border-radius: 3px;
+  border: 1px solid var(--line); border-left-width: 5px;
+  background: var(--surface); box-shadow: var(--shadow);
+  transition: box-shadow .12s ease, opacity .12s ease; overflow: hidden;
+}
+.c-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 6px; }
+.c-icon { width: 15px; height: 15px; flex: 0 0 15px; }
+.c-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-state { font-size: 9.5px; font-weight: 700; letter-spacing: .07em; }
+.c-signal {
+  padding: 5px 10px 8px; font-size: 10.5px; line-height: 1.4; color: var(--ink-2);
+  border-top: 1px dashed var(--line);
+}
+.c-signal .k { color: var(--muted); }
+
+/* ---------- variant C inspector: anchored popover ---------- */
+.pop {
+  position: absolute; width: 336px; max-height: 74%; z-index: 20;
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: 10px; box-shadow: var(--shadow-lift);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.pop-scroll { overflow-y: auto; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--line); padding: 0 12px; flex: 0 0 auto; }
+.tabs button {
+  border: 0; background: transparent; cursor: pointer; padding: 8px 10px;
+  font-size: 12px; font-weight: 500; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+/* ---------- shared inspector internals ---------- */
+
+.ins-head { padding: 16px 18px 14px; border-bottom: 1px solid var(--line); }
+.ins-title { font-size: 16px; font-weight: 600; letter-spacing: -.015em; line-height: 1.2; text-wrap: balance; }
+.ins-key { font-size: 11px; color: var(--muted); margin-top: 3px; word-break: break-all; }
+.ins-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ins-close {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px;
+  width: 26px; height: 26px; cursor: pointer; line-height: 1; font-size: 15px; color: var(--muted);
+  display: grid; place-items: center; flex: 0 0 auto;
+}
+.ins-close:hover { background: var(--surface-2); color: var(--ink); }
+
+.sec { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.sec:last-child { border-bottom: 0; }
+.sec > .eyebrow { margin-bottom: 8px; display: block; }
+
+.health-block { display: flex; gap: 10px; align-items: flex-start; padding: 10px 11px; border-radius: 8px; }
+.health-block .hb-t { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+.health-block .hb-s { font-size: 11.5px; margin-top: 3px; color: var(--ink-2); }
+
+.kv { display: grid; grid-template-columns: minmax(88px, auto) 1fr; gap: 4px 12px; font-size: 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; color: var(--ink-2); word-break: break-word; }
+.kv dd.num { font-variant-numeric: tabular-nums; }
+
+.rel { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; font-size: 12px; }
+.rel + .rel { border-top: 1px dotted var(--line); }
+.rel .verb { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.rel .peer { font-weight: 500; word-break: break-all; }
+.rel button { border: 0; background: none; padding: 0; cursor: pointer; text-align: left; color: var(--accent); }
+.rel button:hover { text-decoration: underline; }
+
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.link-btn {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px;
+  padding: 5px 9px; font-size: 11.5px; color: var(--ink-2); font-weight: 500;
+}
+.link-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.link-btn .rel-tag { font-size: 9px; color: var(--muted); letter-spacing: .04em; }
+
+.empty {
+  font-size: 11.5px; color: var(--muted); font-style: italic;
+  border: 1px dashed var(--line-strong); border-radius: 6px; padding: 8px 10px; background: var(--surface-2);
+}
+
+.tag {
+  display: inline-flex; align-items: center; border-radius: 4px; padding: 1px 5px;
+  font-size: 10px; letter-spacing: .03em; background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.backing { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; padding: 4px 0; }
+.backing + .backing { border-top: 1px dotted var(--line); }
+.backing .bk-kind { color: var(--muted); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ink-2); }
+
+/* ---------- prototype switcher (deliberately foreign) ---------- */
+
+.switcher {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 100; display: flex; align-items: center; gap: 2px;
+  background: #0B0F16; color: #F2F5FA; border: 1px solid #333F50;
+  border-radius: 999px; padding: 4px; box-shadow: 0 8px 28px rgba(0,0,0,.42);
+}
+.switcher button {
+  border: 0; background: transparent; color: #C9D3E2; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 999px; font-size: 15px; line-height: 1;
+  display: grid; place-items: center;
+}
+.switcher button:hover { background: #1D2634; color: #fff; }
+.switcher .label {
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 500;
+  padding: 0 12px; white-space: nowrap; letter-spacing: .01em;
+}
+.switcher .label b { color: #FFD37A; font-weight: 600; }
+.switcher .hint { font-size: 10px; color: #7A889C; padding-right: 8px; letter-spacing: .03em; }
+
+/* ---------- notes strip ---------- */
+.note {
+  position: absolute; top: 12px; left: 12px; z-index: 4; max-width: 380px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; box-shadow: var(--shadow); font-size: 11.5px; color: var(--ink-2);
+}
+.note b { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .drawer { position: absolute; right: 0; top: 0; bottom: 0; z-index: 30; }
+  .panel { grid-template-columns: 1fr; max-height: 46%; }
+  .panel-col { border-left: 0; border-top: 1px solid var(--line); }
+}
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+  // @xyflow/react's UMD build expects a `jsxRuntime` global. React's UMD does not
+  // ship one, so shim it onto createElement. createElement only overrides
+  // props.children when given extra arguments, so passing props straight through
+  // is an exact translation.
+  (function () {
+    function jsx(type, props, key) {
+      return React.createElement(type, key === undefined ? props : Object.assign({}, props, { key: key }));
+    }
+    window.jsxRuntime = { jsx: jsx, jsxs: jsx, jsxDEV: jsx, Fragment: React.Fragment };
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@xyflow/react@12.11.6/dist/umd/index.js"></script>
+
+<script>
+(function () {
+"use strict";
+
+var h = React.createElement;
+var Fragment = React.Fragment;
+var useState = React.useState, useMemo = React.useMemo, useCallback = React.useCallback,
+    useEffect = React.useEffect, useRef = React.useRef;
+
+var XY = window.ReactFlow;
+var Position = XY.Position, MarkerType = XY.MarkerType;
+
+/* ============================================================
+   1. THE REFERENCE PIPELINE  (docs/reference-pipeline.md)
+   Shapes follow CONTEXT.md exactly: edges are stored
+   flow-directed (ADR-0002), backings carry a technology-domain
+   plugin (ADR-0005/0013), provenance is per-node sources[]
+   (ADR-0008), metadata is slow / metrics are fast (ADR-0003/6).
+   ============================================================ */
+
+var OWNERS = {
+  "payments-platform": { key: "payments-platform", displayName: "Payments Platform", channel: "#payments-oncall", onCall: "Payments SRE" },
+  "data-platform":     { key: "data-platform",     displayName: "Data Platform",     channel: "#data-platform",   onCall: "Data Platform SRE" }
+};
+
+var TYPES = {
+  "service":             { label: "Service",              category: "application", icon: "service",   source: "kubernetes" },
+  "kafka-topic":         { label: "Kafka topic",          category: "messaging",   icon: "topic",     source: "kafka" },
+  "connect-connector":   { label: "Connect connector",    category: "integration", icon: "connector", source: "connect" },
+  "elasticsearch-index": { label: "Elasticsearch index",  category: "search",      icon: "index",     source: "yaml" },
+  "iceberg-table":       { label: "Iceberg table",        category: "lakehouse",   icon: "table",     source: "yaml" },
+  "query-engine":        { label: "Query engine",         category: "analytics",   icon: "engine",    source: "yaml" },
+  "external-api":        { label: "External API",         category: "external",    icon: "external",  source: "yaml" }
+};
+
+var RELATIONS = {
+  CALLS:        { orientation: "FORWARD",  forward: "calls",       reverse: "is called by" },
+  PRODUCES_TO:  { orientation: "FORWARD",  forward: "produces to", reverse: "is produced by" },
+  CONSUMES_FROM:{ orientation: "REVERSED", forward: "delivers to", reverse: "consumes from" },
+  SOURCES_FROM: { orientation: "REVERSED", forward: "feeds",       reverse: "sources from" },
+  WRITES_TO:    { orientation: "FORWARD",  forward: "writes to",   reverse: "is written by" },
+  QUERIES:      { orientation: "REVERSED", forward: "is queried by", reverse: "queries" }
+};
+
+var BOTH = ["production", "staging"];
+var PROD = ["production"];
+
+var NODES = [
+  { key: "stripe-webhooks", type: "external-api", displayName: "Stripe Webhooks", envs: BOTH,
+    sources: ["yaml"], ownerKey: null, links: [], backings: [], metadata: {},
+    description: "Inbound payment events from Stripe. Declared in the YAML topology; nothing observes it." },
+
+  { key: "payments-api", type: "service", displayName: "payments-api", envs: BOTH,
+    sources: ["yaml", "kubernetes"], ownerKey: "payments-platform",
+    backings: [
+      { plugin: "kubernetes", kind: "Deployment", reference: "payments-prod/payments-api" },
+      { plugin: "kubernetes", kind: "Service",    reference: "payments-prod/payments-api" },
+      { plugin: "kubernetes", kind: "Ingress",    reference: "payments.acme.io/webhooks/stripe" }
+    ],
+    metadata: { kubernetes: { image: "ghcr.io/acme/payments-api:1.4.2", replicas: 3 } },
+    links: [
+      { rel: "repository", label: "Repository",  url: "https://github.com/acme/payments-api" },
+      { rel: "runbook",    label: "Runbook",     url: "https://wiki.acme.io/runbooks/payments-api" },
+      { rel: "docs",       label: "Docs",        url: "https://docs.acme.io/payments-api" },
+      { rel: "dashboard",  label: "Grafana",     url: "https://grafana.acme.io/d/payments-api" },
+      { rel: "logs",       label: "Logs",        url: "https://logs.acme.io/payments-api" },
+      { rel: "gitops",     label: "Argo CD",     url: "https://argocd.acme.io/applications/payments-api" },
+      { rel: "workload",   label: "Workload",    url: "https://k8s.acme.io/payments-prod/deployments/payments-api" },
+      { rel: "pods",       label: "Pods",        url: "https://k8s.acme.io/payments-prod/pods?app=payments-api" }
+    ],
+    description: "Receives Stripe webhooks and publishes raw payment events." },
+
+  { key: "payments.events.raw.v1", type: "kafka-topic", displayName: "payments.events.raw.v1", envs: BOTH,
+    sources: ["kafka"], ownerKey: "payments-platform",
+    backings: [ { plugin: "kafka", kind: "topic", reference: "payments.events.raw.v1" } ],
+    metadata: { kafka: { partitions: 12, replicationFactor: 3, retentionMs: 604800000 } },
+    links: [ { rel: "dashboard", label: "Grafana", url: "https://grafana.acme.io/d/kafka-topic?topic=payments.events.raw.v1" } ],
+    description: null },
+
+  { key: "payments-enricher", type: "service", displayName: "payments-enricher", envs: BOTH,
+    sources: ["yaml", "kubernetes"], ownerKey: "payments-platform",
+    backings: [
+      { plugin: "kubernetes", kind: "Deployment",     reference: "payments-prod/enricher-v2" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "enrich-consumer-prod" }
+    ],
+    metadata: { kubernetes: { image: "ghcr.io/acme/payments-enricher:2.0.1", replicas: 3 } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/payments-enricher" },
+      { rel: "dashboard",  label: "Grafana",    url: "https://grafana.acme.io/d/payments-enricher-overview" },
+      { rel: "workload",   label: "Workload",   url: "https://k8s.acme.io/payments-prod/deployments/enricher-v2" },
+      { rel: "pods",       label: "Pods",       url: "https://k8s.acme.io/payments-prod/pods?app=enricher-v2" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/enricher-v2" }
+    ],
+    description: "Three names for one service: node key payments-enricher, Deployment enricher-v2, consumer group enrich-consumer-prod." },
+
+  { key: "payments.events.enriched.v1", type: "kafka-topic", displayName: "payments.events.enriched.v1", envs: BOTH,
+    sources: ["kafka"], ownerKey: "payments-platform",
+    backings: [ { plugin: "kafka", kind: "topic", reference: "payments.events.enriched.v1" } ],
+    metadata: { kafka: { partitions: 12, replicationFactor: 3, retentionMs: 2592000000 } },
+    links: [ { rel: "dashboard", label: "Grafana", url: "https://grafana.acme.io/d/kafka-topic?topic=payments.events.enriched.v1" } ],
+    description: null },
+
+  { key: "payments-es-sink", type: "connect-connector", displayName: "payments-es-sink", envs: BOTH,
+    sources: ["connect"], ownerKey: "data-platform",
+    backings: [
+      { plugin: "connect",    kind: "connector",      reference: "connect-prod/payments-es-sink" },
+      { plugin: "kubernetes", kind: "StatefulSet",    reference: "payments-prod/kafka-connect" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "connect-payments-es-sink" }
+    ],
+    metadata: { connect: { connectorClass: "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector", tasksMax: 3, cluster: "connect-prod" } },
+    links: [
+      { rel: "repository", label: "Repository",  url: "https://github.com/acme/connect-config" },
+      { rel: "runbook",    label: "Runbook",     url: "https://wiki.acme.io/runbooks/connect-sinks" },
+      { rel: "connect-ui", label: "Connect UI",  url: "https://connect-ui.acme.io/payments-es-sink" },
+      { rel: "logs",       label: "Logs",        url: "https://logs.acme.io/kafka-connect" },
+      { rel: "config",     label: "Config",      url: "https://connect-ui.acme.io/payments-es-sink/config" }
+    ],
+    description: null },
+
+  { key: "payments-iceberg-sink", type: "connect-connector", displayName: "payments-iceberg-sink", envs: PROD,
+    sources: ["connect"], ownerKey: "data-platform",
+    backings: [
+      { plugin: "connect",    kind: "connector",      reference: "connect-prod/payments-iceberg-sink" },
+      { plugin: "kubernetes", kind: "StatefulSet",    reference: "payments-prod/kafka-connect" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "connect-payments-iceberg-sink" }
+    ],
+    metadata: { connect: { connectorClass: "org.apache.iceberg.connect.IcebergSinkConnector", tasksMax: 3, cluster: "connect-prod" } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/connect-config" },
+      { rel: "runbook",    label: "Runbook",    url: "https://wiki.acme.io/runbooks/connect-sinks" },
+      { rel: "connect-ui", label: "Connect UI", url: "https://connect-ui.acme.io/payments-iceberg-sink" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/kafka-connect" },
+      { rel: "config",     label: "Config",     url: "https://connect-ui.acme.io/payments-iceberg-sink/config" }
+    ],
+    description: null },
+
+  { key: "payments-events-v1", type: "elasticsearch-index", displayName: "payments-events-v1", envs: BOTH,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {},
+    links: [ { rel: "kibana", label: "Kibana", url: "https://kibana.acme.io/app/discover?index=payments-events-v1" } ],
+    description: null },
+
+  { key: "analytics.payments_events", type: "iceberg-table", displayName: "analytics.payments_events", envs: PROD,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {}, links: [],
+    description: null },
+
+  { key: "trino-analytics", type: "query-engine", displayName: "analytics (Trino)", envs: PROD,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {}, links: [],
+    description: null }
+];
+
+/* Stored flow-directed. The reference doc lists edges subject-first;
+   REVERSED relations are stored the other way round. */
+var EDGES = [
+  { fromKey: "stripe-webhooks",            toKey: "payments-api",              relation: "CALLS",         sources: ["yaml"],    envs: BOTH },
+  { fromKey: "payments-api",               toKey: "payments.events.raw.v1",    relation: "PRODUCES_TO",   sources: ["yaml"],    envs: BOTH },
+  { fromKey: "payments.events.raw.v1",     toKey: "payments-enricher",         relation: "CONSUMES_FROM", sources: ["kafka"],   envs: BOTH },
+  { fromKey: "payments-enricher",          toKey: "payments.events.enriched.v1", relation: "PRODUCES_TO", sources: ["yaml"],    envs: BOTH },
+  { fromKey: "payments.events.enriched.v1", toKey: "payments-es-sink",         relation: "SOURCES_FROM",  sources: ["connect"], envs: BOTH },
+  { fromKey: "payments-es-sink",           toKey: "payments-events-v1",        relation: "WRITES_TO",     sources: ["connect"], envs: BOTH },
+  { fromKey: "payments.events.enriched.v1", toKey: "payments-iceberg-sink",    relation: "SOURCES_FROM",  sources: ["connect"], envs: PROD },
+  { fromKey: "payments-iceberg-sink",      toKey: "analytics.payments_events", relation: "WRITES_TO",     sources: ["connect"], envs: PROD },
+  { fromKey: "analytics.payments_events",  toKey: "trino-analytics",           relation: "QUERIES",       sources: ["yaml"],    envs: PROD }
+];
+
+var NO_ADAPTER = { health: "UNKNOWN", rawSignal: null, metrics: {} };
+
+var STATES = {
+  baseline: {
+    production: {
+      "stripe-webhooks": NO_ADAPTER,
+      "payments-api": { health: "HEALTHY", rawSignal: "3 desired / 3 ready", metrics: { kubernetes: { readyReplicas: 3, desiredReplicas: 3 } } },
+      "payments.events.raw.v1": { health: "DEGRADED", rawSignal: "max group lag 40,000 (threshold 10,000)", metrics: { kafka: { maxConsumerLag: 40000 } } },
+      "payments-enricher": { health: "DEGRADED", rawSignal: "3 desired / 2 ready; lag 40,000", metrics: { kubernetes: { readyReplicas: 2, desiredReplicas: 3 }, kafka: { consumerLag: 40000, members: 2 } } },
+      "payments.events.enriched.v1": { health: "HEALTHY", rawSignal: "max group lag 8,400", metrics: { kafka: { maxConsumerLag: 8400 } } },
+      "payments-es-sink": { health: "HEALTHY", rawSignal: "RUNNING, 3/3 tasks RUNNING", metrics: { connect: { runningTasks: 3, totalTasks: 3 }, kafka: { consumerLag: 120 } } },
+      "payments-iceberg-sink": { health: "DEGRADED", rawSignal: "RUNNING, 2/3 tasks RUNNING, 1 FAILED", metrics: { connect: { runningTasks: 2, totalTasks: 3 }, kafka: { consumerLag: 8400 } } },
+      "payments-events-v1": NO_ADAPTER,
+      "analytics.payments_events": NO_ADAPTER,
+      "trino-analytics": NO_ADAPTER
+    },
+    staging: {
+      "stripe-webhooks": NO_ADAPTER,
+      "payments-api": { health: "HEALTHY", rawSignal: "2 desired / 2 ready", metrics: { kubernetes: { readyReplicas: 2, desiredReplicas: 2 } } },
+      "payments.events.raw.v1": { health: "HEALTHY", rawSignal: "max group lag 0", metrics: { kafka: { maxConsumerLag: 0 } } },
+      "payments-enricher": { health: "HEALTHY", rawSignal: "2 desired / 2 ready; lag 0", metrics: { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { consumerLag: 0, members: 2 } } },
+      "payments.events.enriched.v1": { health: "HEALTHY", rawSignal: "max group lag 0", metrics: { kafka: { maxConsumerLag: 0 } } },
+      "payments-es-sink": { health: "HEALTHY", rawSignal: "RUNNING, 2/2 tasks RUNNING", metrics: { connect: { runningTasks: 2, totalTasks: 2 }, kafka: { consumerLag: 0 } } },
+      "payments-events-v1": NO_ADAPTER
+    }
+  },
+  incident: {
+    production: {
+      "stripe-webhooks": NO_ADAPTER,
+      "payments-api": { health: "HEALTHY", rawSignal: "3 desired / 3 ready", metrics: { kubernetes: { readyReplicas: 3, desiredReplicas: 3 } } },
+      "payments.events.raw.v1": { health: "DEGRADED", rawSignal: "max group lag 2,100,000, growing", metrics: { kafka: { maxConsumerLag: 2100000 } } },
+      "payments-enricher": { health: "UNHEALTHY", rawSignal: "3 desired / 0 ready, CrashLoopBackOff", metrics: { kubernetes: { readyReplicas: 0, desiredReplicas: 3 }, kafka: { consumerLag: 2100000, members: 0 } } },
+      "payments.events.enriched.v1": { health: "DEGRADED", rawSignal: "no new records for 20m", metrics: { kafka: { maxConsumerLag: 0 } } },
+      "payments-es-sink": { health: "DISABLED", rawSignal: "connector PAUSED", metrics: { connect: { runningTasks: 0, totalTasks: 3 } } },
+      "payments-iceberg-sink": { health: "DISABLED", rawSignal: "connector PAUSED", metrics: { connect: { runningTasks: 0, totalTasks: 3 } } },
+      "payments-events-v1": NO_ADAPTER,
+      "analytics.payments_events": NO_ADAPTER,
+      "trino-analytics": NO_ADAPTER
+    }
+  }
+};
+
+var ENV_CONFIG = {
+  production: { namespace: "payments-prod",    kafka: "kafka-prod.internal:9092",    connect: "connect-prod.internal:8083" },
+  staging:    { namespace: "payments-staging", kafka: "kafka-staging.internal:9092", connect: "connect-staging.internal:8083" }
+};
+
+var HEALTH_LABEL = { HEALTHY: "Healthy", DEGRADED: "Degraded", UNHEALTHY: "Unhealthy", UNKNOWN: "Unknown", DISABLED: "Disabled" };
+var HEALTH_ORDER = ["UNHEALTHY", "DEGRADED", "DISABLED", "UNKNOWN", "HEALTHY"];
+/* The minimap paints SVG presentation attributes, where var() does not
+   resolve — so it needs literal colours that read on either ground. */
+var HEALTH_HEX = { HEALTHY: "#2F9E68", DEGRADED: "#C98A1E", UNHEALTHY: "#D4534A", UNKNOWN: "#77869A", DISABLED: "#8570C2" };
+
+/* ============================================================
+   2. Selectors + layout
+   ============================================================ */
+
+function nodesFor(env) { return NODES.filter(function (n) { return n.envs.indexOf(env) >= 0; }); }
+function edgesFor(env) { return EDGES.filter(function (e) { return e.envs.indexOf(env) >= 0; }); }
+function stateFor(scenario, env, key) {
+  var byEnv = STATES[scenario] && STATES[scenario][env];
+  return (byEnv && byEnv[key]) || NO_ADAPTER;
+}
+function nodeByKey(key) { for (var i = 0; i < NODES.length; i++) if (NODES[i].key === key) return NODES[i]; return null; }
+function descriptorFor(type) { return TYPES[type] || { label: type, category: "unknown", icon: "external", source: null }; }
+
+/* Layered longest-path over flow-directed edges, then a greedy slot
+   assignment so a branch keeps its predecessor's row. Good enough for a
+   pipeline DAG, and it re-flows correctly when staging drops three nodes. */
+function layout(env) {
+  var ns = nodesFor(env), es = edgesFor(env);
+  var preds = {}, succs = {};
+  ns.forEach(function (n) { preds[n.key] = []; succs[n.key] = []; });
+  es.forEach(function (e) { if (preds[e.toKey]) preds[e.toKey].push(e.fromKey); if (succs[e.fromKey]) succs[e.fromKey].push(e.toKey); });
+
+  var layer = {};
+  ns.forEach(function (n) { layer[n.key] = 0; });
+  for (var pass = 0; pass < ns.length; pass++) {
+    var moved = false;
+    ns.forEach(function (n) {
+      preds[n.key].forEach(function (p) {
+        if (layer[p] + 1 > layer[n.key]) { layer[n.key] = layer[p] + 1; moved = true; }
+      });
+    });
+    if (!moved) break;
+  }
+
+  var byLayer = {};
+  ns.forEach(function (n) { (byLayer[layer[n.key]] = byLayer[layer[n.key]] || []).push(n.key); });
+
+  var slot = {};
+  Object.keys(byLayer).map(Number).sort(function (a, b) { return a - b; }).forEach(function (l) {
+    var taken = {};
+    byLayer[l].forEach(function (k) {
+      var want = 0;
+      for (var i = 0; i < preds[k].length; i++) {
+        if (slot[preds[k][i]] !== undefined) { want = slot[preds[k][i]]; break; }
+      }
+      while (taken[want]) want++;
+      taken[want] = true; slot[k] = want;
+    });
+  });
+
+  return { layer: layer, slot: slot, preds: preds, succs: succs, nodes: ns, edges: es };
+}
+
+/* Upstream / downstream reachability from the selected node. */
+function reachability(lay, selectedKey) {
+  if (!selectedKey) return null;
+  var up = {}, down = {};
+  function walk(key, adj, into) {
+    (adj[key] || []).forEach(function (k) { if (!into[k]) { into[k] = true; walk(k, adj, into); } });
+  }
+  walk(selectedKey, lay.preds, up);
+  walk(selectedKey, lay.succs, down);
+  return { up: up, down: down };
+}
+function nodeRole(reach, key, selectedKey) {
+  if (!reach) return null;
+  if (key === selectedKey) return "self";
+  if (reach.up[key]) return "up";
+  if (reach.down[key]) return "down";
+  return "off";
+}
+function edgeRole(reach, e, selectedKey) {
+  if (!reach) return null;
+  var f = e.fromKey, t = e.toKey;
+  var upSide = function (k) { return k === selectedKey || reach.up[k]; };
+  var downSide = function (k) { return k === selectedKey || reach.down[k]; };
+  if (upSide(f) && upSide(t)) return "up";
+  if (downSide(f) && downSide(t)) return "down";
+  return "off";
+}
+
+var fmt = function (n) { return typeof n === "number" ? n.toLocaleString("en-US") : String(n); };
+
+/* One-line metric summary per node, from NodeState.metrics. */
+function metricLine(st, node) {
+  var m = st.metrics || {}, out = [];
+  if (m.kubernetes && m.kubernetes.desiredReplicas !== undefined) out.push(m.kubernetes.readyReplicas + "/" + m.kubernetes.desiredReplicas + " ready");
+  if (m.connect && m.connect.totalTasks !== undefined) out.push(m.connect.runningTasks + "/" + m.connect.totalTasks + " tasks");
+  if (m.kafka && m.kafka.maxConsumerLag !== undefined) out.push("lag " + fmt(m.kafka.maxConsumerLag));
+  else if (m.kafka && m.kafka.consumerLag !== undefined) out.push("lag " + fmt(m.kafka.consumerLag));
+  if (!out.length && node && !node.backings.length) out.push("not observed");
+  return out.join("  ·  ");
+}
+
+/* ============================================================
+   3. Small shared pieces
+   ============================================================ */
+
+var ICONS = {
+  service:   "M4 6.5h16v4H4zM4 13.5h16v4H4zM7 8.5h.01M7 15.5h.01",
+  topic:     "M3 7h13M6 12h13M3 17h13",
+  connector: "M9 3v6M15 3v6M7 9h10v4a5 5 0 0 1-10 0zM12 18v3",
+  index:     "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM16.5 16.5 21 21",
+  table:     "M3 5h18v14H3zM3 10h18M9 10v9M15 10v9",
+  engine:    "M5 19V9M10 19V5M15 19v-7M20 19v-4",
+  external:  "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"
+};
+
+function Icon(props) {
+  var d = ICONS[props.name] || ICONS.external;
+  return h("svg", { className: props.className, viewBox: "0 0 24 24", fill: "none",
+    stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round",
+    "aria-hidden": "true" }, h("path", { d: d }));
+}
+
+/* Five states, five distinct *shapes* — colour alone would fail the
+   fixture's "all five in one snapshot" requirement. */
+function HealthGlyph(props) {
+  var s = props.size || 12, health = props.health;
+  var common = { className: "hg h-" + health, width: s, height: s, viewBox: "0 0 16 16", "aria-hidden": "true" };
+  if (health === "HEALTHY")   return h("svg", common, h("circle", { cx: 8, cy: 8, r: 5.5, fill: "currentColor" }));
+  if (health === "DEGRADED")  return h("svg", common, h("path", { d: "M8 2 15 14H1Z", fill: "currentColor" }));
+  if (health === "UNHEALTHY") return h("svg", common, h("path", { d: "M5.4 1h5.2L14.5 5v6l-3.9 4H5.4L1.5 11V5Z", fill: "currentColor" }));
+  if (health === "DISABLED")  return h("svg", common,
+    h("rect", { x: 3, y: 2.5, width: 3.6, height: 11, rx: 1, fill: "currentColor" }),
+    h("rect", { x: 9.4, y: 2.5, width: 3.6, height: 11, rx: 1, fill: "currentColor" }));
+  return h("svg", common, h("circle", { cx: 8, cy: 8, r: 5.2, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeDasharray: "2.6 2.2" }));
+}
+
+function HealthChip(props) {
+  return h("span", { className: "chip h-" + props.health + " bg-" + props.health },
+    h(HealthGlyph, { health: props.health, size: 10 }),
+    HEALTH_LABEL[props.health].toUpperCase());
+}
+
+function Eyebrow(props) { return h("span", { className: "eyebrow" }, props.children); }
+
+/* ============================================================
+   4. Inspector internals — shared by all three variants,
+      arranged differently by each.
+   ============================================================ */
+
+function relationsOf(env, key) {
+  var upstream = [], downstream = [];
+  edgesFor(env).forEach(function (e) {
+    var d = RELATIONS[e.relation];
+    if (e.toKey === key)   upstream.push({ peer: e.fromKey, verb: d.reverse, relation: e.relation, sources: e.sources });
+    if (e.fromKey === key) downstream.push({ peer: e.toKey, verb: d.forward, relation: e.relation, sources: e.sources });
+  });
+  return { upstream: upstream, downstream: downstream };
+}
+
+function SecHealth(props) {
+  var st = props.state, node = props.node;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Health"),
+    h("div", { className: "health-block bg-" + st.health },
+      h(HealthGlyph, { health: st.health, size: 18 }),
+      h("div", null,
+        h("div", { className: "hb-t h-" + st.health }, HEALTH_LABEL[st.health].toUpperCase()),
+        h("div", { className: "hb-s mono" }, st.rawSignal ||
+          (node.backings.length ? "No signal from this refresh." : "No backing observes this node — UNKNOWN is its resting state, not a failure."))
+      )
+    ),
+    Object.keys(st.metrics || {}).length
+      ? h("dl", { className: "kv", style: { marginTop: 10 } },
+          [].concat.apply([], Object.keys(st.metrics).map(function (ns) {
+            return Object.keys(st.metrics[ns]).map(function (k) {
+              return h(Fragment, { key: ns + "." + k },
+                h("dt", { className: "mono" }, ns + "." + k),
+                h("dd", { className: "mono num" }, fmt(st.metrics[ns][k])));
+            });
+          })))
+      : null
+  );
+}
+
+function SecConnections(props) {
+  var rels = relationsOf(props.env, props.node.key);
+  function group(title, items) {
+    return h("div", { style: { marginBottom: 10 } },
+      h(Eyebrow, null, title),
+      items.length
+        ? items.map(function (r, i) {
+            return h("div", { className: "rel", key: i },
+              h("span", { className: "verb" }, r.verb),
+              h("button", { className: "peer mono", onClick: function () { props.onSelect(r.peer); } },
+                (nodeByKey(r.peer) || {}).displayName || r.peer));
+          })
+        : h("div", { className: "empty" }, "Nothing " + title.toLowerCase() + " in this environment.")
+    );
+  }
+  return h("div", { className: "sec" },
+    group("Upstream", rels.upstream),
+    group("Downstream", rels.downstream)
+  );
+}
+
+function SecOwner(props) {
+  var owner = props.node.ownerKey ? OWNERS[props.node.ownerKey] : null;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Ownership"),
+    owner
+      ? h("dl", { className: "kv" },
+          h("dt", null, "Team"),    h("dd", null, owner.displayName),
+          h("dt", null, "Channel"), h("dd", { className: "mono" }, owner.channel),
+          h("dt", null, "On-call"), h("dd", null, owner.onCall))
+      : h("div", { className: "empty" }, "No owner recorded. Nobody to page.")
+  );
+}
+
+function SecLinks(props) {
+  var links = props.node.links;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Go to"),
+    links.length
+      ? h("div", { className: "links" }, links.map(function (l, i) {
+          return h("a", { className: "link-btn", key: i, href: l.url, target: "_blank", rel: "noreferrer noopener" },
+            l.label, h("span", { className: "rel-tag mono" }, l.rel));
+        }))
+      : h("div", { className: "empty" }, "No links configured. Add them in the YAML topology or as a per-type template.")
+  );
+}
+
+function SecBackings(props) {
+  var bs = props.node.backings;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Backings"),
+    bs.length
+      ? bs.map(function (b, i) {
+          return h("div", { className: "backing", key: i },
+            h("span", { className: "tag mono" }, b.plugin),
+            h("span", { className: "bk-kind" }, b.kind),
+            h("span", { className: "mono", style: { marginLeft: "auto", textAlign: "right", wordBreak: "break-all" } }, b.reference));
+        })
+      : h("div", { className: "empty" }, "Declared node — no physical object behind it.")
+  );
+}
+
+function SecMetaProv(props) {
+  var node = props.node, md = node.metadata || {};
+  var mdKeys = Object.keys(md);
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Metadata"),
+    mdKeys.length
+      ? h("dl", { className: "kv" }, [].concat.apply([], mdKeys.map(function (ns) {
+          return Object.keys(md[ns]).map(function (k) {
+            return h(Fragment, { key: ns + "." + k },
+              h("dt", { className: "mono" }, ns + "." + k),
+              h("dd", { className: "mono" }, String(md[ns][k])));
+          });
+        })))
+      : h("div", { className: "empty" }, "No metadata."),
+    h("div", { style: { marginTop: 12 } },
+      h(Eyebrow, null, "Discovered by"),
+      h("div", { style: { display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" } },
+        node.sources.map(function (s) { return h("span", { className: "tag mono", key: s }, s); })))
+  );
+}
+
+function InspectorHead(props) {
+  var node = props.node, d = descriptorFor(node.type), st = props.state;
+  return h("div", { className: "ins-head" },
+    h("div", { style: { display: "flex", gap: 10, alignItems: "flex-start" } },
+      h(Icon, { name: d.icon, className: "a-icon" }),
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { className: "ins-title" }, node.displayName),
+        h("div", { className: "ins-key mono" }, node.key)),
+      h("button", { className: "ins-close", onClick: props.onClose, "aria-label": "Close inspector" }, "×")),
+    h("div", { className: "ins-meta" },
+      h(HealthChip, { health: st.health }),
+      h("span", { className: "tag" }, d.label),
+      h("span", { className: "tag mono" }, props.env)),
+    node.description ? h("div", { style: { fontSize: 12, color: "var(--muted)", marginTop: 10 } }, node.description) : null
+  );
+}
+
+/* ============================================================
+   5. Variant A — Flowline
+      Left-to-right pipeline · card nodes · right drawer.
+   ============================================================ */
+
+function NodeA(props) {
+  var d = props.data;
+  var cls = ["a-node"];
+  if (d.role && d.role !== "self") cls.push(d.role === "off" ? "n-off" : "n-" + d.role);
+  if (d.role === "self") cls.push("n-self");
+  return h("div", { className: cls.join(" ") },
+    h(XY.Handle, { type: "target", position: Position.Left }),
+    h("div", { className: "a-body" },
+      h("div", { className: "a-rail bg-" + d.health, style: { background: "var(--h-" + d.health.toLowerCase() + ")", borderRadius: 2 } }),
+      h(Icon, { name: d.icon, className: "a-icon" }),
+      h("div", { className: "a-text" },
+        h("div", { className: "a-name", title: d.displayName }, d.displayName),
+        h("div", { className: "a-type" }, d.typeLabel))),
+    h("div", { className: "a-foot" },
+      h(HealthGlyph, { health: d.health, size: 11 }),
+      h("span", { className: "a-metric mono" }, d.showMetrics && d.metric ? d.metric : HEALTH_LABEL[d.health]),
+      h("span", { className: "a-src mono", style: { marginLeft: "auto" } }, d.sources.join(" "))),
+    h(XY.Handle, { type: "source", position: Position.Right })
+  );
+}
+
+function DrawerInspector(props) {
+  var node = props.node;
+  if (!node) {
+    return h("div", { className: "drawer" },
+      h("div", { className: "sec", style: { paddingTop: 22 } },
+        h(Eyebrow, null, "Node inspector"),
+        h("p", { style: { color: "var(--muted)", fontSize: 12.5, marginTop: 8 } },
+          "Select a node to inspect it. Selecting also highlights everything upstream (blue) and downstream (amber) of it."),
+        h("div", { style: { marginTop: 18 } },
+          h(Eyebrow, null, "Health"),
+          h("div", { className: "legend", style: { marginTop: 8 } },
+            HEALTH_ORDER.map(function (hh) {
+              return h("span", { className: "legend-item", key: hh },
+                h(HealthGlyph, { health: hh, size: 12 }), HEALTH_LABEL[hh]);
+            })))));
+  }
+  return h("div", { className: "drawer" },
+    h("div", { className: "drawer-scroll" },
+      h(InspectorHead, { node: node, state: props.state, env: props.env, onClose: props.onClose }),
+      h(SecHealth, { state: props.state, node: node }),
+      h(SecConnections, { env: props.env, node: node, onSelect: props.onSelect }),
+      h(SecOwner, { node: node }),
+      h(SecLinks, { node: node }),
+      h(SecBackings, { node: node }),
+      h(SecMetaProv, { node: node })));
+}
+
+/* ============================================================
+   6. Variant B — Lanes
+      Ownership is the vertical axis; flow is still horizontal.
+      Inspector is a full-width bottom panel in three columns.
+   ============================================================ */
+
+var LANES = [
+  { key: "payments-platform", label: "Payments Platform", bg: "var(--lane-a)" },
+  { key: "data-platform",     label: "Data Platform",     bg: "var(--lane-b)" },
+  { key: "__none__",          label: "Unowned",           bg: "var(--lane-c)" }
+];
+
+function NodeB(props) {
+  var d = props.data;
+  var cls = ["b-chip"];
+  if (d.role && d.role !== "self") cls.push(d.role === "off" ? "n-off" : "n-" + d.role);
+  if (d.role === "self") cls.push("n-self");
+  return h("div", { className: cls.join(" ") },
+    h(XY.Handle, { type: "target", position: Position.Left }),
+    h("div", { className: "b-bar", style: { background: "var(--h-" + d.health.toLowerCase() + ")" } }),
+    h("div", { className: "b-in" },
+      h("div", { className: "b-name mono", title: d.displayName }, d.displayName),
+      h("div", { className: "b-sub" },
+        h(HealthGlyph, { health: d.health, size: 9 }),
+        h("span", null, d.showMetrics && d.metric ? d.metric : d.typeLabel),
+        d.declared ? h("span", { className: "b-declared" }, "declared") : null)),
+    h(XY.Handle, { type: "source", position: Position.Right })
+  );
+}
+
+function PanelInspector(props) {
+  var node = props.node;
+  if (!node) return null;
+  return h("div", { className: "panel" },
+    h("div", { className: "panel-col" },
+      h(InspectorHead, { node: node, state: props.state, env: props.env, onClose: props.onClose }),
+      h(SecHealth, { state: props.state, node: node })),
+    h("div", { className: "panel-col" },
+      h(SecConnections, { env: props.env, node: node, onSelect: props.onSelect }),
+      h(SecBackings, { node: node })),
+    h("div", { className: "panel-col" },
+      h(SecOwner, { node: node }),
+      h(SecLinks, { node: node }),
+      h(SecMetaProv, { node: node })));
+}
+
+/* ============================================================
+   7. Variant C — Console
+      Top-down · signals always on · inspector is a popover
+      anchored beside the node, so the graph keeps the screen.
+   ============================================================ */
+
+function NodeC(props) {
+  var d = props.data;
+  var cls = ["c-node"];
+  if (d.role && d.role !== "self") cls.push(d.role === "off" ? "n-off" : "n-" + d.role);
+  if (d.role === "self") cls.push("n-self");
+  var tint = "var(--h-" + d.health.toLowerCase() + ")";
+  return h("div", { className: cls.join(" "), style: { borderLeftColor: tint, background: d.health === "HEALTHY" ? "var(--surface)" : "var(--h-" + d.health.toLowerCase() + "-bg)" } },
+    h(XY.Handle, { type: "target", position: Position.Top }),
+    h("div", { className: "c-head" },
+      h(Icon, { name: d.icon, className: "c-icon", }),
+      h("span", { className: "c-name mono", title: d.displayName }, d.displayName),
+      h("span", { className: "c-state h-" + d.health }, HEALTH_LABEL[d.health].toUpperCase())),
+    d.showMetrics
+      ? h("div", { className: "c-signal mono" },
+          h("div", null, d.rawSignal || h("span", { className: "k" }, "no signal — nothing observes this node")),
+          d.metric ? h("div", { className: "k", style: { marginTop: 2 } }, d.metric) : null)
+      : null,
+    h(XY.Handle, { type: "source", position: Position.Bottom })
+  );
+}
+
+function PopInspector(props) {
+  var node = props.node;
+  var tabs = ["Overview", "Connections", "Go to"];
+  var tabState = useState("Overview"), tab = tabState[0], setTab = tabState[1];
+  useEffect(function () { setTab("Overview"); }, [node && node.key]);
+  if (!node) return null;
+  return h("div", { className: "pop", style: props.anchor },
+    h(InspectorHead, { node: node, state: props.state, env: props.env, onClose: props.onClose }),
+    h("div", { className: "tabs", role: "tablist" }, tabs.map(function (t) {
+      return h("button", { key: t, role: "tab", "aria-selected": tab === t, onClick: function () { setTab(t); } }, t);
+    })),
+    h("div", { className: "pop-scroll" },
+      tab === "Overview" ? h(Fragment, null,
+        h(SecHealth, { state: props.state, node: node }),
+        h(SecBackings, { node: node }),
+        h(SecMetaProv, { node: node })) : null,
+      tab === "Connections" ? h(SecConnections, { env: props.env, node: node, onSelect: props.onSelect }) : null,
+      tab === "Go to" ? h(Fragment, null,
+        h(SecOwner, { node: node }),
+        h(SecLinks, { node: node })) : null));
+}
+
+/* ============================================================
+   8. Canvas assembly
+   ============================================================ */
+
+var NODE_TYPES = { A: NodeA, B: NodeB, C: NodeC };
+var VARIANTS = [
+  { key: "A", name: "Flowline",  blurb: "Left-to-right pipeline · card nodes · right drawer" },
+  { key: "B", name: "Lanes",     blurb: "Swimlanes by owning team · compact chips · bottom panel" },
+  { key: "C", name: "Console",   blurb: "Top-down · signals always on · popover anchored to the node" }
+];
+
+var GEOM = {
+  A: { dx: 268, dy: 128, w: 210, ox: 60, oy: 80 },
+  B: { dx: 232, dy: 0,   w: 178, ox: 60, oy: 0 },
+  C: { dx: 300, dy: 176, w: 250, ox: 60, oy: 60 }
+};
+var LANE_H = 150;
+
+function buildGraph(variant, env, scenario, showMetrics, selectedKey) {
+  var lay = layout(env);
+  var reach = reachability(lay, selectedKey);
+  var g = GEOM[variant];
+
+  var rfNodes = lay.nodes.map(function (n) {
+    var st = stateFor(scenario, env, n.key);
+    var d = descriptorFor(n.type);
+    var x, y;
+    if (variant === "B") {
+      var laneIdx = LANES.findIndex(function (l) { return l.key === (n.ownerKey || "__none__"); });
+      var within = lay.slot[n.key] || 0;
+      x = g.ox + lay.layer[n.key] * g.dx;
+      y = 46 + laneIdx * LANE_H + within * 52 + 34;
+    } else if (variant === "C") {
+      x = g.ox + (lay.slot[n.key] || 0) * g.dx;
+      y = g.oy + lay.layer[n.key] * g.dy;
+    } else {
+      x = g.ox + lay.layer[n.key] * g.dx;
+      y = g.oy + (lay.slot[n.key] || 0) * g.dy;
+    }
+    return {
+      id: n.key, type: variant, position: { x: x, y: y }, draggable: true,
+      data: {
+        displayName: n.displayName, typeLabel: d.label, icon: d.icon,
+        health: st.health, rawSignal: st.rawSignal, metric: metricLine(st, n),
+        sources: n.sources, declared: n.backings.length === 0,
+        showMetrics: showMetrics, role: nodeRole(reach, n.key, selectedKey)
+      }
+    };
+  });
+
+  var rfEdges = lay.edges.map(function (e) {
+    var role = edgeRole(reach, e, selectedKey);
+    var dim = role === "off";
+    var stroke = role === "up" ? "var(--accent)"
+               : role === "down" ? "var(--h-degraded)"
+               : "var(--line-strong)";
+    var showLabel = variant === "C" || (variant === "A" && role && role !== "off");
+    return {
+      id: e.fromKey + "->" + e.toKey,
+      source: e.fromKey, target: e.toKey,
+      type: variant === "B" ? "smoothstep" : "default",
+      animated: role === "down",
+      label: showLabel ? RELATIONS[e.relation].forward : undefined,
+      style: { stroke: stroke, strokeWidth: role && role !== "off" ? 2 : 1.4, opacity: dim ? 0.2 : 1 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: dim ? "var(--line-strong)" : stroke }
+    };
+  });
+
+  return { nodes: rfNodes, edges: rfEdges, lay: lay };
+}
+
+function Canvas(props) {
+  var g = props.graph, variant = props.variant;
+  var rf = useRef(null);
+
+  /* XYFlow writes measured dimensions back through onNodesChange. Rebuilding
+     the array on every selection would throw those away — and the minimap only
+     draws nodes that have them — so carry `measured` across rebuilds by id. */
+  var ns = XY.useNodesState([]);
+  var rfNodes = ns[0], setRfNodes = ns[1], onNodesChange = ns[2];
+
+  useEffect(function () {
+    setRfNodes(function (prev) {
+      var byId = {};
+      prev.forEach(function (p) { byId[p.id] = p; });
+      return g.nodes.map(function (n) {
+        var p = byId[n.id];
+        return p && p.measured ? Object.assign({}, n, { measured: p.measured }) : n;
+      });
+    });
+  }, [g]);
+
+  useEffect(function () {
+    if (rf.current) {
+      var t = setTimeout(function () { rf.current && rf.current.fitView({ padding: 0.16, duration: 300 }); }, 60);
+      return function () { clearTimeout(t); };
+    }
+  }, [props.env, variant, props.showMetrics]);
+
+  return h(XY.ReactFlow, {
+    nodes: rfNodes, edges: g.edges,
+    onNodesChange: onNodesChange,
+    nodeTypes: props.nodeTypes,
+    onInit: function (inst) { rf.current = inst; inst.fitView({ padding: 0.16 }); },
+    onNodeClick: function (_, n) { props.onSelect(n.id); },
+    onPaneClick: function () { props.onSelect(null); },
+    nodesConnectable: false, elementsSelectable: true,
+    proOptions: { hideAttribution: true },
+    minZoom: 0.25, maxZoom: 2,
+    defaultEdgeOptions: { type: "default" }
+  },
+    h(XY.Background, { gap: 22, size: 1.6, color: "var(--canvas-dot)" }),
+    h(XY.Controls, { showInteractive: false }),
+    variant !== "B" ? h(XY.MiniMap, { pannable: true, zoomable: true, maskColor: "rgba(0,0,0,.06)",
+      nodeColor: function (n) { return HEALTH_HEX[n.data.health]; } }) : null,
+    props.children);
+}
+
+/* ============================================================
+   9. App shell
+   ============================================================ */
+
+function readVariant() {
+  try {
+    var p = new URLSearchParams(window.location.search).get("variant");
+    if (p && NODE_TYPES[p.toUpperCase()]) return p.toUpperCase();
+  } catch (e) {}
+  return "A";
+}
+function writeVariant(v) {
+  try {
+    var url = new URL(window.location.href);
+    url.searchParams.set("variant", v);
+    window.history.replaceState({}, "", url);
+  } catch (e) {}
+}
+
+function App() {
+  var v = useState(readVariant()), variant = v[0], setVariant = v[1];
+  var e = useState("production"), env = e[0], setEnv = e[1];
+  var s = useState("baseline"), scenario = s[0], setScenario = s[1];
+  var m = useState(true), showMetrics = m[0], setShowMetrics = m[1];
+  var k = useState(null), selectedKey = k[0], setSelectedKey = k[1];
+
+  useEffect(function () { writeVariant(variant); }, [variant]);
+
+  // staging has no incident scenario in the fixture
+  useEffect(function () { if (env === "staging" && scenario === "incident") setScenario("baseline"); }, [env]);
+  useEffect(function () { if (selectedKey && !nodesFor(env).some(function (n) { return n.key === selectedKey; })) setSelectedKey(null); }, [env]);
+
+  useEffect(function () {
+    function onKey(ev) {
+      var t = ev.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        var i = VARIANTS.findIndex(function (x) { return x.key === variant; });
+        var n = (i + (ev.key === "ArrowRight" ? 1 : -1) + VARIANTS.length) % VARIANTS.length;
+        setVariant(VARIANTS[n].key); ev.preventDefault();
+      }
+      if (ev.key === "Escape") setSelectedKey(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return function () { window.removeEventListener("keydown", onKey); };
+  }, [variant]);
+
+  var graph = useMemo(function () {
+    return buildGraph(variant, env, scenario, showMetrics, selectedKey);
+  }, [variant, env, scenario, showMetrics, selectedKey]);
+
+  var nodeTypes = useMemo(function () { return { A: NodeA, B: NodeB, C: NodeC }; }, []);
+
+  var selectedNode = selectedKey ? nodeByKey(selectedKey) : null;
+  var selectedState = selectedKey ? stateFor(scenario, env, selectedKey) : NO_ADAPTER;
+
+  var ns = nodesFor(env);
+  var counts = HEALTH_ORDER.map(function (hh) {
+    return { h: hh, n: ns.filter(function (n) { return stateFor(scenario, env, n.key).health === hh; }).length };
+  }).filter(function (c) { return c.n > 0; });
+
+  var cur = VARIANTS.find(function (x) { return x.key === variant; });
+
+  /* per-variant metrics control label */
+  var metricsControl = h("button", {
+    className: "toggle", "aria-pressed": showMetrics,
+    onClick: function () { setShowMetrics(!showMetrics); }
+  }, h("span", { className: "dot" }),
+     variant === "C" ? (showMetrics ? "Signals shown" : "Topology only") : (showMetrics ? "Metrics on" : "Metrics off"));
+
+  var rail = h("div", { className: "rail" },
+    h("div", { className: "rail-brand" },
+      h("b", null, "Nodqora"),
+      h("span", { className: "eyebrow" }, "Payments pipeline")),
+    h("div", { className: "rail-group" },
+      h(Eyebrow, null, "Environment"),
+      h("div", { className: "seg" }, ["production", "staging"].map(function (x) {
+        return h("button", { key: x, "aria-pressed": env === x, onClick: function () { setEnv(x); } }, x);
+      }))),
+    h("div", { className: "rail-group" },
+      h(Eyebrow, null, "Scenario"),
+      h("div", { className: "seg" }, ["baseline", "incident"].map(function (x) {
+        return h("button", { key: x, "aria-pressed": scenario === x, disabled: x === "incident" && env === "staging",
+          title: x === "incident" && env === "staging" ? "The fixture defines the incident for production only" : undefined,
+          onClick: function () { setScenario(x); } }, x);
+      }))),
+    metricsControl,
+    h("div", { className: "rail-spacer" }),
+    h("div", { className: "counts" },
+      h("b", null, ns.length), " nodes · ", h("b", null, edgesFor(env).length), " edges  ",
+      counts.map(function (c) {
+        return h("span", { key: c.h, className: "legend-item", style: { display: "inline-flex", marginLeft: 10 } },
+          h(HealthGlyph, { health: c.h, size: 10 }), h("span", { className: "mono" }, c.n));
+      })),
+    h("span", { className: "counts mono", style: { borderLeft: "1px solid var(--line)", paddingLeft: 14 } },
+      ENV_CONFIG[env].namespace));
+
+  /* Lane bands live in graph coordinates (ViewportPortal), so they pan and
+     zoom with the nodes instead of sliding out from under them. */
+  var laneOverlay = variant === "B"
+    ? h(XY.ViewportPortal, null,
+        h("div", { style: { position: "absolute", left: 0, top: 0, pointerEvents: "none", zIndex: -1 } },
+          LANES.map(function (l, i) {
+            var inLane = ns.filter(function (x) { return (x.ownerKey || "__none__") === l.key; });
+            var maxLayer = 0;
+            ns.forEach(function (x) { maxLayer = Math.max(maxLayer, graph.lay.layer[x.key]); });
+            var width = GEOM.B.ox * 2 + maxLayer * GEOM.B.dx + GEOM.B.w;
+            return h("div", { key: l.key, style: {
+              position: "absolute", left: 0, top: 46 + i * LANE_H, width: width, height: LANE_H - 10,
+              background: l.bg, borderRadius: 10, border: "1px solid var(--line)" } },
+              h("div", { className: "b-lane-label" },
+                h("b", null, l.label),
+                h("span", { className: "mono" }, inLane.length + " node" + (inLane.length === 1 ? "" : "s"))));
+          })))
+    : null;
+
+  var note = variant === "B"
+    ? h("div", { className: "note" },
+        h("b", null, "Ownership as the vertical axis. "),
+        "The pipeline crosses from Payments Platform to Data Platform at the connectors — the hand-off this product exists to make visible.")
+    : variant === "C"
+      ? h("div", { className: "note" },
+          h("b", null, "Signals are opt-out, not opt-in. "),
+          "Every node shows its raw signal — the string health was normalised from — so the canvas never asks you to open a panel to see why something is amber.")
+      : null;
+
+  var stage;
+  if (variant === "A") {
+    stage = h("div", { className: "stage" },
+      h("div", { className: "canvas-wrap" },
+        h(Canvas, { graph: graph, variant: variant, nodeTypes: nodeTypes, env: env, showMetrics: showMetrics,
+          onSelect: setSelectedKey })),
+      h(DrawerInspector, { node: selectedNode, state: selectedState, env: env,
+        onClose: function () { setSelectedKey(null); }, onSelect: setSelectedKey }));
+  } else if (variant === "B") {
+    stage = h(Fragment, null,
+      h("div", { className: "stage" },
+        h("div", { className: "canvas-wrap" },
+          h(Canvas, { graph: graph, variant: variant, nodeTypes: nodeTypes, env: env, showMetrics: showMetrics,
+            onSelect: setSelectedKey }, laneOverlay),
+          note)),
+      selectedNode ? h(PanelInspector, { node: selectedNode, state: selectedState, env: env,
+        onClose: function () { setSelectedKey(null); }, onSelect: setSelectedKey }) : null);
+  } else {
+    stage = h("div", { className: "stage" },
+      h("div", { className: "canvas-wrap" },
+        h(Canvas, { graph: graph, variant: variant, nodeTypes: nodeTypes, env: env, showMetrics: showMetrics,
+          onSelect: setSelectedKey }),
+        note,
+        selectedNode ? h(PopInspector, { node: selectedNode, state: selectedState, env: env,
+          anchor: { right: 20, top: 20 },
+          onClose: function () { setSelectedKey(null); }, onSelect: setSelectedKey }) : null));
+  }
+
+  var switcher = h("div", { className: "switcher", role: "group", "aria-label": "Prototype variant" },
+    h("button", { onClick: function () { cycle(-1); }, "aria-label": "Previous variant" }, "‹"),
+    h("span", { className: "label" }, h("b", null, cur.key), " — ", cur.name),
+    h("button", { onClick: function () { cycle(1); }, "aria-label": "Next variant" }, "›"),
+    h("span", { className: "hint" }, "← →"));
+
+  function cycle(dir) {
+    var i = VARIANTS.findIndex(function (x) { return x.key === variant; });
+    setVariant(VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length].key);
+  }
+
+  return h(Fragment, null, rail, stage, switcher);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+
+})();
+</script>
