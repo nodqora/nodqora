@@ -1,8 +1,14 @@
 # ADR-0005: The graph holds logical nodes only; physical objects are backings
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0013](0013-backings-route-health.md)
 - **Date**: 2026-09-01
 - **Ticket**: [Core graph domain model](https://github.com/fredskor/nodqora/issues/3)
+
+> **Amendment (ADR-0013).** The backing field `adapter` is renamed `plugin`, and
+> its meaning is sharpened: it names the plugin whose *technology domain* the
+> object belongs to, not the plugin that resolved it. Backings additionally
+> became the routing table for health observation. The decision below stands
+> otherwise.
 
 ## Context
 

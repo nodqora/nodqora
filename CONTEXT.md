@@ -2,11 +2,14 @@
 
 The core graph model. Technology-agnostic by construction (product plan §5.2):
 nothing in this document names Kubernetes, Kafka or Connect as a concept the
-core understands. Those are adapters that produce these shapes.
+core understands. Those are plugins that produce these shapes.
 
 Every term below is tested against [the reference pipeline](docs/reference-pipeline.md).
-Decisions are recorded in [`docs/adr/`](docs/adr/) — ADR-0001 through ADR-0009
-were all fixed by [Core graph domain model](https://github.com/fredskor/nodqora/issues/3).
+Decisions are recorded in [`docs/adr/`](docs/adr/). ADR-0001 through ADR-0009
+were fixed by [Core graph domain model](https://github.com/fredskor/nodqora/issues/3);
+ADR-0010 through ADR-0015 by
+[Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6),
+which also amended ADR-0005.
 
 ---
 
@@ -20,6 +23,10 @@ Environment ──owns──▶ Node ──▶ NodeState        (fast: health, m
      └──owns──▶ Edge ──┘
 
 Registry: TypeDescriptor (per node type) · RelationDescriptor (per relation)
+
+Plugin[yaml · kubernetes · kafka · connect]
+   ├── Discovery  ──▶ DiscoveryResult{nodes, edges, descriptors, outcome}
+   └── Health     ──▶ StateContribution{health, rawSignal, metrics}  ──▶ NodeState
 ```
 
 **Slow half** — Node, Edge, Backing, Link, Owner, Environment. Changes when
@@ -62,7 +69,9 @@ Say *type*. There is no `subtype` in the MVP (ADR-0009).
 ### TypeDescriptor
 
 A registry entry describing one node type: category, icon, display label,
-source. Registered by **plugins and by the YAML topology alike** — which is how
+source. `icon` is a **name** from a fixed frontend icon set, never a shipped
+asset; `source` is a plugin id. Registered by **plugins and by the YAML topology
+alike** — which is how
 `iceberg-table` exists with no plugin behind it. An unregistered type resolves
 to a fallback descriptor and still renders (ADR-0001).
 
@@ -122,6 +131,9 @@ The fast half: `nodeId`, `health`, `rawSignal`, `metrics{}`, `observedAt`.
 Written by the health refresh loop on its own cadence, joined to the Node on
 read (ADR-0003).
 
+One row, but **composed from several StateContributions** — `payments-enricher`
+is observed by `kubernetes` and `kafka` at once (ADR-0013).
+
 Never say "the node's health is stale" — say the **NodeState** is stale.
 
 ### Health
@@ -130,7 +142,7 @@ The normalized operational state of a Node. A **closed** five-value enum
 (product plan §13): `HEALTHY`, `DEGRADED`, `UNHEALTHY`, `UNKNOWN`, `DISABLED`.
 
 Deliberately the one closed vocabulary in a model of open strings — normalizing
-technology-specific status into a fixed set is what adapters exist to do
+technology-specific status into a fixed set is what plugins exist to do
 (ADR-0003).
 
 `UNKNOWN` is **normal, not an error**: four of the reference pipeline's ten
@@ -144,9 +156,17 @@ NodeState so the inspector can always show its work.
 
 ### Backing
 
-A physical object an adapter resolved a Node to: adapter, kind, reference.
-Topology, so it lives on the Node side; the live signal from a backing lives in
-NodeState (ADR-0005).
+A physical object behind a Node: `{ plugin, kind, reference }`. Topology, so it
+lives on the Node side; the live signal from a backing lives in NodeState
+(ADR-0005).
+
+`plugin` names the plugin whose **technology domain** the object belongs to —
+not the one that discovered it. A consumer group is a Kafka object however we
+learned of it, so the `connect` plugin writes `{ plugin: kafka, kind:
+consumer-group, ... }`. Provenance is the node's `sources[]`, never this field.
+
+**Backings are the routing table for health**: a plugin is asked to observe
+exactly the nodes carrying a backing of its own (ADR-0013).
 
 - A Node may have **many** backings (`payments-api`: Deployment + Service + Ingress).
 - One object may back **many** Nodes (one `kafka-connect` StatefulSet backs both connectors).
@@ -155,11 +175,13 @@ NodeState (ADR-0005).
 ### Declared node / Discovered node
 
 **Declared** — comes from the YAML topology; `sources` contains `yaml`.
-**Discovered** — comes from an adapter. A node can be both, and the fixture's
-most important node is (`payments-enricher`: `sources: [yaml, kubernetes]`).
+**Discovered** — comes from another plugin. A node can be both, and the
+fixture's most important node is (`payments-enricher`:
+`sources: [yaml, kubernetes]`).
 
-The graph is permanently mixed. No feature may assume an adapter exists behind
-a node.
+The graph is permanently mixed. No feature may assume an observing plugin exists
+behind a node. There is no "generic external node" — a declared node is an
+ordinary node (ADR-0011).
 
 ### Owner
 
@@ -190,11 +212,61 @@ split across ADR-0003's boundary.
 
 ### Sources
 
-Which contributors produced a Node or Edge: `[yaml, kubernetes]`. Per-node, not
+Which plugins produced a Node or Edge: `[yaml, kubernetes]`. Per-node, not
 per-field — the MVP records *that* a source contributed, not *which field it
 set* (ADR-0008). Merge precedence is decided separately.
 
+This is the model's **provenance** mechanism. `Backing.plugin` is not.
+
 ---
+
+### Plugin
+
+A registered contributor of graph data: `id`, display label, declared
+capabilities, config type, contributed descriptors (ADR-0010). The MVP has
+**four**, and these exact id strings are API surface — they are the `metadata`
+keys, the `sources[]` entries, the `backings[].plugin` values and
+`TypeDescriptor.source`:
+
+`yaml` · `kubernetes` · `kafka` · `connect`
+
+The YAML topology is a plugin like any other (ADR-0011). Kafka and Kafka Connect
+are two plugins, not one.
+
+Configuration is per environment, file-declared and bound at startup; secrets
+are `${env:}` / `${file:}` references, never values (ADR-0014).
+
+### Capability
+
+What a plugin can do. There are exactly **two**, either or both:
+
+- **Discovery** — produces topology, returning a DiscoveryResult.
+- **Health** — produces runtime state, returning StateContributions.
+
+A capability is present *iff* the plugin implements it. Links are **data**, not
+a capability: declared in YAML, emitted by Discovery, or templated per node type
+in environment config (ADR-0010).
+
+### DiscoveryResult
+
+One plugin's **full snapshot** of its scope for one environment — never a delta:
+`{ nodes[], edges[], descriptors[], outcome }`, where `outcome` is `COMPLETE`,
+`PARTIAL(reasons)` or `FAILED(cause)` (ADR-0012).
+
+Nodes carry final keys and only the fields the plugin knows; `null` means **no
+opinion**, not empty. Edges may reference keys the plugin does not own.
+
+`outcome` is not a completeness guarantee — a plugin cannot always tell it was
+blind. Say the snapshot is `PARTIAL`, not "discovery failed".
+
+### StateContribution
+
+One plugin's observation of one node: `{ health, rawSignal, metrics{} }`
+(ADR-0013). Several are composed into the single NodeState row — metrics union
+by namespace, raw signals join in plugin order, and health collapses by a rule
+that is decided separately.
+
+A contribution is not a NodeState. Only the state engine writes NodeState.
 
 ## Vocabulary to avoid
 
@@ -209,3 +281,7 @@ set* (ADR-0008). Merge precedence is decided separately.
 | namespace (on a Node) | the **environment**, or the backing's namespace | `namespace` is a Kubernetes concept; it is not a core field |
 | label / tag | **metadata** | neither field exists in the MVP (ADR-0009) |
 | missing in staging | **not present in** staging | drift is absence, not a marked state |
+| adapter / integration | **plugin** | one word for one concept; a capability implementation is not an adapter (ADR-0010) |
+| generic external node | **declared node** | implies a mechanism that does not exist — a node with no plugin behind it is ordinary (ADR-0011) |
+| the plugin's health value | the plugin's **StateContribution** | several plugins observe one node; only the state engine produces `health` (ADR-0013) |
+| plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
