@@ -88,7 +88,7 @@ mixed; no MVP feature may assume every node has an adapter behind it.
 | `payments-iceberg-sink` | `analytics.payments_events` | WRITES_TO | ✓ | — |
 | `trino-analytics` | `analytics.payments_events` | QUERIES | ✓ | — |
 
-Nine edges in production, five in staging. Note that data flow and edge
+Nine edges in production, six in staging. Note that data flow and edge
 direction disagree for `CONSUMES_FROM`, `SOURCES_FROM` and `QUERIES` — the
 consumer is the subject. Reconciling that is domain-model work; the fixture
 just records both facts.
@@ -103,7 +103,7 @@ just records both facts.
 | Kafka cluster | `kafka-prod.internal:9092` | `kafka-staging.internal:9092` |
 | Connect cluster | `connect-prod.internal:8083` | `connect-staging.internal:8083` |
 | Nodes | 10 | 7 |
-| Edges | 9 | 5 |
+| Edges | 9 | 6 |
 
 **Staging drift** — staging lacks the entire Iceberg branch:
 `payments-iceberg-sink`, `analytics.payments_events`, `trino-analytics`. This is
