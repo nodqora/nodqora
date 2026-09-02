@@ -22,7 +22,9 @@ ADR-0036 through ADR-0042 by
 which also amended ADR-0033; ADR-0043 through ADR-0051 by
 [Discovery-engine merge semantics](https://github.com/fredskor/nodqora/issues/12),
 which also amended ADR-0008, ADR-0012, ADR-0035 and ADR-0042; and ADR-0052
-through ADR-0060 by [REST API shape](https://github.com/fredskor/nodqora/issues/13).
+through ADR-0060 by [REST API shape](https://github.com/fredskor/nodqora/issues/13);
+and ADR-0061 through ADR-0065 by
+[YAML topology format](https://github.com/fredskor/nodqora/issues/14).
 
 ---
 
@@ -167,7 +169,14 @@ Orientation affects **wording only**. It never affects traversal.
 ### RelationDescriptor
 
 Registry entry for one relation: orientation, forward phrasing, reverse
-phrasing. Registered like a TypeDescriptor.
+phrasing.
+
+Unlike a TypeDescriptor, the six are **core built-ins**, seeded at startup
+rather than registered by a plugin (ADR-0062). `relation` is still an open
+string; the registry is simply not empty. Two plugins emit `SOURCES_FROM`, and
+plugin registration would give it two definitions whose phrasing could
+disagree — making the descriptor a node renders with depend on poll order,
+the race ADR-0049 refused for Owners.
 
 ### Environment
 
@@ -312,6 +321,13 @@ The graph is permanently mixed. No feature may assume an observing plugin exists
 behind a node. There is no "generic external node" — a declared node is an
 ordinary node (ADR-0011).
 
+"Declared" is a statement about **provenance, not about content**. A YAML
+stanza carrying only a verb — `payments-api` is `{key, producesTo}` — emits a
+node with no fields at all, so it too arrives with `sources: [yaml,
+kubernetes]`. `sources[]` cannot tell a mention from a declaration, and does
+not need to: ADR-0008 records *that* a source contributed, never which field it
+set (ADR-0063).
+
 ### Owner
 
 A first-class entity — a team: `key`, `displayName`, `channel`, `onCall`.
@@ -421,7 +437,7 @@ my graph is gone" rather than as one subtly absent node.
 | `kubernetes` | enumerated namespaces, one cluster per environment (ADR-0035) | Deployment, StatefulSet, CronJob (ADR-0030) | none (ADR-0033) |
 | `kafka` | required topic-name **prefix** list (ADR-0037) | topic (ADR-0036) | none |
 | `connect` | the configured cluster, whole | connector (ADR-0036) | from the `topics` key only (ADR-0041) |
-| `yaml` | the topology file | any | any — seven of the fixture's nine |
+| `yaml` | one **directory** per environment, every `*.yaml` in it (ADR-0061) | any | any — seven of the fixture's nine |
 
 Suppression is **subtractive and exact** in both scoped plugins — an exact
 `kind/name` or topic name, never a narrowing selector and never a glob
@@ -430,7 +446,7 @@ node while narrowing fails toward a *missing* one.
 
 An enumerated scope unit that yields **zero nodes** ⇒ `PARTIAL` — a prefix
 matching no topics, a namespace with no workloads, a Connect cluster with no
-connectors. The zero-output guard lives in the plugin because only the plugin can
+connectors, a topology directory with no node stanza anywhere in it. The zero-output guard lives in the plugin because only the plugin can
 tell an empty scope from an empty result, and a `PARTIAL` deletes nothing
 (ADR-0047). `connect` has **no** suppression mechanism at all — a known scope gap,
 not a merge problem.
@@ -456,6 +472,62 @@ dashboard id composed against a per-environment template in the plugin's config,
 which is what lets one manifest render correctly in both production and staging.
 A rel with no configured template produces **no link**, never a half-composed
 one.
+
+The vocabulary stays at nine: `topology.io/consumes` and `topology.io/produces`
+were considered here and **declined**, so "`kubernetes` emits no edges" stays
+literally true and `yaml` is the sole declarer of edges no plugin can observe.
+The cost is paid at the point of use: adding a consumer is two edits, the
+annotation for health routing and the YAML stanza for the edge (ADR-0065).
+
+### YAML topology
+
+The `yaml` plugin's input: **one directory per environment**, every `*.yaml` in
+it read together as one snapshot (ADR-0061). Each file declares
+`environment:` and is rejected if that disagrees with the directory — redundant
+by design, because staging is written by copying production and a half-edited
+copy is this layout's characteristic failure.
+
+```yaml
+environment: production
+owners:  [{key, displayName, channel, onCall}]
+types:   [{type, label, category, icon}]        # TypeDescriptors (ADR-0001)
+nodes:
+  - key: payments-enricher
+    consumesFrom: [payments.events.raw.v1]
+    producesTo:   [payments.events.enriched.v1]
+    consumerGroups: [enrich-consumer-prod]
+```
+
+**Drift is written nowhere.** Staging lacks the Iceberg branch by having no
+stanza for it, which is the same absence `kubernetes` produces for a namespace
+that has no such Deployment (ADR-0004).
+
+**Edges are verb keys under the acting node** — `calls` · `producesTo` ·
+`consumesFrom` · `sourcesFrom` · `writesTo` · `queries` — with no `from`, no
+`to` and no escape hatch. The subject is the enclosing node and is always the
+actor, so a direction is never written and can never be written backwards; the
+loader applies ADR-0002's orientation. Six verbs, **closed** for `yaml`, so a
+new relation is a code change (ADR-0062).
+
+**Declare the gaps, not the graph.** `yaml` wins every contested scalar
+(ADR-0044), so a field written here that another plugin also knows is a silent
+override. Six of the fixture's ten stanzas are one or two lines: both topics
+are `{key, owner}` because `kafka` emits no `ownerKey`, both connectors are
+`{key, owner, writesTo}` because `connect` emits none either and cannot see its
+own destination. There is no `metadata`, no generic `backings:` list and no
+`relations:` block (ADR-0063).
+
+**Links here hold verbatim URLs** — the one writer in the MVP that does. The
+file is read once, for one environment, so ADR-0032's argument does not reach
+it (ADR-0061).
+
+**The environment is the unit of failure.** Anything invalid anywhere in the
+directory ⇒ `FAILED` ⇒ nothing changes: a file that will not parse, an unknown
+key, a mismatched `environment:`, or **a key declared twice**. A contest here
+is always a bug — files have no `creationTimestamp` and filename order would
+let renaming a file change a node's type — and it is never needed, because a
+cross-team edge lives in the actor's stanza. Say the *directory* failed, not
+the file (ADR-0064).
 
 ### Capability
 
@@ -660,6 +732,9 @@ would put a per-poll timestamp inside a collection ADR-0050 diffs, degenerating
 | stale / retained node | a key **retained through a `PARTIAL`** | absence means nothing in a snapshot that admits it was blind (ADR-0046) |
 | override / pinned field | `yaml` wins by **merge precedence** | §56 needs no second mechanism — YAML is a plugin that always wins (ADR-0044, ADR-0051) |
 | edge confidence / inferred edge | just an **edge** | every MVP edge is asserted; ADR-0009 dropped `confidence` and ADR-0041 removed the last inference |
+| the edge's `from` / `to` in YAML | the **verb** on the acting node | YAML never writes a direction; three of six relations read against the flow, and a reversed one is silently wrong (ADR-0062) |
+| the topology file | the environment's topology **directory** | it is many files read as one snapshot, and the directory is the unit of failure (ADR-0061, ADR-0064) |
+| YAML declares the graph | YAML declares the **gaps** | `yaml` wins every contested scalar, so a restated field is an override (ADR-0044, ADR-0063) |
 | topology (as an API resource) | the **environment** | there is no Topology entity; environment is the only scope (ADR-0004, ADR-0052) |
 | the node endpoint / the search endpoint | the **graph document** | the MVP API is three GETs; per-node, traversal and search routes do not exist (ADR-0053, ADR-0054) |
 | the node has no state | its NodeState is **`UNKNOWN`** | `/state` carries every key; a missing key would mean *deleted*, which is the graph document's meaning (ADR-0057) |
