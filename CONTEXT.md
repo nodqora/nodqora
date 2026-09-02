@@ -9,10 +9,17 @@ Decisions are recorded in [`docs/adr/`](docs/adr/). ADR-0001 through ADR-0009
 were fixed by [Core graph domain model](https://github.com/fredskor/nodqora/issues/3);
 ADR-0010 through ADR-0015 by
 [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6),
-which also amended ADR-0005; ADR-0020 through ADR-0023 by
+which also amended ADR-0005; ADR-0016 through ADR-0019 by
+[Canvas and node-inspector prototype](https://github.com/fredskor/nodqora/issues/7);
+ADR-0020 through ADR-0023 by
 [Identity-resolution rules for the MVP](https://github.com/fredskor/nodqora/issues/8);
 ADR-0024 through ADR-0029 by
-[Health normalization model](https://github.com/fredskor/nodqora/issues/9).
+[Health normalization model](https://github.com/fredskor/nodqora/issues/9);
+ADR-0030 through ADR-0035 by
+[Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10);
+ADR-0036 through ADR-0042 by
+[Kafka and Kafka Connect discovery scope](https://github.com/fredskor/nodqora/issues/11),
+which also amended ADR-0033.
 
 ---
 
@@ -253,7 +260,26 @@ is routinely not the one that can *attribute* it: `kafka` is the only plugin
 that can read consumer lag and the only one that cannot say whose lag it is. So
 `connect` stamps its config-declared workload onto every connector it discovers,
 and `enrich-consumer-prod` is attributed by an annotation on the workload or by
-YAML. The `kafka` plugin attributes nothing.
+YAML. The `kafka` plugin attributes nothing: it emits exactly **one** backing,
+`{ plugin: kafka, kind: topic, reference: <topic name> }`, on the node whose key
+is that topic's name (ADR-0040).
+
+### Routed group
+
+A consumer group that some node carries as a backing — declared by an
+annotation, by YAML, or by the `connect` plugin's own config. The routed set is
+the **only** set the `kafka` plugin reads: it never enumerates groups, because
+no API answers "which groups consume topic X" and the alternative is the whole
+cluster's consumer state on every fast poll (ADR-0040).
+
+Group→topic then falls out of the same response that carries the lag, since
+committed offsets are keyed by topic-partition — so a routed group's lag reaches
+both the node that routed it and the topics it consumes, without any plugin
+attributing anything.
+
+**A group nobody routed is invisible.** Its lag reaches no node and no topic.
+That is the standing cost of attribution-by-the-knowing-plugin, and it is why
+consumer groups are backings rather than nodes (ADR-0036).
 
 Backings are also the **alternate-name index**. There is no `aliases` field: a
 node is identified by `key`, `displayName` and `backings[].reference`, which is
@@ -280,7 +306,7 @@ Nodes reference it by `ownerKey`. Stored once, never copied onto nodes
 
 A navigation target on a Node: `{ rel, label, url }`. `rel` is an **open**
 string with well-known values — `repository`, `runbook`, `docs`, `dashboard`,
-`logs`, `gitops`, `workload`, `config`.
+`logs`, `gitops`, `workload`, `config`, `topic`, `consumers`.
 
 There is exactly **one** link mechanism. Repository and runbook are links, not
 fields (ADR-0007). A node with no links is a designed empty state, not a defect.
@@ -290,6 +316,13 @@ fields (ADR-0007). A node with no links is a designed empty state, not a defect.
 Plugin-namespaced opaque JSON on a Node, Edge or Backing, keyed by plugin id:
 `{ kafka: { partitions: 12, retentionMs: 604800000 } }`. **Slow-moving values
 only.** The core never reads inside it (ADR-0006).
+
+Keys are **allow-listed per plugin**, by name, never everything-except
+(ADR-0014, ADR-0038): `kubernetes` → `image`, `version`; `kafka` →
+`partitions`, `replicationFactor`, `retentionMs`, `cleanupPolicy`; `connect` →
+`class`, `type`, `tasksMax`. Allow-listing is a habit, not only a leak
+mitigation: a plugin that copies wholesale because it happens to be safe today
+is the one that leaks when the API grows.
 
 ### Metrics
 
@@ -326,6 +359,31 @@ are two plugins, not one.
 
 Configuration is per environment, file-declared and bound at startup; secrets
 are `${env:}` / `${file:}` references, never values (ADR-0014).
+
+### Discovery scope
+
+What each plugin is pointed at, and what it turns into nodes. Every scope knob
+is **required, enumerated and wildcard-free**, so a forgotten one reads as "half
+my graph is gone" rather than as one subtly absent node.
+
+| plugin | scope | node-producing kinds | edges |
+|---|---|---|---|
+| `kubernetes` | enumerated namespaces, one cluster per environment (ADR-0035) | Deployment, StatefulSet, CronJob (ADR-0030) | none (ADR-0033) |
+| `kafka` | required topic-name **prefix** list (ADR-0037) | topic (ADR-0036) | none |
+| `connect` | the configured cluster, whole | connector (ADR-0036) | from the `topics` key only (ADR-0041) |
+| `yaml` | the topology file | any | any — seven of the fixture's nine |
+
+Suppression is **subtractive and exact** in both scoped plugins — an exact
+`kind/name` or topic name, never a narrowing selector and never a glob
+(ADR-0031, ADR-0037) — because subtraction fails toward a visibly-wrong *extra*
+node while narrowing fails toward a *missing* one.
+
+Brokers, Kafka clusters, Connect clusters, workers and consumer groups are
+**not** nodes: they are physical (ADR-0005), or they duplicate the Environment,
+or they are backings (ADR-0036).
+
+Both loops run at **5 minute discovery / 30 second health** for all three code
+plugins, with timeouts strictly below their interval (ADR-0035, ADR-0042).
 
 ### `topology.io/*` annotations
 
@@ -410,3 +468,5 @@ old it is.
 | health rolls up / propagates | health is **local** | a propagated value has no raw signal behind it, and it flattens the shape the canvas exists to show (ADR-0027) |
 | the plugin returned UNKNOWN | the plugin **abstained** | `UNKNOWN` is discarded in composition, so returning it for something observed deletes the plugin's own vote (ADR-0024, ADR-0029) |
 | plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
+| consumer group node | a **routed group** — a backing | a group is how a component consumes, not a component; unrouted, it is invisible (ADR-0036, ADR-0040) |
+| topic filter / topic pattern | the **include prefix** list | scope is exact leading-substring match; no regex, no glob (ADR-0037) |

@@ -204,13 +204,25 @@ not from any Kubernetes object):
 topics                    = payments.events.enriched.v1
 connection.url            = https://es-prod.internal:9200
 type.name                 = _doc
-# → writes index payments-events-v1
+# → writes index payments-events-v1   (NOT derivable from this config — see below)
 
 # payments-iceberg-sink
 topics                    = payments.events.enriched.v1
 iceberg.catalog           = analytics
 iceberg.tables            = analytics.payments_events
 ```
+
+**Read that first block carefully: `payments-events-v1` is not in it.**
+`connection.url` is the Elasticsearch *cluster* endpoint, not an index name —
+the sink derives its index from the topic name. So the destination is knowable
+to a human reading the pipeline and **not** knowable to a plugin reading the
+config, which is why [ADR-0041](adr/0041-connect-infers-edges-from-the-topics-key-alone.md)
+has `connect` parse the `topics` key alone and leave both `WRITES_TO` edges to
+YAML. Inferring the index per connector class would emit an edge to
+`payments.events.enriched.v1`, which under [ADR-0020](adr/0020-flat-case-folded-node-keys.md)
+is the topic's own key — a self-loop that merges an index into a topic.
+`iceberg.tables` is the contrasting case: the node key, stated verbatim, and
+still not used.
 
 A connector at `RUNNING` with a `FAILED` task is the product plan's own §13
 DEGRADED example. It is in the baseline deliberately: the top-level connector

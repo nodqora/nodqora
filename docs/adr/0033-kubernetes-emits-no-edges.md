@@ -20,6 +20,13 @@ produce them settles the question before any of those are evaluated:
   `payments-api→raw.v1`, `payments-enricher→raw.v1`,
   `payments-enricher→enriched.v1`, `trino-analytics→analytics.payments_events`.
 
+> **Amended by [ADR-0041](0041-connect-infers-edges-from-the-topics-key-alone.md).**
+> This count is wrong: `payments-events-v1` does not appear in
+> `payments-es-sink`'s config, and `connection.url` is the Elasticsearch cluster
+> endpoint, not the index. The correct split is **two from `connect`** and
+> **seven from YAML**. Kubernetes still contributes zero, so the decision below
+> is unaffected — only its supporting arithmetic.
+
 **Kubernetes contributes zero.**
 
 ## Decision
