@@ -1,8 +1,16 @@
 # ADR-0042: Kafka and Connect configuration, cadence, outcome semantics, and GET-only enforcement
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kafka and Kafka Connect discovery scope](https://github.com/fredskor/nodqora/issues/11)
+
+> **Amendment (ADR-0047).** The zero-output guard generalizes to all three code
+> plugins: **an enumerated scope unit that yields zero nodes ⇒ `PARTIAL`**.
+> `connect` gains the reason it lacked — a configured cluster with zero connectors —
+> and `kubernetes` gains the namespace equivalent (ADR-0035). `kafka`'s two reasons
+> below are unchanged, and the undetectable ACL residual handed to #12 is answered
+> there: it stays undetectable, and ADR-0047 accepts it rather than guarding it.
+
 
 ## Context
 

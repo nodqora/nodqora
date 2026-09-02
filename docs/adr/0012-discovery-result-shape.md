@@ -1,8 +1,22 @@
 # ADR-0012: Discovery returns keyed core nodes as full snapshots that declare their own outcome
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0049](0049-owners-are-environment-scoped-discovery-output.md), [ADR-0051](0051-merge-diagnostics-are-logs-not-model-fields.md)
 - **Date**: 2026-09-01
 - **Ticket**: [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6)
+
+> **Amendment (ADR-0049).** `DiscoveryResult` gains `owners[]` —
+> `{ nodes[], edges[], owners[], descriptors[], outcome }`. ADR-0007's Owner
+> entity had no delivery path at all; owners are environment-scoped and folded
+> like nodes, **not** like the global descriptors.
+>
+> **Amendment (ADR-0051).** "The union of the latest **successful** result per
+> (plugin, environment)" was written before `PARTIAL` had a defined effect.
+> Descriptors come from the **stored snapshot**, whatever put it there: a
+> `PARTIAL` contributes, a `FAILED` does not. The separate provision that a failed
+> poll must retain the last known set rather than clearing it is no longer a rule
+> to implement — under ADR-0043 it is what the store does. The residual ambiguity
+> this ADR handed to #12 is answered by ADR-0046 and ADR-0047.
+
 
 ## Context
 

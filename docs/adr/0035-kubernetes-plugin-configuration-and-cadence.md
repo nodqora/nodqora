@@ -1,8 +1,16 @@
 # ADR-0035: Kubernetes plugin configuration and cadence — enumerated namespaces, one cluster, poll not watch
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
+
+> **Amendment (ADR-0047).** The `kubernetes` plugin gains a `PARTIAL` reason it
+> lacked: **an enumerated namespace that produced zero node-producing workloads**.
+> The zero-output guard is a plugin obligation because the engine cannot tell an
+> empty scope from an empty result; `kafka` already had the rule (ADR-0042) and the
+> asymmetry was an accident of which ticket wrote them. Everything else — enumerated
+> namespaces, no wildcard, one cluster per environment, 5m/30s — stands.
+
 
 ## Context
 

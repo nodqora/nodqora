@@ -1,8 +1,15 @@
 # ADR-0008: Provenance is a per-node contributor list, not per-field attribution
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0051](0051-merge-diagnostics-are-logs-not-model-fields.md)
 - **Date**: 2026-09-01
 - **Ticket**: [Core graph domain model](https://github.com/fredskor/nodqora/issues/3)
+
+> **Amendment (ADR-0051).** The open note below — that §56 manual overrides
+> "will need their own mechanism (a pinned-fields list, or promotion to per-field
+> provenance)" — is **discharged without building either**. ADR-0011 makes `yaml`
+> a plugin and ADR-0044 gives it top precedence, so a manual correction wins every
+> scalar on every subsequent poll. Per-node `sources[]` stands exactly as decided.
+
 
 ## Context
 

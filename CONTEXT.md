@@ -19,7 +19,9 @@ ADR-0030 through ADR-0035 by
 [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10);
 ADR-0036 through ADR-0042 by
 [Kafka and Kafka Connect discovery scope](https://github.com/fredskor/nodqora/issues/11),
-which also amended ADR-0033.
+which also amended ADR-0033; ADR-0043 through ADR-0051 by
+[Discovery-engine merge semantics](https://github.com/fredskor/nodqora/issues/12),
+which also amended ADR-0008, ADR-0012, ADR-0035 and ADR-0042.
 
 ---
 
@@ -35,9 +37,13 @@ Environment ──owns──▶ Node ──▶ NodeState        (fast: health, m
 Registry: TypeDescriptor (per node type) · RelationDescriptor (per relation)
 
 Plugin[yaml · kubernetes · kafka · connect]
-   ├── Discovery  ──▶ DiscoveryResult{nodes, edges, descriptors, outcome}
+   ├── Discovery  ──▶ DiscoveryResult{nodes, edges, owners, descriptors, outcome}
+   │                      └──▶ Snapshot store ──fold──▶ Node · Edge · Owner
    └── Health     ──▶ HealthResult{contributions, outcome}           ──▶ NodeState
 ```
+
+The **snapshot store** is the source of truth; Node, Edge and Owner rows are a
+**fold** of it (ADR-0043). Nothing writes them directly.
 
 **Slow half** — Node, Edge, Backing, Link, Owner, Environment. Changes when
 architecture changes. **Fast half** — NodeState. Changes every refresh. The
@@ -58,6 +64,11 @@ Fields: `id` (surrogate), `environmentKey` + `key` (natural key), `type`,
 `metadata{}`, `sources[]`, `discoveredAt`, `updatedAt`.
 
 `updatedAt` moves **only when topology changes** — never on a health refresh.
+Because the fold rewrites every row on every poll, that is enforced by
+**diffing the folded row against the stored one**, over canonically ordered
+collections — compare them as built and `updatedAt` degenerates into a poll clock
+(ADR-0050). `discoveredAt` is when the fold created the row: a node that leaves
+and returns gets a new one, and a fresh `NodeState`.
 
 ### Node key
 
@@ -117,6 +128,10 @@ to a fallback descriptor and still renders (ADR-0001).
 A directed relationship between two Nodes in the same Environment. Fields:
 `id`, `environmentKey`, `fromKey`, `toKey`, `relation`, `metadata{}`,
 `sources[]`, `discoveredAt`, `updatedAt`.
+
+Its identity is the **full tuple** `(environmentKey, fromKey, toKey, relation)`,
+endpoints matched case-folded like node keys — so an edge has **no contestable
+scalar at all** and edge merge is set union (ADR-0045).
 
 **`from` → `to` is always the direction data flows** (ADR-0002). Downstream is
 always "follow outgoing edges"; upstream is always "follow incoming". There are
@@ -302,6 +317,16 @@ A first-class entity — a team: `key`, `displayName`, `channel`, `onCall`.
 Nodes reference it by `ownerKey`. Stored once, never copied onto nodes
 (ADR-0007).
 
+Owners arrive in `DiscoveryResult.owners[]` and are **environment-scoped**,
+folded exactly like nodes — not like the global descriptors, because
+register-if-absent would let poll order decide a team's on-call channel
+(ADR-0049). Only `yaml` produces them: `kubernetes` reads `topology.io/owner` and
+gets a *key*, never a channel.
+
+An `ownerKey` that resolves to no Owner is **ordinary**, not an error — it is the
+expected steady state for a node whose manifests are annotated before anyone has
+written a YAML owner block (ADR-0048).
+
 ### Link
 
 A navigation target on a Node: `{ rel, label, url }`. `rel` is an **open**
@@ -310,6 +335,13 @@ string with well-known values — `repository`, `runbook`, `docs`, `dashboard`,
 
 There is exactly **one** link mechanism. Repository and runbook are links, not
 fields (ADR-0007). A node with no links is a designed empty state, not a defect.
+
+`links[]` is **additive with element identity `(rel, normalized url)`** —
+deduplicated after ADR-0032's scheme-prepending and **blind to which plugin said
+it**, or the fixture's most-linked node shows two identical Repository buttons.
+Not keyed by `rel` alone: a node can carry two `workload` links from `kubernetes`
+alone (ADR-0032, ADR-0021). Two writers with one `rel` and different URLs produce
+two visible links (ADR-0044).
 
 ### Metadata
 
@@ -338,9 +370,26 @@ Keys are **allow-listed per plugin**, never "whatever the API returned"
 
 Which plugins produced a Node or Edge: `[yaml, kubernetes]`. Per-node, not
 per-field — the MVP records *that* a source contributed, not *which field it
-set* (ADR-0008). Merge precedence is decided separately.
+set* (ADR-0008).
+
+Under ADR-0043 it is **derived, not stored as a decision**: it is the set of
+snapshots whose scope carries the key. `[yaml, kubernetes]` degrading to `[yaml]`
+is a topology change and moves `updatedAt` (ADR-0050).
 
 This is the model's **provenance** mechanism. `Backing.plugin` is not.
+
+### Merge precedence
+
+The order in which a contested **scalar** is settled — first non-`null` wins:
+
+```text
+yaml  >  connect  >  kubernetes  >  kafka
+```
+
+One **global** order, applied identically to `type`, `displayName`, `description`
+and `ownerKey`; nothing else on a Node is contestable (ADR-0044). It is §34's own
+tiers translated, and it is what makes `yaml` the §56 manual-override mechanism
+with no pinned-fields list behind it (ADR-0051).
 
 ---
 
@@ -378,6 +427,13 @@ Suppression is **subtractive and exact** in both scoped plugins — an exact
 (ADR-0031, ADR-0037) — because subtraction fails toward a visibly-wrong *extra*
 node while narrowing fails toward a *missing* one.
 
+An enumerated scope unit that yields **zero nodes** ⇒ `PARTIAL` — a prefix
+matching no topics, a namespace with no workloads, a Connect cluster with no
+connectors. The zero-output guard lives in the plugin because only the plugin can
+tell an empty scope from an empty result, and a `PARTIAL` deletes nothing
+(ADR-0047). `connect` has **no** suppression mechanism at all — a known scope gap,
+not a merge problem.
+
 Brokers, Kafka clusters, Connect clusters, workers and consumer groups are
 **not** nodes: they are physical (ADR-0005), or they duplicate the Environment,
 or they are backings (ADR-0036).
@@ -414,14 +470,69 @@ in environment config (ADR-0010).
 ### DiscoveryResult
 
 One plugin's **full snapshot** of its scope for one environment — never a delta:
-`{ nodes[], edges[], descriptors[], outcome }`, where `outcome` is `COMPLETE`,
-`PARTIAL(reasons)` or `FAILED(cause)` (ADR-0012).
+`{ nodes[], edges[], owners[], descriptors[], outcome }`, where `outcome` is
+`COMPLETE`, `PARTIAL(reasons)` or `FAILED(cause)` (ADR-0012, ADR-0049).
 
 Nodes carry final keys and only the fields the plugin knows; `null` means **no
-opinion**, not empty. Edges may reference keys the plugin does not own.
+opinion**, not empty — and it never has to mean anything else, because a value
+disappears when the snapshot carrying it stops carrying it (ADR-0043). Edges may
+reference keys the plugin does not own.
 
 `outcome` is not a completeness guarantee — a plugin cannot always tell it was
 blind. Say the snapshot is `PARTIAL`, not "discovery failed".
+
+### Snapshot store
+
+The engine's retained copy of the latest **accepted** DiscoveryResult per
+`(plugin, environment)`. It is durable, and it is the **source of truth**: Node,
+Edge and Owner rows are derived from it and can be rebuilt from it at any time
+(ADR-0043).
+
+`outcome` is its transition function (ADR-0046):
+
+| `outcome` | effect |
+|---|---|
+| `COMPLETE` | **replace wholesale** — keys absent from it are absent |
+| `PARTIAL` | **upsert the keys present, retain the keys absent**, whole nodes |
+| `FAILED` | **no change** |
+
+> **Absence is honoured at exactly one granularity per level: key-level within a
+> plugin's snapshot, field-level never.** Across plugins, fields are settled by
+> merge precedence, never by absence.
+
+A stored snapshot whose plugin or environment has left the config is discarded at
+startup, or its nodes become immortal.
+
+### Fold
+
+The pure recomputation of an environment's Node, Edge and Owner rows from the
+snapshot store. It runs when a snapshot lands, recomputes the **whole**
+environment, and commits atomically (ADR-0043).
+
+It is **order-independent**: the same stored snapshots produce the same graph
+whatever order they arrived in. That is why an emptiness guard — "fill an empty
+field, never overwrite a populated one" — is structurally unavailable here, and
+why nothing may express a *negative* assertion: every snapshot says only "here is
+what I found" (ADR-0051).
+
+Say the fold **recomputes** a node. Do not say the merge *updates* one.
+
+A key absent from a `COMPLETE` snapshot is deleted **immediately** — no
+N-consecutive rule, no delta threshold. Deletion here is non-destructive and
+self-healing, while over-retention is permanent and corrupts drift-is-absence
+(ADR-0047).
+
+### Stub node
+
+The node the fold materializes at an edge endpoint no snapshot carries: no
+`type` (so ADR-0001's fallback descriptor renders it), no `displayName`, no
+backings, no links, health `UNKNOWN`. There is no `stub` flag — it is the empty
+case of a node the model already has (ADR-0048).
+
+It exists because a canvas edge needs two nodes, and because a visibly-wrong
+extra node beats a silently-missing relationship (ADR-0031's direction). A
+dangling `ownerKey` gets no such treatment: it renders fine as a name with an
+empty contact section.
 
 ### StateContribution
 
@@ -470,3 +581,9 @@ old it is.
 | plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
 | consumer group node | a **routed group** — a backing | a group is how a component consumes, not a component; unrouted, it is invisible (ADR-0036, ADR-0040) |
 | topic filter / topic pattern | the **include prefix** list | scope is exact leading-substring match; no regex, no glob (ADR-0037) |
+| the merge updates a node | the **fold recomputes** it | nothing writes Node rows directly; they are derived from the snapshot store (ADR-0043) |
+| the discovery run | a **snapshot**, per (plugin, environment) | the four land independently; there is no moment when "the run" finishes (ADR-0012, ADR-0043) |
+| the node was deleted | the key is **carried by no snapshot** | deletion is arithmetic over the store, not an event someone emits (ADR-0047) |
+| stale / retained node | a key **retained through a `PARTIAL`** | absence means nothing in a snapshot that admits it was blind (ADR-0046) |
+| override / pinned field | `yaml` wins by **merge precedence** | §56 needs no second mechanism — YAML is a plugin that always wins (ADR-0044, ADR-0051) |
+| edge confidence / inferred edge | just an **edge** | every MVP edge is asserted; ADR-0009 dropped `confidence` and ADR-0041 removed the last inference |
