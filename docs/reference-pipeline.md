@@ -54,7 +54,7 @@ that.
 ## 2. Node inventory
 
 `disc` = how the node enters the graph: **K8s**, **Kafka**, **Connect** (all
-discovered) or **declared** (YAML only, no adapter).
+discovered) or **declared** (YAML only, no observing plugin).
 
 | id | type | display name | disc | prod | staging |
 |---|---|---|---|---|---|
@@ -70,7 +70,7 @@ discovered) or **declared** (YAML only, no adapter).
 | `trino-analytics` | query-engine | analytics (Trino) | declared | ✓ | — |
 
 Four of ten nodes are **declared, not discovered**. The graph is permanently
-mixed; no MVP feature may assume every node has an adapter behind it.
+mixed; no MVP feature may assume every node has a plugin behind it.
 
 ---
 
@@ -212,20 +212,25 @@ Two named scenarios. **Baseline** is the default and exercises all five §13
 normalized states at once. **Incident** is for demos and for designing the
 canvas's degraded rendering.
 
+The **raw signal** column is a *gist*, not literal composed output. Several
+plugins observe most nodes (ADR-0013), so `payments-es-sink`'s real signal is
+`"2/2 ready; lag 120; RUNNING, 3/3 tasks RUNNING"`. The column names the
+*interesting* signal; it is not an expected-output assertion (ADR-0028).
+
 ### Baseline (production)
 
 | node | raw signal | normalized |
 |---|---|---|
-| `stripe-webhooks` | no adapter | UNKNOWN |
+| `stripe-webhooks` | nothing observes this node | UNKNOWN |
 | `payments-api` | 3 desired / 3 ready | HEALTHY |
 | `payments.events.raw.v1` | group lag 40,000 | DEGRADED |
 | `payments-enricher` | 3 desired / 2 ready; lag 40,000 | DEGRADED |
 | `payments.events.enriched.v1` | max group lag 8,400 | HEALTHY |
 | `payments-es-sink` | RUNNING, 3/3 tasks RUNNING | HEALTHY |
 | `payments-iceberg-sink` | RUNNING, 1 task FAILED | DEGRADED |
-| `payments-events-v1` | no adapter | UNKNOWN |
-| `analytics.payments_events` | no adapter | UNKNOWN |
-| `trino-analytics` | no adapter | UNKNOWN |
+| `payments-events-v1` | nothing observes this node | UNKNOWN |
+| `analytics.payments_events` | nothing observes this node | UNKNOWN |
+| `trino-analytics` | nothing observes this node | UNKNOWN |
 
 Staging under baseline: all seven nodes HEALTHY or UNKNOWN, no lag.
 
@@ -237,18 +242,29 @@ DISABLED does not occur in baseline — see incident.
 |---|---|---|
 | `payments-enricher` | 3 desired / 0 ready, `CrashLoopBackOff` | UNHEALTHY |
 | `payments.events.raw.v1` | group lag 2,100,000, growing | DEGRADED |
-| `payments.events.enriched.v1` | no new records for 20m | DEGRADED |
+| `payments.events.enriched.v1` | sink groups idle, lag unchanged | HEALTHY |
 | `payments-es-sink` | connector `PAUSED` | DISABLED |
 | `payments-iceberg-sink` | connector `PAUSED` | DISABLED |
 | `payments-api` | 3 desired / 3 ready | HEALTHY |
-| all declared nodes | no adapter | UNKNOWN |
+| all declared nodes | nothing observes this node | UNKNOWN |
 
 The incident's shape matters: a single failing workload mid-pipeline, healthy
 upstream, stalled downstream. The graph should make the blast direction obvious
 without a blast-radius feature.
 
 Thresholds (lag limits especially) are configurable per the product plan; the
-numbers above are the fixture's values, not product defaults.
+numbers above are the fixture's values, not product defaults. Lag thresholds
+live in the `kafka` plugin's per-environment config, keyed by consumer group
+(ADR-0025).
+
+`enriched.v1` reads **HEALTHY** through the incident. Its original signal — "no
+new records for 20m" — is producer staleness, computable only by comparing high
+watermarks across two polls, and ADR-0012 makes plugins stateless; the MVP
+derives topic health from consumer lag alone (ADR-0025). Under the incident
+nothing produces to the topic *and* both sinks are paused, so the sink groups'
+lag stays frozen at its baseline, under threshold. An idle topic reading HEALTHY
+is honest — the incident's shape (enricher UNHEALTHY, upstream backing up,
+downstream deliberately DISABLED) still reads off the canvas without it.
 
 ---
 
@@ -290,7 +306,7 @@ Each property below exists on purpose. Removing one removes a design constraint.
 
 | property | forces |
 |---|---|
-| 4 of 10 nodes have no adapter | the graph is permanently mixed; UNKNOWN is normal, not an error state |
+| 4 of 10 nodes have no observing plugin | the graph is permanently mixed; UNKNOWN is normal, not an error state |
 | `enricher-v2` ≠ `payments-enricher` ≠ `enrich-consumer-prod` | annotation-based identity resolution; string equality is insufficient |
 | one workload hosts two connectors | workload-to-node mapping is not one-to-one |
 | three consumer-group naming conventions | group attribution needs more than one rule |

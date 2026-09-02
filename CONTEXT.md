@@ -10,7 +10,9 @@ were fixed by [Core graph domain model](https://github.com/fredskor/nodqora/issu
 ADR-0010 through ADR-0015 by
 [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6),
 which also amended ADR-0005; ADR-0020 through ADR-0023 by
-[Identity-resolution rules for the MVP](https://github.com/fredskor/nodqora/issues/8).
+[Identity-resolution rules for the MVP](https://github.com/fredskor/nodqora/issues/8);
+ADR-0024 through ADR-0029 by
+[Health normalization model](https://github.com/fredskor/nodqora/issues/9).
 
 ---
 
@@ -27,7 +29,7 @@ Registry: TypeDescriptor (per node type) · RelationDescriptor (per relation)
 
 Plugin[yaml · kubernetes · kafka · connect]
    ├── Discovery  ──▶ DiscoveryResult{nodes, edges, descriptors, outcome}
-   └── Health     ──▶ StateContribution{health, rawSignal, metrics}  ──▶ NodeState
+   └── Health     ──▶ HealthResult{contributions, outcome}           ──▶ NodeState
 ```
 
 **Slow half** — Node, Edge, Backing, Link, Owner, Environment. Changes when
@@ -162,6 +164,9 @@ read (ADR-0003).
 One row, but **composed from several StateContributions** — `payments-enricher`
 is observed by `kubernetes` and `kafka` at once (ADR-0013).
 
+A node nobody observes gets **no row at all**; absence reads as `UNKNOWN` /
+`rawSignal: null` / `metrics: {}` / `observedAt: null` on the join (ADR-0028).
+
 Never say "the node's health is stale" — say the **NodeState** is stale.
 
 ### Health
@@ -173,14 +178,43 @@ Deliberately the one closed vocabulary in a model of open strings — normalizin
 technology-specific status into a fixed set is what plugins exist to do
 (ADR-0003).
 
+**The five values are not a ladder.** Three are severities; two are not
+opinions at all. `UNKNOWN` is an **abstention** — "I was not asked" or "I could
+not look". `DISABLED` is **judgement suspended** — a human turned this off, so
+the lag behind it and the readiness beneath it are consequences of that act,
+not findings. So contributions collapse in three steps (ADR-0024):
+
+1. **Discard** every `UNKNOWN`. Nothing left — including nothing asked — is
+   `UNKNOWN`.
+2. Any surviving `DISABLED` wins **outright**, over `UNHEALTHY` included.
+3. Otherwise **worst-wins** over the only real ladder:
+   `HEALTHY` < `DEGRADED` < `UNHEALTHY`.
+
+The same three steps run **inside** a plugin collapsing several of its own
+backings, so there is one composition algorithm applied at two levels.
+
 `UNKNOWN` is **normal, not an error**: four of the reference pipeline's ten
 nodes are permanently UNKNOWN because nothing observes them.
+
+Health is **local** — a node's health is what its own backings report, and
+nothing else. It never propagates across edges (ADR-0027).
+
+`DISABLED` requires **evidence of intent**: `desired = 0`, `PAUSED`, `STOPPED`.
+Absence of activity is never enough, which is why `kafka` never emits it — an
+`EMPTY` consumer group is a scaled-down consumer and a crashed one alike
+(ADR-0029).
 
 ### Raw signal
 
 The technology-specific observation a health value was normalized *from* —
 `"3 desired / 2 ready; lag 40000"`, `"RUNNING, 1 of 3 tasks FAILED"`. Held on
 NodeState so the inspector can always show its work.
+
+Contributions join in **registry order** — `yaml`, `kubernetes`, `kafka`,
+`connect` — separated by `"; "`. It is **`null`** when nothing observed the
+node, never a string like "no adapter"; the inspector has a designed empty
+state for that. A Connect stack trace contributes its **first line only**,
+bounded (ADR-0028).
 
 ### Backing
 
@@ -250,6 +284,10 @@ The same shape as metadata, on **NodeState**, for fast-moving values:
 `{ kafka: { maxConsumerLag: 40000 } }`. Metadata and metrics are the same idea
 split across ADR-0003's boundary.
 
+Keys are **allow-listed per plugin**, never "whatever the API returned"
+(ADR-0028): `kubernetes` → `desiredReplicas`, `readyReplicas`; `kafka` →
+`maxConsumerLag`; `connect` → `tasksTotal`, `tasksRunning`.
+
 ### Sources
 
 Which plugins produced a Node or Edge: `[yaml, kubernetes]`. Per-node, not
@@ -306,7 +344,22 @@ One plugin's observation of one node: `{ health, rawSignal, metrics{} }`
 by namespace, raw signals join in plugin order, and health collapses by a rule
 that is decided separately.
 
+Health collapses by ADR-0024's three steps — see **Health** above.
+
 A contribution is not a NodeState. Only the state engine writes NodeState.
+
+### HealthResult
+
+One plugin's health poll of one environment: `{ contributions, outcome }`, where
+`outcome` is `COMPLETE`, `PARTIAL(reasons)` or `FAILED(cause)` — the same three
+values, for the same reason, as DiscoveryResult (ADR-0026).
+
+**`health` says what we found; `outcome` says how well we looked.** They are
+separate because ADR-0024 discards abstentions: a plugin that fails for a cycle
+would otherwise let the plugins that did answer render a node green.
+
+There is no staleness TTL. `observedAt` is returned and the frontend says how
+old it is.
 
 ## Vocabulary to avoid
 
@@ -326,4 +379,6 @@ A contribution is not a NodeState. Only the state engine writes NodeState.
 | fuzzy match / similar name | an exact **cascade tier** | every resolution tier is exact; §34 forbids fuzzy as the primary mechanism (ADR-0021) |
 | generic external node | **declared node** | implies a mechanism that does not exist — a node with no plugin behind it is ordinary (ADR-0011) |
 | the plugin's health value | the plugin's **StateContribution** | several plugins observe one node; only the state engine produces `health` (ADR-0013) |
+| health rolls up / propagates | health is **local** | a propagated value has no raw signal behind it, and it flattens the shape the canvas exists to show (ADR-0027) |
+| the plugin returned UNKNOWN | the plugin **abstained** | `UNKNOWN` is discarded in composition, so returning it for something observed deletes the plugin's own vote (ADR-0024, ADR-0029) |
 | plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
