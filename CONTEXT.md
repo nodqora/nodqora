@@ -204,6 +204,14 @@ Absence of activity is never enough, which is why `kafka` never emits it — an
 `EMPTY` consumer group is a scaled-down consumer and a crashed one alike
 (ADR-0029).
 
+**`kubernetes` is the plugin that can**, because its evidence is *declarative*
+and sits in the object's own spec rather than being inferred from an observed
+absence: `spec.replicas: 0` and a CronJob's `spec.suspend: true` are recorded
+statements of intent (ADR-0034). One consequence to know: a shared workload
+carries `DISABLED` to every node it backs, so scaling the `kafka-connect`
+StatefulSet to zero turns **both** connectors `DISABLED` under step 2 above,
+even though nobody paused the connectors.
+
 ### Raw signal
 
 The technology-specific observation a health value was normalized *from* —
@@ -233,6 +241,11 @@ exactly the nodes carrying a backing of its own (ADR-0013).
 - A Node may have **many** backings (`payments-api`: Deployment + Service + Ingress).
 - One object may back **many** Nodes (one `kafka-connect` StatefulSet backs both connectors).
 - A Node may have **none** — it is then a declared node.
+
+In Kubernetes, a Service or Ingress attaches to a node **by selector** —
+`Ingress →(backend service name)→ Service →(selector ⊇ pod labels)→ workload` —
+and that chain is the only Kubernetes inference the MVP uses. It produces
+backing attachment, never an edge (ADR-0030, ADR-0033).
 
 **A backing is emitted by whichever plugin knows the node key**, whatever
 technology the object belongs to (ADR-0022). The plugin that can *read* a signal
@@ -313,6 +326,21 @@ are two plugins, not one.
 
 Configuration is per environment, file-declared and bound at startup; secrets
 are `${env:}` / `${file:}` references, never values (ADR-0014).
+
+### `topology.io/*` annotations
+
+The **closed** nine-key vocabulary the `kubernetes` plugin reads from an object
+(ADR-0032). Unknown `topology.io/*` keys are ignored and logged — never
+interpreted as links or metadata.
+
+`node` (the key, ADR-0021 tier 1) · `type` · `owner` · `ignore` ·
+`consumer-groups` · `repository` · `runbook` · `docs` · `grafana`
+
+**Annotations hold ids, not URLs.** `grafana: payments-enricher-overview` is a
+dashboard id composed against a per-environment template in the plugin's config,
+which is what lets one manifest render correctly in both production and staging.
+A rel with no configured template produces **no link**, never a half-composed
+one.
 
 ### Capability
 

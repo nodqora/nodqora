@@ -138,14 +138,26 @@ logical service. Resolution must come from annotations, not string equality:
 
 ```yaml
 # on Deployment enricher-v2
-topology.io/service:    payments-enricher
-topology.io/owner:      payments-platform
-topology.io/repository: github.com/acme/payments-enricher
-topology.io/grafana:    payments-enricher-overview
+topology.io/node:            payments-enricher
+topology.io/owner:           payments-platform
+topology.io/consumer-groups: enrich-consumer-prod
+topology.io/repository:      github.com/acme/payments-enricher
+topology.io/grafana:         payments-enricher-overview
 ```
 
+The vocabulary is fixed by [ADR-0032](adr/0032-closed-annotation-vocabulary-and-composed-links.md):
+`topology.io/service` was renamed **`topology.io/node`**, because ADR-0030 admits
+StatefulSets and CronJobs too and the key names the node, not a type.
+`topology.io/consumer-groups` was added — it is how `enrich-consumer-prod`'s lag
+reaches this node at all (ADR-0022). `grafana` holds a dashboard **id**, not a
+URL; the URL is composed per environment from a config template, which is what
+lets one manifest render correctly in both production and staging.
+
 `kafka-connect` hosts **both** connectors — one workload, two connector nodes.
-The mapping from workload to connector is not one-to-one.
+The mapping from workload to connector is not one-to-one. It is **not itself a
+node**: the ten-node inventory holds because the `kubernetes` plugin is told to
+suppress it by exact name (ADR-0031), while `connect` still stamps it as a
+backing on both connectors. Suppression removes node emission, not readability.
 
 This mismatch is the fixture's most important feature. Identity resolution that
 only works on the `payments-api` case is not identity resolution.
