@@ -9,7 +9,8 @@ Decisions are recorded in [`docs/adr/`](docs/adr/). ADR-0001 through ADR-0009
 were fixed by [Core graph domain model](https://github.com/fredskor/nodqora/issues/3);
 ADR-0010 through ADR-0015 by
 [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6),
-which also amended ADR-0005.
+which also amended ADR-0005; ADR-0020 through ADR-0023 by
+[Identity-resolution rules for the MVP](https://github.com/fredskor/nodqora/issues/8).
 
 ---
 
@@ -57,6 +58,33 @@ enricher is a Deployment called `enricher-v2` with a consumer group called
 `enrich-consumer-prod`. The key is what survives all three.
 
 The natural key of a Node is the pair **(environmentKey, key)** (ADR-0004).
+
+The key is a **flat** human-readable string, unique within its Environment
+across **all** types — never qualified by type or plugin, never opaque
+(ADR-0020). It is stored verbatim and trimmed, but uniqueness and merge lookup
+are **case-folded**: `UNIQUE (environmentKey, lower(trim(key)))`. That is what
+lets `yaml` and `kubernetes` mint `payments-enricher` independently and land on
+one row.
+
+### Identity resolution
+
+How a plugin decides which node key a thing it found belongs to. It happens
+**inside the plugin** (ADR-0012), and only `kubernetes` has a real problem: a
+topic and a connector are each their own key, and YAML states its key outright.
+
+The rule is an **ordered cascade of exact-match tiers, first match wins** —
+annotation, then object name. No tier is ever fuzzy (ADR-0021).
+
+### Contested key
+
+Two objects resolving to one node key. The plugin emits **one** node: backings
+unioned so health routing reaches every claimant, scalars from the newest object
+by `creationTimestamp`, and the contest recorded under the plugin's own
+`metadata` namespace (ADR-0021).
+
+A contest is not an incomplete snapshot — never report it as `PARTIAL`. And note
+the reverse is not a contest at all: one object backing many nodes is legal and
+deliberate (ADR-0005, ADR-0022).
 
 ### Type
 
@@ -172,6 +200,18 @@ exactly the nodes carrying a backing of its own (ADR-0013).
 - One object may back **many** Nodes (one `kafka-connect` StatefulSet backs both connectors).
 - A Node may have **none** — it is then a declared node.
 
+**A backing is emitted by whichever plugin knows the node key**, whatever
+technology the object belongs to (ADR-0022). The plugin that can *read* a signal
+is routinely not the one that can *attribute* it: `kafka` is the only plugin
+that can read consumer lag and the only one that cannot say whose lag it is. So
+`connect` stamps its config-declared workload onto every connector it discovers,
+and `enrich-consumer-prod` is attributed by an annotation on the workload or by
+YAML. The `kafka` plugin attributes nothing.
+
+Backings are also the **alternate-name index**. There is no `aliases` field: a
+node is identified by `key`, `displayName` and `backings[].reference`, which is
+where the fixture's `enricher-v2` and `enrich-consumer-prod` live (ADR-0023).
+
 ### Declared node / Discovered node
 
 **Declared** — comes from the YAML topology; `sources` contains `yaml`.
@@ -282,6 +322,8 @@ A contribution is not a NodeState. Only the state engine writes NodeState.
 | label / tag | **metadata** | neither field exists in the MVP (ADR-0009) |
 | missing in staging | **not present in** staging | drift is absence, not a marked state |
 | adapter / integration | **plugin** | one word for one concept; a capability implementation is not an adapter (ADR-0010) |
+| alias | the **key**, or a **backing reference** | there is no alias field; backings carry the alternate names (ADR-0023) |
+| fuzzy match / similar name | an exact **cascade tier** | every resolution tier is exact; §34 forbids fuzzy as the primary mechanism (ADR-0021) |
 | generic external node | **declared node** | implies a mechanism that does not exist — a node with no plugin behind it is ordinary (ADR-0011) |
 | the plugin's health value | the plugin's **StateContribution** | several plugins observe one node; only the state engine produces `health` (ADR-0013) |
 | plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
