@@ -21,7 +21,8 @@ ADR-0036 through ADR-0042 by
 [Kafka and Kafka Connect discovery scope](https://github.com/fredskor/nodqora/issues/11),
 which also amended ADR-0033; ADR-0043 through ADR-0051 by
 [Discovery-engine merge semantics](https://github.com/fredskor/nodqora/issues/12),
-which also amended ADR-0008, ADR-0012, ADR-0035 and ADR-0042.
+which also amended ADR-0008, ADR-0012, ADR-0035 and ADR-0042; and ADR-0052
+through ADR-0060 by [REST API shape](https://github.com/fredskor/nodqora/issues/13).
 
 ---
 
@@ -558,6 +559,78 @@ would otherwise let the plugins that did answer render a node green.
 There is no staleness TTL. `observedAt` is returned and the frontend says how
 old it is.
 
+---
+
+## The read API
+
+The MVP API is **three GETs**, and there is no fourth (ADR-0053):
+
+```text
+GET /api/meta                          static rosters + poll intervals
+GET /api/environments/{envKey}/graph    the slow half, 5m, ETag
+GET /api/environments/{envKey}/state    the fast half, 30s
+```
+
+Environment is the **scoping resource** — §32's `/topologies` names an entity
+this model does not have (ADR-0052). Where a node is addressed it is addressed
+by **key**, case-folded like every other key lookup; the *environment* key is
+matched exactly, because it is operator-authored config rather than discovered
+data.
+
+The split is ADR-0003's wall made visible: `/graph` moves when architecture
+moves, `/state` every refresh. **The API is entirely read-only** — no writes at
+all, which puts GET-only at both ends of the system alongside ADR-0042's
+build-enforced GET-only into Connect.
+
+### Graph document
+
+`{ nodes[], edges[], owners[], typeDescriptors[], relationDescriptors[], plugins[] }`.
+
+Nodes are **complete** — the inspector renders from data already in hand, so
+ADR-0019's designed empty states are never confused with a spinner (ADR-0053).
+**Descriptors ride with the graph** rather than in `/api/meta`, because ADR-0043
+commits a node and the descriptor for its type in the same atomic fold, and two
+endpoints reopen the race the fold closed (ADR-0055).
+
+### State document
+
+`{ observedAt, plugins[], states[] }`, one entry per node key — **every** key,
+with `UNKNOWN` / `null` / `{}` / `null` synthesized for the unobserved
+(ADR-0057). Absence never crosses the wire here, because absence already means
+**deleted** in the graph document (ADR-0047) and two payloads may not disagree
+about that. Composed NodeState only: a StateContribution is never served.
+
+### Read-time projection
+
+A value the API computes from the snapshot store on read and **never stores on
+the folded row** (ADR-0056). There are two: each plugin's `outcome` — discovery
+on `/graph`, health on `/state` — and `sources[]`, widened on the wire from
+plugin ids to `{ plugin, confirmedAt }`.
+
+`confirmedAt` is what tells "confirmed 30 seconds ago" from "retained through a
+`PARTIAL` since Tuesday" (ADR-0046). It is a projection *because* storing it
+would put a per-poll timestamp inside a collection ADR-0050 diffs, degenerating
+`updatedAt` into a poll clock.
+
+### What the API does not do
+
+- **It never fabricates.** `displayName: null` reaches the client unresolved and
+  the frontend renders `displayName ?? key` — the fixture's `payments-api` is
+  genuinely *named* `payments-api`, and a server-side fallback would erase the
+  difference permanently (ADR-0058). A dangling `ownerKey` is returned bare,
+  with no stub Owner.
+- **It never traverses.** Upstream/downstream is a client-side BFS over the
+  loaded graph, **unbounded** — the fixture's declared tail sits two hops past
+  the last discovered node, so any default depth hides exactly what the mixed
+  graph exists to prove (ADR-0054). §16's Find Path, All Paths and depth control
+  are out of scope.
+- **It never searches.** Every string ADR-0023 makes matchable already ships in
+  the graph document. Search is therefore **environment-scoped by construction**:
+  cross-environment search is unavailable without new surface, not merely
+  unbuilt (ADR-0054).
+- **It never returns configuration or secrets** (§40, ADR-0014). The environment
+  roster is `{key, displayName}` and nothing else.
+
 ## Vocabulary to avoid
 
 | don't say | say | why |
@@ -587,3 +660,7 @@ old it is.
 | stale / retained node | a key **retained through a `PARTIAL`** | absence means nothing in a snapshot that admits it was blind (ADR-0046) |
 | override / pinned field | `yaml` wins by **merge precedence** | §56 needs no second mechanism — YAML is a plugin that always wins (ADR-0044, ADR-0051) |
 | edge confidence / inferred edge | just an **edge** | every MVP edge is asserted; ADR-0009 dropped `confidence` and ADR-0041 removed the last inference |
+| topology (as an API resource) | the **environment** | there is no Topology entity; environment is the only scope (ADR-0004, ADR-0052) |
+| the node endpoint / the search endpoint | the **graph document** | the MVP API is three GETs; per-node, traversal and search routes do not exist (ADR-0053, ADR-0054) |
+| the node has no state | its NodeState is **`UNKNOWN`** | `/state` carries every key; a missing key would mean *deleted*, which is the graph document's meaning (ADR-0057) |
+| the API defaults displayName | the **frontend** renders `displayName ?? key` | a fabricated name is indistinguishable from a real one that equals the key (ADR-0058) |
