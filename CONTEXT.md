@@ -41,12 +41,15 @@ Registry: TypeDescriptor (per node type) · RelationDescriptor (per relation)
 
 Plugin[yaml · kubernetes · kafka · connect]
    ├── Discovery  ──▶ DiscoveryResult{nodes, edges, owners, descriptors, outcome}
-   │                      └──▶ Snapshot store ──fold──▶ Node · Edge · Owner
-   └── Health     ──▶ HealthResult{contributions, outcome}           ──▶ NodeState
+   │                      └──▶ Snapshot store    ──fold──▶ Node · Edge · Owner
+   └── Health     ──▶ HealthResult{contributions, outcome}
+                          └──▶ Contribution store ──fold──▶ NodeState
 ```
 
-The **snapshot store** is the source of truth; Node, Edge and Owner rows are a
-**fold** of it (ADR-0043). Nothing writes them directly.
+**Two stores, two folds, four derived tables.** The stores are the source of
+truth; Node, Edge, Owner and NodeState rows are a **fold** of them (ADR-0043,
+ADR-0072). Nothing writes them directly, and both halves can be rebuilt from
+their store at any time.
 
 **Slow half** — Node, Edge, Backing, Link, Owner, Environment. Changes when
 architecture changes. **Fast half** — NodeState. Changes every refresh. The
@@ -126,6 +129,13 @@ alike** — which is how
 `iceberg-table` exists with no plugin behind it. An unregistered type resolves
 to a fallback descriptor and still renders (ADR-0001).
 
+Global, but **not a table**: descriptors ride in the snapshot store like nodes,
+and the global set served inside `/graph` is a read-time projection over it, so
+they are as derived and as mortal as everything else. Contested ids resolve by
+merge precedence, then by config environment order — never by which poll landed
+first (ADR-0077). The six **RelationDescriptors** are the exception: core
+built-ins seeded at startup, not stored at all (ADR-0062).
+
 ### Edge
 
 A directed relationship between two Nodes in the same Environment. Fields:
@@ -155,6 +165,9 @@ MVP vocabulary (ADR-0002):
 | `SOURCES_FROM` | reversed | feeds | sources from |
 | `WRITES_TO` | forward | writes to | is written by |
 | `QUERIES` | reversed | is queried by | queries |
+
+A relation is matched **exactly**, never case-folded: it is a vocabulary id from
+a registry of core built-ins, not discovered data (ADR-0071).
 
 ### Orientation
 
@@ -198,6 +211,9 @@ is observed by `kubernetes` and `kafka` at once (ADR-0013).
 
 A node nobody observes gets **no row at all**; absence reads as `UNKNOWN` /
 `rawSignal: null` / `metrics: {}` / `observedAt: null` on the join (ADR-0028).
+
+`observedAt` is the **`min`** over the contributions — the composed state is only
+as fresh as its stalest observer, so it can never overstate (ADR-0072).
 
 Never say "the node's health is stale" — say the **NodeState** is stale.
 
@@ -358,6 +374,9 @@ register-if-absent would let poll order decide a team's on-call channel
 (ADR-0049). Only `yaml` produces them: `kubernetes` reads `topology.io/owner` and
 gets a *key*, never a channel.
 
+An owner key is **case-folded for uniqueness and lookup**, exactly like a node
+key and for the same reason (ADR-0071).
+
 An `ownerKey` that resolves to no Owner is **ordinary**, not an error — it is the
 expected steady state for a node whose manifests are annotated before anyone has
 written a YAML owner block (ADR-0048).
@@ -407,9 +426,14 @@ Which plugins produced a Node or Edge: `[yaml, kubernetes]`. Per-node, not
 per-field — the MVP records *that* a source contributed, not *which field it
 set* (ADR-0008).
 
-Under ADR-0043 it is **derived, not stored as a decision**: it is the set of
-snapshots whose scope carries the key. `[yaml, kubernetes]` degrading to `[yaml]`
-is a topology change and moves `updatedAt` (ADR-0050).
+Under ADR-0043 it is **derived, not stored as a decision**: the plugins carrying
+the key as a node, **union** the plugins naming it as an edge endpoint.
+`[yaml, kubernetes]` degrading to `[yaml]` is a topology change and moves
+`updatedAt` (ADR-0050).
+
+The union is uniform, so a **stub node** is literally the empty case rather than a
+special rule — at the cost of `connect` appearing in a topic's `sources[]` because
+it named that topic in an edge (ADR-0079).
 
 This is the model's **provenance** mechanism. `Backing.plugin` is not.
 
@@ -591,8 +615,14 @@ Edge and Owner rows are derived from it and can be rebuilt from it at any time
 > plugin's snapshot, field-level never.** Across plugins, fields are settled by
 > merge precedence, never by absence.
 
+Physically it is a **header per `(plugin, environment)` plus one entry row per key
+carried** — never a single blob, because `PARTIAL` is per-key by definition and
+ADR-0056's `confirmedAt` is per key per plugin (ADR-0071). Descriptors are entries
+too (ADR-0077).
+
 A stored snapshot whose plugin or environment has left the config is discarded at
-startup, or its nodes become immortal.
+startup, or its nodes become immortal — enforced by cascade from the `environment`
+and `plugin` config-mirror tables rather than by a sweep (ADR-0074).
 
 ### Fold
 
@@ -607,6 +637,12 @@ why nothing may express a *negative* assertion: every snapshot says only "here i
 what I found" (ADR-0051).
 
 Say the fold **recomputes** a node. Do not say the merge *updates* one.
+
+Folds for one environment are **serialized on the `environment` row**, held from
+the fold's first read to its commit. Order-independence is a property of the
+*inputs*, not of the commits: two unserialized folds can each be correct and still
+let the later-committing, earlier-reading one erase a whole plugin's nodes for a
+cadence (ADR-0075).
 
 A key absent from a `COMPLETE` snapshot is deleted **immediately** — no
 N-consecutive rule, no delta threshold. Deletion here is non-destructive and
@@ -634,6 +670,15 @@ that is decided separately.
 
 Health collapses by ADR-0024's three steps — see **Health** above.
 
+Contributions are **retained per plugin** in a contribution store, keyed by
+`node_id`, and NodeState is a fold of them (ADR-0072) — symmetric with the
+snapshot store, and for the same reason: plugins poll independently, and a
+collapse cannot be recomputed from its own output because ADR-0024 discards the
+abstentions first.
+
+Keyed by `node_id` rather than node key so a node that leaves and returns reads
+`UNKNOWN` rather than re-inheriting stale contributions (ADR-0050).
+
 A contribution is not a NodeState. Only the state engine writes NodeState.
 
 ### HealthResult
@@ -649,6 +694,43 @@ would otherwise let the plugins that did answer render a node green.
 There is no staleness TTL. `observedAt` is returned and the frontend says how
 old it is.
 
+### Derived cache
+
+The `node` / `edge` / `owner` / `node_state` rows — a fold of the stores, never
+written directly. **Droppable**: a schema change recreates them and the boot fold
+repopulates, because ADR-0043 has no special cold-start path (ADR-0080).
+
+Collections on a folded row are **JSONB columns**, not child tables: canonical
+ordering is a storage obligation (ADR-0050), and a JSONB array is ordered while a
+child table's order is a clause someone can forget (ADR-0073).
+
+Edges store endpoint **keys**, not node ids — an id churns when a node leaves and
+returns, which would move `updatedAt` on every edge touching it for a topology
+change that did not happen (ADR-0078).
+
+### Config mirror
+
+The `environment` and `plugin` tables: config materialized at startup for
+referential integrity, never a second source of truth. Cascading deletes turn
+ADR-0043's two cleanup rules from a sweep across eight tables into an invariant
+(ADR-0074).
+
+The environment key is therefore **immutable** — a rename is a delete plus a
+create, self-healing within one cadence.
+
+### Folded key
+
+The stored generated column `lower(btrim(key))`, on nodes, owners and both edge
+endpoints. It is what ADR-0020's uniqueness, ADR-0045's endpoint resolution and
+ADR-0052's addressing all match on.
+
+### Payload version
+
+One application-level constant stamped on every stored payload. On startup, rows
+whose version differs are **discarded** — payloads are never migrated, because the
+plugins rebuild the store within one cadence (ADR-0080). One constant, not one per
+plugin: a bump must empty the graph rather than leave it partial and wrong.
+
 ---
 
 ## The read API
@@ -657,7 +739,7 @@ The MVP API is **three GETs**, and there is no fourth (ADR-0053):
 
 ```text
 GET /api/meta                          static rosters + poll intervals
-GET /api/environments/{envKey}/graph    the slow half, 5m, ETag
+GET /api/environments/{envKey}/graph    the slow half, 5m
 GET /api/environments/{envKey}/state    the fast half, 30s
 ```
 
@@ -692,10 +774,11 @@ about that. Composed NodeState only: a StateContribution is never served.
 
 ### Read-time projection
 
-A value the API computes from the snapshot store on read and **never stores on
-the folded row** (ADR-0056). There are two: each plugin's `outcome` — discovery
-on `/graph`, health on `/state` — and `sources[]`, widened on the wire from
-plugin ids to `{ plugin, confirmedAt }`.
+A value the API computes from the store on read and **never stores on the folded
+row** (ADR-0056). There are **three**: each plugin's `outcome` — discovery on
+`/graph`, health on `/state`; `sources[]`, widened on the wire from plugin ids to
+`{ plugin, confirmedAt }`; and the **TypeDescriptors** riding inside `/graph`
+(ADR-0077).
 
 `confirmedAt` is what tells "confirmed 30 seconds ago" from "retained through a
 `PARTIAL` since Tuesday" (ADR-0046). It is a projection *because* storing it
