@@ -310,6 +310,24 @@ Backings are also the **alternate-name index**. There is no `aliases` field: a
 node is identified by `key`, `displayName` and `backings[].reference`, which is
 where the fixture's `enricher-v2` and `enrich-consumer-prod` live (ADR-0023).
 
+### Identifying string set
+
+The strings by which search can find a node: `key`, `displayName`, and each
+`backings[].reference` — the latter matchable **whole and by its `/`-separated
+segments**, because the string an SRE pastes from a Kubernetes alert is
+`enricher-v2`, not `payments-prod/enricher-v2` (ADR-0023, ADR-0066).
+
+The set is deliberately *not* wider. `type` and `ownerKey` are in the client's
+hands and matching them would deliver ADR-0018's deferred filters through the
+search box without designing them.
+
+### Matched via
+
+The attribution a search result carries when the hit came from a backing
+reference rather than from `key` or `displayName` — "`payments-enricher`, via
+Deployment `enricher-v2`". Without it, a result whose matched string the node
+does not display reads as a bug (ADR-0068).
+
 ### Declared node / Discovered node
 
 **Declared** — comes from the YAML topology; `sources` contains `yaml`.
@@ -739,3 +757,7 @@ would put a per-poll timestamp inside a collection ADR-0050 diffs, degenerating
 | the node endpoint / the search endpoint | the **graph document** | the MVP API is three GETs; per-node, traversal and search routes do not exist (ADR-0053, ADR-0054) |
 | the node has no state | its NodeState is **`UNKNOWN`** | `/state` carries every key; a missing key would mean *deleted*, which is the graph document's meaning (ADR-0057) |
 | the API defaults displayName | the **frontend** renders `displayName ?? key` | a fabricated name is indistinguishable from a real one that equals the key (ADR-0058) |
+| search filters the canvas | search produces a **result list** | dimming non-matches is ADR-0018's deferred filter with no off-switch, and it attacks both of ADR-0017's health channels (ADR-0068) |
+| aliases are searchable | the **identifying string set** is | there is no alias field; the set is `key`, `displayName` and backing references, whole and by segment (ADR-0023, ADR-0066) |
+| search disambiguates similar names | the **result list** disambiguates | `payments-e` matches `payments-enricher` and `payments-events-v1` and both are correct; the matcher owes a total order, not fewer hits (ADR-0067) |
+| no results found | no node **in this environment** matches | search is environment-scoped by construction; three of ten fixture nodes are absent from staging (ADR-0054, ADR-0070) |
