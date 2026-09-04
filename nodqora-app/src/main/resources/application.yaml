@@ -34,11 +34,11 @@ nodqora:
   #
   # Both lists must name exactly the registered plugins, checked at startup: a misspelled id would
   # otherwise sort last in silence and the graph would go on being folded with the wrong precedence.
-  # Slices 2-4 extend these as `kubernetes`, `connect` and `kafka` arrive, to
-  # `[yaml, kubernetes, kafka, connect]` and `[yaml, connect, kubernetes, kafka]`.
+  # Slices 3-4 extend these as `kafka` and `connect` arrive, to `[yaml, kubernetes, kafka, connect]`
+  # and `[yaml, connect, kubernetes, kafka]`.
   plugins:
-    registry-order: [yaml]
-    precedence: [yaml]
+    registry-order: [yaml, kubernetes]
+    precedence: [yaml, kubernetes]
 
   # ADR-0035, ADR-0042. Timeouts sit strictly below their interval (see DiscoveryEngine).
   refresh:
@@ -54,7 +54,34 @@ nodqora:
       plugins:
         # ADR-0061: one directory per environment, every *.yaml in it read together as one snapshot.
         yaml: { dir: fixtures/reference-pipeline/production }
+        # ADR-0035: enumerated namespaces, required and non-empty, with no wildcard and no `all`
+        # mode -- a forgotten namespace should read as "half my graph is gone" rather than as one
+        # subtly absent node, which ADR-0004 cannot tell from real drift. One cluster per
+        # environment, so `<namespace>/<name>` stays unique as a backing reference.
+        kubernetes:
+          namespaces: [payments-prod]
+          # ADR-0031: exact `kind/name`, no globs and no regex. `kafka-connect` hosts both
+          # connectors and is not itself a node; suppression removes node emission only, so
+          # `connect` can still stamp it as a backing on both of them.
+          ignore: [statefulset/kafka-connect]
+          # ADR-0032: the annotations hold ids, and the URL is composed here -- which is what lets
+          # one manifest render correctly in production and in staging. No template, no link.
+          links:
+            workload: "https://k8s.acme.io/{namespace}/{kind}/{name}"
+            pods: "https://k8s.acme.io/{namespace}/{kind}/{name}/pods"
+            logs: "https://grafana.acme.io/explore?ns={namespace}&app={name}"
+            dashboard: "https://grafana.acme.io/d/{value}"
+            gitops: "https://argocd.acme.io/applications/{value}"
     staging:
       display-name: Staging
       plugins:
         yaml: { dir: fixtures/reference-pipeline/staging }
+        kubernetes:
+          namespaces: [payments-staging]
+          ignore: [statefulset/kafka-connect]
+          links:
+            workload: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}"
+            pods: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}/pods"
+            logs: "https://grafana-staging.acme.io/explore?ns={namespace}&app={name}"
+            dashboard: "https://grafana-staging.acme.io/d/{value}"
+            gitops: "https://argocd-staging.acme.io/applications/{value}"

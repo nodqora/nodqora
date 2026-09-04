@@ -1,0 +1,62 @@
+{
+  "workloads": [
+    {
+      "kind": "Deployment",
+      "namespace": "payments-staging",
+      "name": "payments-api",
+      "creationTimestamp": "2026-03-11T09:24:00Z",
+      "labels": {
+        "app": "payments-api",
+        "argocd.argoproj.io/instance": "payments-api"
+      },
+      "annotations": {
+        "topology.io/type": "service",
+        "topology.io/owner": "payments-platform",
+        "topology.io/repository": "github.com/acme/payments-api",
+        "topology.io/runbook": "wiki/runbooks/payments-api",
+        "topology.io/docs": "docs.acme.io/payments-api",
+        "topology.io/grafana": "payments-api-overview"
+      },
+      "podLabels": { "app": "payments-api" }
+    },
+    {
+      "kind": "Deployment",
+      "namespace": "payments-staging",
+      "name": "enricher-v2",
+      "creationTimestamp": "2026-06-02T14:05:00Z",
+      "labels": { "app": "payments-enricher" },
+      "annotations": {
+        "topology.io/node": "payments-enricher",
+        "topology.io/type": "service",
+        "topology.io/owner": "payments-platform",
+        "topology.io/consumer-groups": "enrich-consumer-staging",
+        "topology.io/repository": "github.com/acme/payments-enricher",
+        "topology.io/grafana": "payments-enricher-overview"
+      },
+      "podLabels": { "app": "payments-enricher" }
+    },
+    {
+      "kind": "StatefulSet",
+      "namespace": "payments-staging",
+      "name": "kafka-connect",
+      "creationTimestamp": "2026-01-20T08:00:00Z",
+      "labels": { "app": "kafka-connect" },
+      "annotations": {},
+      "podLabels": { "app": "kafka-connect" }
+    }
+  ],
+  "services": [
+    {
+      "namespace": "payments-staging",
+      "name": "payments-api",
+      "selector": { "app": "payments-api" }
+    }
+  ],
+  "ingresses": [
+    {
+      "namespace": "payments-staging",
+      "name": "payments-api",
+      "services": ["payments-api"]
+    }
+  ]
+}
