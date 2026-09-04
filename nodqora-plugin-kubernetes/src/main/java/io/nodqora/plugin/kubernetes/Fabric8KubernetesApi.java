@@ -1,12 +1,17 @@
 package io.nodqora.plugin.kubernetes;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.Service;
-import io.fabric8.kubernetes.api.model.apps.Deployment;
-import io.fabric8.kubernetes.api.model.apps.StatefulSet;
+import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
+import io.fabric8.kubernetes.api.model.apps.StatefulSetSpec;
 import io.fabric8.kubernetes.api.model.batch.v1.CronJob;
+import io.fabric8.kubernetes.api.model.batch.v1.CronJobSpec;
+import io.fabric8.kubernetes.api.model.batch.v1.JobSpec;
+import io.fabric8.kubernetes.api.model.batch.v1.JobTemplateSpec;
 import io.fabric8.kubernetes.api.model.networking.v1.Ingress;
 import io.fabric8.kubernetes.api.model.networking.v1.IngressBackend;
+import io.fabric8.kubernetes.api.model.networking.v1.IngressServiceBackend;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
@@ -17,8 +22,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SequencedSet;
-import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -51,12 +56,12 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 .withConfig(configure(config))
                 .build()) {
             List<ObservedWorkload> workloads = new ArrayList<>();
-            client.apps().deployments().inNamespace(namespace).list().getItems().forEach(deployment ->
-                    workloads.add(workload(WorkloadKind.DEPLOYMENT, deployment.getMetadata(), podLabels(deployment))));
-            client.apps().statefulSets().inNamespace(namespace).list().getItems().forEach(statefulSet ->
-                    workloads.add(workload(WorkloadKind.STATEFULSET, statefulSet.getMetadata(), podLabels(statefulSet))));
-            client.batch().v1().cronjobs().inNamespace(namespace).list().getItems().forEach(cronJob ->
-                    workloads.add(workload(WorkloadKind.CRONJOB, cronJob.getMetadata(), podLabels(cronJob))));
+            client.apps().deployments().inNamespace(namespace).list().getItems().forEach(deployment -> workloads.add(
+                    workload(WorkloadKind.DEPLOYMENT, deployment.getMetadata(), template(deployment.getSpec()))));
+            client.apps().statefulSets().inNamespace(namespace).list().getItems().forEach(statefulSet -> workloads.add(
+                    workload(WorkloadKind.STATEFULSET, statefulSet.getMetadata(), template(statefulSet.getSpec()))));
+            client.batch().v1().cronjobs().inNamespace(namespace).list().getItems().forEach(cronJob -> workloads.add(
+                    workload(WorkloadKind.CRONJOB, cronJob.getMetadata(), jobTemplate(cronJob))));
 
             List<ObservedService> services = client.services().inNamespace(namespace).list().getItems().stream()
                     .map(Fabric8KubernetesApi::service)
@@ -114,33 +119,37 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 ingress.getMetadata().getNamespace(), ingress.getMetadata().getName(), List.copyOf(services));
     }
 
-    private static java.util.Optional<String> backendService(IngressBackend backend) {
-        return java.util.Optional.ofNullable(backend)
+    private static Optional<String> backendService(IngressBackend backend) {
+        return Optional.ofNullable(backend)
                 .map(IngressBackend::getService)
-                .map(service -> service.getName())
+                .map(IngressServiceBackend::getName)
                 .filter(Objects::nonNull);
     }
 
-    private static Map<String, String> podLabels(Object workload) {
-        return switch (workload) {
-            case Deployment deployment -> templateLabels(deployment.getSpec(), spec -> spec.getTemplate());
-            case StatefulSet statefulSet -> templateLabels(statefulSet.getSpec(), spec -> spec.getTemplate());
-            case CronJob cronJob -> cronJob.getSpec() == null
-                            || cronJob.getSpec().getJobTemplate() == null
-                            || cronJob.getSpec().getJobTemplate().getSpec() == null
-                    ? Map.of()
-                    : templateLabels(
-                            cronJob.getSpec().getJobTemplate().getSpec(), spec -> spec.getTemplate());
-            default -> Map.of();
-        };
+    /**
+     * The pod template's labels — what a Service selector matches, and therefore what decides
+     * whether a node gets its Service and Ingress backings at all. Each kind hands its own spec
+     * over, so there is no runtime type dispatch and no default branch that could drop the labels
+     * of a kind someone adds later.
+     */
+    private static Map<String, String> template(DeploymentSpec spec) {
+        return spec == null ? Map.of() : labels(spec.getTemplate());
     }
 
-    private static <S> Map<String, String> templateLabels(
-            S spec, Function<S, io.fabric8.kubernetes.api.model.PodTemplateSpec> template) {
-        if (spec == null) {
-            return Map.of();
-        }
-        io.fabric8.kubernetes.api.model.PodTemplateSpec pod = template.apply(spec);
+    private static Map<String, String> template(StatefulSetSpec spec) {
+        return spec == null ? Map.of() : labels(spec.getTemplate());
+    }
+
+    private static Map<String, String> jobTemplate(CronJob cronJob) {
+        return Optional.ofNullable(cronJob.getSpec())
+                .map(CronJobSpec::getJobTemplate)
+                .map(JobTemplateSpec::getSpec)
+                .map(JobSpec::getTemplate)
+                .map(Fabric8KubernetesApi::labels)
+                .orElseGet(Map::of);
+    }
+
+    private static Map<String, String> labels(PodTemplateSpec pod) {
         return pod == null || pod.getMetadata() == null || pod.getMetadata().getLabels() == null
                 ? Map.of()
                 : pod.getMetadata().getLabels();

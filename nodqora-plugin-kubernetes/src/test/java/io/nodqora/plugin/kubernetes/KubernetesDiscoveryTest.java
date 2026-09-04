@@ -86,6 +86,12 @@ class KubernetesDiscoveryTest {
                 .containsExactly("payments-api");
         assertThat(keys(discover(objects, config(List.of("deployment/kafka-")))))
                 .containsExactly("kafka-connect", "payments-api");
+        // The kind is folded because a human writes `StatefulSet`; the name is not, so a wrong-case
+        // entry leaves an extra node on the graph rather than removing a real one.
+        assertThat(keys(discover(objects, config(List.of("Deployment/kafka-connect")))))
+                .containsExactly("payments-api");
+        assertThat(keys(discover(objects, config(List.of("deployment/Kafka-Connect")))))
+                .containsExactly("kafka-connect", "payments-api");
     }
 
     @Test
@@ -97,6 +103,12 @@ class KubernetesDiscoveryTest {
         // team, where an operator will revert it; the deny-list needs a PR against the nodqora config
         // repo for a service team's own migration runner.
         assertThat(discover(objects, config(List.of())).nodes()).isEmpty();
+
+        // ADR-0031 names the value `"true"`. Anything else leaves the node visible, because
+        // suppressing on a value we did not recognise fails toward a missing node.
+        NamespaceObjects shouting = new NamespaceObjects(
+                List.of(workload("migrations", Map.of(TopologyAnnotations.IGNORE, "TRUE"))), List.of(), List.of());
+        assertThat(keys(discover(shouting, config(List.of())))).containsExactly("migrations");
     }
 
     @Test
@@ -165,6 +177,49 @@ class KubernetesDiscoveryTest {
                 .contains(
                         "workload https://k8s.acme.io/payments-prod/deployment/enricher-v2",
                         "workload https://k8s.acme.io/payments-prod/deployment/enricher-v1");
+    }
+
+    @Test
+    void a_losing_claimants_annotation_link_is_not_dropped() {
+        ObservedWorkload one = new ObservedWorkload(
+                WorkloadKind.DEPLOYMENT,
+                "payments-prod",
+                "enricher-v1",
+                Instant.parse("2026-01-01T00:00:00Z"),
+                Map.of(),
+                Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.REPOSITORY, "acme/old"),
+                Map.of());
+        ObservedWorkload two = new ObservedWorkload(
+                WorkloadKind.DEPLOYMENT,
+                "payments-prod",
+                "enricher-v2",
+                Instant.parse("2026-06-01T00:00:00Z"),
+                Map.of(),
+                Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.REPOSITORY, "acme/new"),
+                Map.of());
+
+        // ADR-0021 takes *scalars* from the newest object; `links[]` is a collection, and ADR-0044
+        // makes collections additive with an element identity. Two writers with one `rel` and
+        // different URLs render two links, both visible — the same failure direction ADR-0031
+        // chose, and it lets a human see that the two objects disagree.
+        assertThat(links(discover(new NamespaceObjects(List.of(one, two), List.of(), List.of()), config(List.of()))
+                        .nodes()
+                        .getFirst()))
+                .containsExactly("repository https://acme/new", "repository https://acme/old");
+    }
+
+    @Test
+    void two_claimants_saying_the_same_thing_are_one_link() {
+        ObservedWorkload one = annotated("enricher-v1", Instant.parse("2026-01-01T00:00:00Z"));
+        ObservedWorkload two = annotated("enricher-v2", Instant.parse("2026-06-01T00:00:00Z"));
+
+        assertThat(links(discover(
+                                new NamespaceObjects(List.of(one, two), List.of(), List.of()),
+                                config(List.of(), new KubernetesConfig.Links(
+                                        "https://k8s.acme.io/{namespace}", null, null, null, null)))
+                        .nodes()
+                        .getFirst()))
+                .containsExactly("workload https://k8s.acme.io/payments-prod");
     }
 
     @Test

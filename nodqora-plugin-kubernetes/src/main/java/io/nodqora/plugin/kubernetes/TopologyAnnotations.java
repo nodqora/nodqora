@@ -2,7 +2,6 @@ package io.nodqora.plugin.kubernetes;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -55,9 +54,14 @@ final class TopologyAnnotations {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /** ADR-0031: the opt-out is an annotation with the value {@code "true"} and nothing else. */
+    /**
+     * ADR-0031: the opt-out is an annotation with the value {@code "true"} and nothing else.
+     * Matched exactly, for the same failure-direction reason the deny-list is: a value this does
+     * not recognise leaves the node on the graph, which is visible, rather than removing it, which
+     * ADR-0004 reads as drift.
+     */
     static boolean ignores(ObservedWorkload workload) {
-        return "true".equals(lowercased(value(workload, IGNORE)));
+        return "true".equals(value(workload, IGNORE));
     }
 
     /** ADR-0032: plural, because nothing says a workload consumes one topic. */
@@ -75,9 +79,5 @@ final class TopologyAnnotations {
                 .filter(key -> !CLOSED.contains(key))
                 .sorted()
                 .toList();
-    }
-
-    private static String lowercased(String value) {
-        return value == null ? null : value.toLowerCase(Locale.ROOT);
     }
 }

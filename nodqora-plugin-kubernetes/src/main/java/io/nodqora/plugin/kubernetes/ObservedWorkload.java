@@ -1,7 +1,6 @@
 package io.nodqora.plugin.kubernetes;
 
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -39,8 +38,13 @@ public record ObservedWorkload(
         return namespace + "/" + name;
     }
 
-    /** ADR-0031's deny-list entry for this object, matched exactly and never as a pattern. */
+    /**
+     * ADR-0031's deny-list entry for this object, matched exactly and never as a pattern. The
+     * <em>name</em> is compared verbatim — an entry whose case is wrong fails toward an extra node,
+     * which is visibly wrong and gets reported, rather than toward a missing one, which ADR-0004
+     * cannot tell from drift. Only the kind is folded, because a human writes `StatefulSet`.
+     */
     public String denyListEntry() {
-        return kind.lowercased() + "/" + name.toLowerCase(Locale.ROOT);
+        return kind.lowercased() + "/" + name;
     }
 }

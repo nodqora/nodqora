@@ -1,6 +1,6 @@
 # ADR-0035: Kubernetes plugin configuration and cadence — enumerated namespaces, one cluster, poll not watch
 
-- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md)
+- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md), [ADR-0103](0103-cadence-is-the-engines-global-refresh.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
 
@@ -10,6 +10,12 @@
 > empty scope from an empty result; `kafka` already had the rule (ADR-0042) and the
 > asymmetry was an accident of which ticket wrote them. Everything else — enumerated
 > namespaces, no wildcard, one cluster per environment, 5m/30s — stands.
+
+> **Amendment (ADR-0103).** The four cadence keys below — `discoveryInterval`, `healthInterval`,
+> `discoveryTimeout`, `healthTimeout` — are **not bound** on the plugin's config type. Cadence is
+> the engine's global `nodqora.refresh`, whose defaults are these numbers, and the timeout is
+> derived as half the interval rather than validated below it. The numbers and every other key
+> here stand; only the per-plugin override mechanism ADR-0012 licensed is unbuilt.
 
 
 ## Context

@@ -1,6 +1,7 @@
 package io.nodqora.core.config;
 
 import java.util.ArrayList;
+import java.util.stream.IntStream;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,9 +19,10 @@ import java.util.Map;
  * wrote. Restoring the list here keeps that failure mode from being every plugin's to rediscover.
  *
  * <p>The rule is deliberately narrow: a map is a list only when its keys are exactly
- * {@code 0 … n-1}. A configuration map genuinely keyed by consecutive integers from zero would be
- * misread, which is the accepted cost — no MVP plugin has one, and the alternative is a per-plugin
- * escape hatch for a problem the binder created.
+ * {@code 0 … n-1}. Its one limitation is the mirror of that — a configuration map genuinely keyed
+ * by consecutive integers from zero would be read as a list. No MVP plugin has one, and this is a
+ * workaround for something the binder does rather than a decision about the product, so it is
+ * recorded here rather than as an ADR.
  */
 final class ConfigLists {
 
@@ -45,7 +47,7 @@ final class ConfigLists {
 
     private static boolean indexed(Map<String, Object> map) {
         return !map.isEmpty()
-                && java.util.stream.IntStream.range(0, map.size())
+                && IntStream.range(0, map.size())
                         .allMatch(index -> map.containsKey(String.valueOf(index)));
     }
 

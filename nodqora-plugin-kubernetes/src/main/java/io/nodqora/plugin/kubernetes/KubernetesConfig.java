@@ -36,16 +36,22 @@ public record KubernetesConfig(
 
     public KubernetesConfig {
         namespaces = namespaces == null ? List.of() : List.copyOf(namespaces);
-        // Matched exactly and case-folded once here, so the deny-list cannot become a pattern by
-        // accident and a `StatefulSet/kafka-connect` entry still means what it looks like.
-        ignore = ignore == null
-                ? List.of()
-                : ignore.stream().map(entry -> entry.trim().toLowerCase(Locale.ROOT)).toList();
+        // Only the kind half is folded, so a `StatefulSet/kafka-connect` entry still means what it
+        // looks like while the name stays an exact match — see ObservedWorkload.denyListEntry().
+        ignore = ignore == null ? List.of() : ignore.stream().map(KubernetesConfig::foldKind).toList();
         links = links == null ? Links.none() : links;
     }
 
     public boolean denies(ObservedWorkload workload) {
         return ignore.contains(workload.denyListEntry());
+    }
+
+    private static String foldKind(String entry) {
+        String trimmed = entry.trim();
+        int slash = trimmed.indexOf('/');
+        return slash < 0
+                ? trimmed.toLowerCase(Locale.ROOT)
+                : trimmed.substring(0, slash).toLowerCase(Locale.ROOT) + trimmed.substring(slash);
     }
 
     /**

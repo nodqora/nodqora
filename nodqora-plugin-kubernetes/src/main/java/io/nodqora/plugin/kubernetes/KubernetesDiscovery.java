@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.SequencedSet;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +77,7 @@ class KubernetesDiscovery {
                 continue;
             }
 
-            List<DiscoveredNode> found = read(namespace, objects, config, suppressions);
+            List<DiscoveredNode> found = nodesIn(namespace, objects, config, suppressions);
             if (found.isEmpty()) {
                 // ADR-0047: the zero-output guard is a plugin obligation, because the engine cannot
                 // tell an empty scope from an empty result — and a COMPLETE empty snapshot deletes
@@ -109,7 +110,7 @@ class KubernetesDiscovery {
 
     // ---------------------------------------------------------------- one namespace
 
-    private List<DiscoveredNode> read(
+    private List<DiscoveredNode> nodesIn(
             String namespace, NamespaceObjects objects, KubernetesConfig config, Suppressions suppressions) {
         List<ObservedWorkload> admitted = new ArrayList<>();
         for (ObservedWorkload workload : objects.workloads()) {
@@ -175,14 +176,20 @@ class KubernetesDiscovery {
                 .toList();
         ObservedWorkload winner = byRecency.getFirst();
 
-        List<Link> composed = new ArrayList<>(links.fromAnnotations(winner));
         SequencedSet<Backing> backings = new LinkedHashSet<>();
+        Map<String, Link> composed = new LinkedHashMap<>();
         for (ObservedWorkload claimant : byRecency) {
             backings.add(new Backing(PLUGIN_ID, claimant.kind().lowercased(), claimant.reference()));
             TopologyAnnotations.consumerGroups(claimant).forEach(group ->
                     backings.add(new Backing(CONSUMER_GROUP_DOMAIN, CONSUMER_GROUP_KIND, group)));
             backings.addAll(attachments.of(claimant));
-            composed.addAll(links.fromObject(claimant));
+            // ADR-0044: `links[]` is a collection, and collections are additive with an element
+            // identity — `(rel, url)` here, already scheme-prepended. Only *scalars* come from the
+            // newest object (ADR-0021), so a losing claimant's `topology.io/repository` stays
+            // visible rather than being silently dropped, which is the failure direction ADR-0044
+            // rejects: two writers disagreeing render two links, and a human sees the disagreement.
+            Stream.concat(links.fromAnnotations(claimant).stream(), links.fromObject(claimant).stream())
+                    .forEach(link -> composed.putIfAbsent(link.rel() + " " + link.url(), link));
         }
 
         return new DiscoveredNode(
@@ -191,9 +198,9 @@ class KubernetesDiscovery {
                 null,
                 null,
                 TopologyAnnotations.value(winner, TopologyAnnotations.OWNER),
-                composed,
+                List.copyOf(composed.values()),
                 List.copyOf(backings),
-                contest(byRecency));
+                contestMetadata(byRecency));
     }
 
     /**
@@ -201,7 +208,7 @@ class KubernetesDiscovery {
      * logged. It is deliberately not reported through {@code outcome}: the snapshot is complete, and
      * a {@code PARTIAL} would trip the deletion fail-safes ADR-0046 builds on failure signals.
      */
-    private static Map<String, Object> contest(List<ObservedWorkload> byRecency) {
+    private static Map<String, Object> contestMetadata(List<ObservedWorkload> byRecency) {
         if (byRecency.size() < 2) {
             return Map.of();
         }

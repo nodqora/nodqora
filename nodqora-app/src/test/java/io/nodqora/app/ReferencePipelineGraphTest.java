@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,7 +82,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
 
     @Test
     void exactly_the_four_declared_nodes_carry_a_type_and_a_display_name() {
-        List<String> named = new java.util.ArrayList<>();
+        List<String> named = new ArrayList<>();
         graph("production").get("nodes").forEach(node -> {
             if (!node.get("type").isNull() && !node.get("displayName").isNull()) {
                 named.add(node.get("key").asText());
@@ -290,7 +291,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     }
 
     private static List<String> backings(JsonNode node) {
-        List<String> backings = new java.util.ArrayList<>();
+        List<String> backings = new ArrayList<>();
         node.get("backings").forEach(backing -> backings.add("%s %s %s".formatted(
                 backing.get("plugin").asText(),
                 backing.get("kind").asText(),
@@ -299,7 +300,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     }
 
     private static List<String> links(JsonNode node) {
-        List<String> links = new java.util.ArrayList<>();
+        List<String> links = new ArrayList<>();
         node.get("links").forEach(link ->
                 links.add(link.get("rel").asText() + " " + link.get("url").asText()));
         return links;
