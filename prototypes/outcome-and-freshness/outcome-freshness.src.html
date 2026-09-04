@@ -1,0 +1,1138 @@
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+  // @xyflow/react's UMD build expects a `jsxRuntime` global; React's UMD ships none.
+  (function () {
+    function jsx(type, props, key) {
+      return React.createElement(type, key === undefined ? props : Object.assign({}, props, { key: key }));
+    }
+    window.jsxRuntime = { jsx: jsx, jsxs: jsx, jsxDEV: jsx, Fragment: React.Fragment };
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@xyflow/react@12.11.6/dist/umd/index.js"></script>
+
+<script>
+(function () {
+"use strict";
+
+var h = React.createElement;
+var Fragment = React.Fragment;
+var useState = React.useState, useMemo = React.useMemo, useEffect = React.useEffect, useRef = React.useRef;
+
+var XY = window.ReactFlow;
+var Position = XY.Position, MarkerType = XY.MarkerType;
+
+/* ============================================================
+   1. THE REFERENCE PIPELINE (docs/reference-pipeline.md)
+   ============================================================ */
+
+var OWNERS = {
+  "payments-platform": { key: "payments-platform", displayName: "Payments Platform", channel: "#payments-oncall", onCall: "Payments SRE" },
+  "data-platform":     { key: "data-platform",     displayName: "Data Platform",     channel: "#data-platform",   onCall: "Data Platform SRE" }
+};
+
+var TYPES = {
+  "service":             { label: "Service",             icon: "service" },
+  "kafka-topic":         { label: "Kafka topic",         icon: "topic" },
+  "connect-connector":   { label: "Connect connector",   icon: "connector" },
+  "elasticsearch-index": { label: "Elasticsearch index", icon: "index" },
+  "iceberg-table":       { label: "Iceberg table",       icon: "table" },
+  "query-engine":        { label: "Query engine",        icon: "engine" },
+  "external-api":        { label: "External API",        icon: "external" }
+};
+
+var RELATIONS = {
+  CALLS:         { forward: "calls",          reverse: "is called by" },
+  PRODUCES_TO:   { forward: "produces to",    reverse: "is produced by" },
+  CONSUMES_FROM: { forward: "delivers to",    reverse: "consumes from" },
+  SOURCES_FROM:  { forward: "feeds",          reverse: "sources from" },
+  WRITES_TO:     { forward: "writes to",      reverse: "is written by" },
+  QUERIES:       { forward: "is queried by",  reverse: "queries" }
+};
+
+var BOTH = ["production", "staging"], PROD = ["production"];
+
+/* ADR-0010/0011: four plugins, two capabilities. `yaml` declares no Health,
+   which is where UNKNOWN falls out of the model for free. */
+var PLUGINS = ["yaml", "kubernetes", "kafka", "connect"];
+var PLUGIN_META = {
+  yaml:       { label: "yaml",       discovery: true, health: false, discoverySec: 300, healthSec: null },
+  kubernetes: { label: "kubernetes", discovery: true, health: true,  discoverySec: 300, healthSec: 30 },
+  kafka:      { label: "kafka",      discovery: true, health: true,  discoverySec: 300, healthSec: 30 },
+  connect:    { label: "connect",    discovery: true, health: true,  discoverySec: 300, healthSec: 30 }
+};
+
+var NODES = [
+  { key: "stripe-webhooks", type: "external-api", displayName: "Stripe Webhooks", envs: BOTH,
+    sources: ["yaml"], ownerKey: null, links: [], backings: [], metadata: {},
+    description: "Inbound payment events from Stripe. Declared in the YAML topology; nothing observes it." },
+
+  { key: "payments-api", type: "service", displayName: "payments-api", envs: BOTH,
+    sources: ["yaml", "kubernetes"], ownerKey: "payments-platform",
+    backings: [
+      { plugin: "kubernetes", kind: "Deployment", reference: "payments-prod/payments-api" },
+      { plugin: "kubernetes", kind: "Service",    reference: "payments-prod/payments-api" },
+      { plugin: "kubernetes", kind: "Ingress",    reference: "payments.acme.io/webhooks/stripe" }
+    ],
+    metadata: { kubernetes: { image: "ghcr.io/acme/payments-api:1.4.2" } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/payments-api" },
+      { rel: "runbook",    label: "Runbook",    url: "https://wiki.acme.io/runbooks/payments-api" },
+      { rel: "docs",       label: "Docs",       url: "https://docs.acme.io/payments-api" },
+      { rel: "dashboard",  label: "Grafana",    url: "https://grafana.acme.io/d/payments-api" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/payments-api" },
+      { rel: "gitops",     label: "Argo CD",    url: "https://argocd.acme.io/applications/payments-api" },
+      { rel: "workload",   label: "Workload",   url: "https://k8s.acme.io/payments-prod/deployments/payments-api" },
+      { rel: "pods",       label: "Pods",       url: "https://k8s.acme.io/payments-prod/pods?app=payments-api" }
+    ],
+    description: "Receives Stripe webhooks and publishes raw payment events." },
+
+  { key: "payments.events.raw.v1", type: "kafka-topic", displayName: "payments.events.raw.v1", envs: BOTH,
+    sources: ["kafka"], ownerKey: "payments-platform",
+    backings: [{ plugin: "kafka", kind: "topic", reference: "payments.events.raw.v1" }],
+    metadata: { kafka: { partitions: 12, replicationFactor: 3 } },
+    links: [{ rel: "dashboard", label: "Grafana", url: "https://grafana.acme.io/d/kafka-topic?topic=payments.events.raw.v1" }],
+    description: null },
+
+  { key: "payments-enricher", type: "service", displayName: "payments-enricher", envs: BOTH,
+    sources: ["yaml", "kubernetes"], ownerKey: "payments-platform",
+    backings: [
+      { plugin: "kubernetes", kind: "Deployment",     reference: "payments-prod/enricher-v2" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "enrich-consumer-prod" }
+    ],
+    metadata: { kubernetes: { image: "ghcr.io/acme/payments-enricher:2.0.1" } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/payments-enricher" },
+      { rel: "dashboard",  label: "Grafana",    url: "https://grafana.acme.io/d/payments-enricher-overview" },
+      { rel: "workload",   label: "Workload",   url: "https://k8s.acme.io/payments-prod/deployments/enricher-v2" },
+      { rel: "pods",       label: "Pods",       url: "https://k8s.acme.io/payments-prod/pods?app=enricher-v2" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/enricher-v2" }
+    ],
+    description: "Three names for one service: node key payments-enricher, Deployment enricher-v2, consumer group enrich-consumer-prod." },
+
+  { key: "payments.events.enriched.v1", type: "kafka-topic", displayName: "payments.events.enriched.v1", envs: BOTH,
+    sources: ["kafka"], ownerKey: "payments-platform",
+    backings: [{ plugin: "kafka", kind: "topic", reference: "payments.events.enriched.v1" }],
+    metadata: { kafka: { partitions: 12, replicationFactor: 3 } },
+    links: [{ rel: "dashboard", label: "Grafana", url: "https://grafana.acme.io/d/kafka-topic?topic=payments.events.enriched.v1" }],
+    description: null },
+
+  { key: "payments-es-sink", type: "connect-connector", displayName: "payments-es-sink", envs: BOTH,
+    sources: ["connect"], ownerKey: "data-platform",
+    backings: [
+      { plugin: "connect",    kind: "connector",      reference: "connect-prod/payments-es-sink" },
+      { plugin: "kubernetes", kind: "StatefulSet",    reference: "payments-prod/kafka-connect" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "connect-payments-es-sink" }
+    ],
+    metadata: { connect: { connectorClass: "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector", tasksMax: 3 } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/connect-config" },
+      { rel: "runbook",    label: "Runbook",    url: "https://wiki.acme.io/runbooks/connect-sinks" },
+      { rel: "connect-ui", label: "Connect UI", url: "https://connect-ui.acme.io/payments-es-sink" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/kafka-connect" },
+      { rel: "config",     label: "Config",     url: "https://connect-ui.acme.io/payments-es-sink/config" }
+    ],
+    description: "Three observers: connect (tasks), kubernetes (the shared StatefulSet), kafka (lag). ADR-0026's worked example." },
+
+  { key: "payments-iceberg-sink", type: "connect-connector", displayName: "payments-iceberg-sink", envs: PROD,
+    sources: ["connect"], ownerKey: "data-platform",
+    backings: [
+      { plugin: "connect",    kind: "connector",      reference: "connect-prod/payments-iceberg-sink" },
+      { plugin: "kubernetes", kind: "StatefulSet",    reference: "payments-prod/kafka-connect" },
+      { plugin: "kafka",      kind: "consumer-group", reference: "connect-payments-iceberg-sink" }
+    ],
+    metadata: { connect: { connectorClass: "org.apache.iceberg.connect.IcebergSinkConnector", tasksMax: 3 } },
+    links: [
+      { rel: "repository", label: "Repository", url: "https://github.com/acme/connect-config" },
+      { rel: "runbook",    label: "Runbook",    url: "https://wiki.acme.io/runbooks/connect-sinks" },
+      { rel: "connect-ui", label: "Connect UI", url: "https://connect-ui.acme.io/payments-iceberg-sink" },
+      { rel: "logs",       label: "Logs",       url: "https://logs.acme.io/kafka-connect" },
+      { rel: "config",     label: "Config",     url: "https://connect-ui.acme.io/payments-iceberg-sink/config" }
+    ],
+    description: null },
+
+  { key: "payments-events-v1", type: "elasticsearch-index", displayName: "payments-events-v1", envs: BOTH,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {},
+    links: [{ rel: "kibana", label: "Kibana", url: "https://kibana.acme.io/app/discover?index=payments-events-v1" }],
+    description: null },
+
+  { key: "analytics.payments_events", type: "iceberg-table", displayName: "analytics.payments_events", envs: PROD,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {}, links: [], description: null },
+
+  { key: "trino-analytics", type: "query-engine", displayName: "analytics (Trino)", envs: PROD,
+    sources: ["yaml"], ownerKey: "data-platform", backings: [], metadata: {}, links: [], description: null }
+];
+
+var EDGES = [
+  { fromKey: "stripe-webhooks",             toKey: "payments-api",                relation: "CALLS",         envs: BOTH },
+  { fromKey: "payments-api",                toKey: "payments.events.raw.v1",      relation: "PRODUCES_TO",   envs: BOTH },
+  { fromKey: "payments.events.raw.v1",      toKey: "payments-enricher",           relation: "CONSUMES_FROM", envs: BOTH },
+  { fromKey: "payments-enricher",           toKey: "payments.events.enriched.v1", relation: "PRODUCES_TO",   envs: BOTH },
+  { fromKey: "payments.events.enriched.v1", toKey: "payments-es-sink",            relation: "SOURCES_FROM",  envs: BOTH },
+  { fromKey: "payments-es-sink",            toKey: "payments-events-v1",          relation: "WRITES_TO",     envs: BOTH },
+  { fromKey: "payments.events.enriched.v1", toKey: "payments-iceberg-sink",       relation: "SOURCES_FROM",  envs: PROD },
+  { fromKey: "payments-iceberg-sink",       toKey: "analytics.payments_events",   relation: "WRITES_TO",     envs: PROD },
+  { fromKey: "analytics.payments_events",   toKey: "trino-analytics",             relation: "QUERIES",       envs: PROD }
+];
+
+/* ADR-0028: a node nobody observes has no NodeState row; absence reads UNKNOWN. */
+var NO_OBS = { health: "UNKNOWN", rawSignal: null, metrics: {}, observers: [] };
+
+/* `observers` = which health-capable plugins actually contributed this cycle.
+   The frontend never computes it; it is what /state's contributions imply. */
+function st(health, rawSignal, metrics, observers) {
+  return { health: health, rawSignal: rawSignal, metrics: metrics || {}, observers: observers || [] };
+}
+
+var HEALTH_SETS = {
+  baseline: {
+    production: {
+      "stripe-webhooks": NO_OBS,
+      "payments-api": st("HEALTHY", "3 desired / 3 ready", { kubernetes: { readyReplicas: 3, desiredReplicas: 3 } }, ["kubernetes"]),
+      "payments.events.raw.v1": st("DEGRADED", "max group lag 40,000 (threshold 10,000)", { kafka: { maxConsumerLag: 40000 } }, ["kafka"]),
+      "payments-enricher": st("DEGRADED", "3 desired / 2 ready; lag 40,000", { kubernetes: { readyReplicas: 2, desiredReplicas: 3 }, kafka: { maxConsumerLag: 40000 } }, ["kubernetes", "kafka"]),
+      "payments.events.enriched.v1": st("HEALTHY", "max group lag 8,400", { kafka: { maxConsumerLag: 8400 } }, ["kafka"]),
+      "payments-es-sink": st("HEALTHY", "2/2 ready; lag 120; RUNNING, 3/3 tasks RUNNING", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 120 }, connect: { tasksRunning: 3, tasksTotal: 3 } }, ["kubernetes", "kafka", "connect"]),
+      "payments-iceberg-sink": st("DEGRADED", "2/2 ready; lag 8,400; RUNNING, 2 of 3 tasks RUNNING", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 8400 }, connect: { tasksRunning: 2, tasksTotal: 3 } }, ["kubernetes", "kafka", "connect"]),
+      "payments-events-v1": NO_OBS, "analytics.payments_events": NO_OBS, "trino-analytics": NO_OBS
+    },
+    staging: {
+      "stripe-webhooks": NO_OBS,
+      "payments-api": st("HEALTHY", "2 desired / 2 ready", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 } }, ["kubernetes"]),
+      "payments.events.raw.v1": st("HEALTHY", "max group lag 0", { kafka: { maxConsumerLag: 0 } }, ["kafka"]),
+      "payments-enricher": st("HEALTHY", "2 desired / 2 ready; lag 0", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 0 } }, ["kubernetes", "kafka"]),
+      "payments.events.enriched.v1": st("HEALTHY", "max group lag 0", { kafka: { maxConsumerLag: 0 } }, ["kafka"]),
+      "payments-es-sink": st("HEALTHY", "2/2 ready; lag 0; RUNNING, 2/2 tasks RUNNING", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 0 }, connect: { tasksRunning: 2, tasksTotal: 2 } }, ["kubernetes", "kafka", "connect"]),
+      "payments-events-v1": NO_OBS
+    }
+  },
+  incident: {
+    production: {
+      "stripe-webhooks": NO_OBS,
+      "payments-api": st("HEALTHY", "3 desired / 3 ready", { kubernetes: { readyReplicas: 3, desiredReplicas: 3 } }, ["kubernetes"]),
+      "payments.events.raw.v1": st("DEGRADED", "max group lag 2,100,000", { kafka: { maxConsumerLag: 2100000 } }, ["kafka"]),
+      "payments-enricher": st("UNHEALTHY", "3 desired / 0 ready, CrashLoopBackOff; lag 2,100,000", { kubernetes: { readyReplicas: 0, desiredReplicas: 3 }, kafka: { maxConsumerLag: 2100000 } }, ["kubernetes", "kafka"]),
+      "payments.events.enriched.v1": st("HEALTHY", "max group lag 8,400 (frozen)", { kafka: { maxConsumerLag: 8400 } }, ["kafka"]),
+      "payments-es-sink": st("DISABLED", "2/2 ready; lag 120; connector PAUSED", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 120 }, connect: { tasksRunning: 0, tasksTotal: 3 } }, ["kubernetes", "kafka", "connect"]),
+      "payments-iceberg-sink": st("DISABLED", "2/2 ready; lag 8,400; connector PAUSED", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 8400 }, connect: { tasksRunning: 0, tasksTotal: 3 } }, ["kubernetes", "kafka", "connect"]),
+      "payments-events-v1": NO_OBS, "analytics.payments_events": NO_OBS, "trino-analytics": NO_OBS
+    }
+  },
+  /* The contrast case this ticket exists for. `connect` health FAILED, so its
+     abstention is discarded (ADR-0024) and both connectors compose down to
+     kubernetes + kafka — green because we stopped looking. Meanwhile the
+     enricher is honestly DISABLED (spec.replicas: 0, ADR-0034). Two calm
+     nodes, opposite situations. */
+  blind: {
+    production: {
+      "stripe-webhooks": NO_OBS,
+      "payments-api": st("HEALTHY", "3 desired / 3 ready", { kubernetes: { readyReplicas: 3, desiredReplicas: 3 } }, ["kubernetes"]),
+      "payments.events.raw.v1": st("DEGRADED", "max group lag 260,000 (threshold 10,000)", { kafka: { maxConsumerLag: 260000 } }, ["kafka"]),
+      "payments-enricher": st("DISABLED", "spec.replicas: 0 — scaled to zero; lag 260,000", { kubernetes: { readyReplicas: 0, desiredReplicas: 0 }, kafka: { maxConsumerLag: 260000 } }, ["kubernetes", "kafka"]),
+      "payments.events.enriched.v1": st("HEALTHY", "max group lag 8,400", { kafka: { maxConsumerLag: 8400 } }, ["kafka"]),
+      "payments-es-sink": st("HEALTHY", "2/2 ready; lag 120", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 120 } }, ["kubernetes", "kafka"]),
+      "payments-iceberg-sink": st("HEALTHY", "2/2 ready; lag 8,400", { kubernetes: { readyReplicas: 2, desiredReplicas: 2 }, kafka: { maxConsumerLag: 8400 } }, ["kubernetes", "kafka"]),
+      "payments-events-v1": NO_OBS, "analytics.payments_events": NO_OBS, "trino-analytics": NO_OBS
+    }
+  }
+};
+
+/* ============================================================
+   2. Outcome + freshness fixtures (ADR-0026, ADR-0046, ADR-0056)
+   Ages are seconds before "now". Discovery runs at 300s, health at 30s
+   (ADR-0035, ADR-0042), so a *recent poll* and an *old confirmation* are
+   independent facts — which is the whole point of ADR-0056.
+   ============================================================ */
+
+var SCENARIOS = [
+  {
+    key: "baseline", label: "baseline", healthSet: "baseline",
+    blurb: "All four plugins COMPLETE. Nothing to report — the case whatever we design must not cry wolf on.",
+    discovery: {
+      yaml:       { outcome: "COMPLETE", age: 96 },
+      kubernetes: { outcome: "COMPLETE", age: 96 },
+      kafka:      { outcome: "COMPLETE", age: 96 },
+      connect:    { outcome: "COMPLETE", age: 96 }
+    },
+    health: {
+      kubernetes: { outcome: "COMPLETE", age: 11 },
+      kafka:      { outcome: "COMPLETE", age: 11 },
+      connect:    { outcome: "COMPLETE", age: 11 }
+    },
+    confirm: {}
+  },
+  {
+    key: "retained", label: "retained", healthSet: "baseline",
+    blurb: "`connect` discovery has been PARTIAL for 23 minutes: it polls fine, but two of three workers 503 and the connectors are being retained, not confirmed. Health is unaffected — so nothing on the health channel changes at all.",
+    discovery: {
+      yaml:       { outcome: "COMPLETE", age: 96 },
+      kubernetes: { outcome: "COMPLETE", age: 96 },
+      kafka:      { outcome: "COMPLETE", age: 96 },
+      connect:    { outcome: "PARTIAL",  age: 96,
+                    reasons: ["GET /connectors — 503 from 2 of 3 workers on connect-prod.internal:8083"] }
+    },
+    health: {
+      kubernetes: { outcome: "COMPLETE", age: 11 },
+      kafka:      { outcome: "COMPLETE", age: 11 },
+      connect:    { outcome: "COMPLETE", age: 11 }
+    },
+    confirm: {
+      "payments-es-sink":      { connect: 1382 },
+      "payments-iceberg-sink": { connect: 1382 }
+    }
+  },
+  {
+    key: "incident", label: "incident", healthSet: "incident",
+    blurb: "The fixture's incident, every plugin COMPLETE. Both connectors are genuinely DISABLED — a human paused them. Compare this against `blind`.",
+    discovery: {
+      yaml:       { outcome: "COMPLETE", age: 132 },
+      kubernetes: { outcome: "COMPLETE", age: 132 },
+      kafka:      { outcome: "COMPLETE", age: 132 },
+      connect:    { outcome: "COMPLETE", age: 132 }
+    },
+    health: {
+      kubernetes: { outcome: "COMPLETE", age: 8 },
+      kafka:      { outcome: "COMPLETE", age: 8 },
+      connect:    { outcome: "COMPLETE", age: 8 }
+    },
+    confirm: {}
+  },
+  {
+    key: "blind", label: "blind", healthSet: "blind",
+    blurb: "ADR-0026's worked example. `connect` is unreachable, so both connectors compose down to kubernetes + kafka and read HEALTHY while nobody knows what their tasks are doing. The enricher, scaled to zero on purpose, is honestly DISABLED. Two calm nodes, opposite situations.",
+    discovery: {
+      yaml:       { outcome: "COMPLETE", age: 74 },
+      kubernetes: { outcome: "COMPLETE", age: 74 },
+      kafka:      { outcome: "COMPLETE", age: 74 },
+      connect:    { outcome: "FAILED",   age: 74,
+                    cause: "connect-prod.internal:8083 — connection refused" }
+    },
+    health: {
+      kubernetes: { outcome: "COMPLETE", age: 9 },
+      kafka:      { outcome: "COMPLETE", age: 9 },
+      connect:    { outcome: "FAILED",   age: 9,
+                    cause: "connect-prod.internal:8083 — connection refused" }
+    },
+    confirm: {
+      "payments-es-sink":      { connect: 748 },
+      "payments-iceberg-sink": { connect: 748 }
+    }
+  }
+];
+
+function scenarioByKey(k) { for (var i = 0; i < SCENARIOS.length; i++) if (SCENARIOS[i].key === k) return SCENARIOS[i]; return SCENARIOS[0]; }
+
+/* Retention is a COMPARISON, not a timeout. A plugin's outcome carries when it
+   was recorded; a source carries when that plugin last confirmed the key. A
+   COMPLETE poll replaces its snapshot, so every key it carries was confirmed at
+   that poll and the two timestamps agree. Anything older was RETAINED — which
+   is exactly the two-of-ten distinction ADR-0056 said an environment-level
+   banner could not make. No TTL, no frontend constant, no clock skew: both
+   timestamps come from the same server in the same document. */
+function retainedAgainst(sc, plugin, age) {
+  var o = sc.discovery[plugin];
+  return !!o && age > o.age;
+}
+
+var ENV_CONFIG = {
+  production: { namespace: "payments-prod",    kafka: "kafka-prod.internal:9092" },
+  staging:    { namespace: "payments-staging", kafka: "kafka-staging.internal:9092" }
+};
+
+var HEALTH_LABEL = { HEALTHY: "Healthy", DEGRADED: "Degraded", UNHEALTHY: "Unhealthy", UNKNOWN: "Unknown", DISABLED: "Disabled" };
+var HEALTH_ORDER = ["UNHEALTHY", "DEGRADED", "DISABLED", "UNKNOWN", "HEALTHY"];
+
+/* ============================================================
+   3. Selectors, layout, projections
+   ============================================================ */
+
+function nodesFor(env) { return NODES.filter(function (n) { return n.envs.indexOf(env) >= 0; }); }
+function edgesFor(env) { return EDGES.filter(function (e) { return e.envs.indexOf(env) >= 0; }); }
+function nodeByKey(k) { for (var i = 0; i < NODES.length; i++) if (NODES[i].key === k) return NODES[i]; return null; }
+function descriptorFor(t) { return TYPES[t] || { label: t, icon: "external" }; }
+
+function stateFor(sc, env, key) {
+  var set = HEALTH_SETS[sc.healthSet] || {};
+  var byEnv = set[env];
+  /* staging has no incident/blind fixture — fall back to its baseline */
+  if (!byEnv) byEnv = (HEALTH_SETS.baseline[env] || {});
+  return byEnv[key] || NO_OBS;
+}
+
+/* ADR-0056: sources[] widens on the wire to {plugin, confirmedAt}. */
+function sourcesFor(sc, node) {
+  return node.sources.map(function (p) {
+    var override = sc.confirm[node.key] && sc.confirm[node.key][p];
+    var age = override !== undefined ? override : (sc.discovery[p] ? sc.discovery[p].age : 0);
+    return { plugin: p, age: age, stale: retainedAgainst(sc, p, age) };
+  });
+}
+function isRetained(sc, node) {
+  return sourcesFor(sc, node).some(function (s) { return s.stale; });
+}
+/* Which health-capable plugins that *back* this node failed or degraded this
+   cycle. Derived from backings (ADR-0013 routes health through them). */
+function blindObservers(sc, node) {
+  var out = [];
+  node.backings.forEach(function (b) {
+    if (!PLUGIN_META[b.plugin] || !PLUGIN_META[b.plugin].health) return;
+    if (out.indexOf(b.plugin) >= 0) return;
+    var o = sc.health[b.plugin];
+    if (o && o.outcome !== "COMPLETE") out.push(b.plugin);
+  });
+  return out;
+}
+function outcomeSummary(sc) {
+  var partial = 0, failed = 0, worst = "COMPLETE", items = [];
+  PLUGINS.forEach(function (p) {
+    [["discovery", sc.discovery[p]], ["health", sc.health[p]]].forEach(function (pair) {
+      var o = pair[1];
+      if (!o) return;
+      items.push({ plugin: p, capability: pair[0], o: o });
+      if (o.outcome === "PARTIAL") { partial++; if (worst === "COMPLETE") worst = "PARTIAL"; }
+      if (o.outcome === "FAILED") { failed++; worst = "FAILED"; }
+    });
+  });
+  return { partial: partial, failed: failed, worst: worst, items: items };
+}
+
+function layout(env) {
+  var ns = nodesFor(env), es = edgesFor(env);
+  var preds = {}, succs = {};
+  ns.forEach(function (n) { preds[n.key] = []; succs[n.key] = []; });
+  es.forEach(function (e) { if (preds[e.toKey]) preds[e.toKey].push(e.fromKey); if (succs[e.fromKey]) succs[e.fromKey].push(e.toKey); });
+  var layer = {};
+  ns.forEach(function (n) { layer[n.key] = 0; });
+  for (var pass = 0; pass < ns.length; pass++) {
+    var moved = false;
+    ns.forEach(function (n) {
+      preds[n.key].forEach(function (p) { if (layer[p] + 1 > layer[n.key]) { layer[n.key] = layer[p] + 1; moved = true; } });
+    });
+    if (!moved) break;
+  }
+  var byLayer = {};
+  ns.forEach(function (n) { (byLayer[layer[n.key]] = byLayer[layer[n.key]] || []).push(n.key); });
+  var slot = {};
+  Object.keys(byLayer).map(Number).sort(function (a, b) { return a - b; }).forEach(function (l) {
+    var taken = {};
+    byLayer[l].forEach(function (k) {
+      var want = 0;
+      for (var i = 0; i < preds[k].length; i++) if (slot[preds[k][i]] !== undefined) { want = slot[preds[k][i]]; break; }
+      while (taken[want]) want++;
+      taken[want] = true; slot[k] = want;
+    });
+  });
+  return { layer: layer, slot: slot, preds: preds, succs: succs, nodes: ns, edges: es };
+}
+
+function reachability(lay, sel) {
+  if (!sel) return null;
+  var up = {}, down = {};
+  function walk(k, adj, into) { (adj[k] || []).forEach(function (x) { if (!into[x]) { into[x] = true; walk(x, adj, into); } }); }
+  walk(sel, lay.preds, up); walk(sel, lay.succs, down);
+  return { up: up, down: down };
+}
+function nodeRole(reach, key, sel) {
+  if (!reach) return null;
+  if (key === sel) return "self";
+  if (reach.up[key]) return "up";
+  if (reach.down[key]) return "down";
+  return "off";
+}
+function edgeRole(reach, e, sel) {
+  if (!reach) return null;
+  var upSide = function (k) { return k === sel || reach.up[k]; };
+  var downSide = function (k) { return k === sel || reach.down[k]; };
+  if (upSide(e.fromKey) && upSide(e.toKey)) return "up";
+  if (downSide(e.fromKey) && downSide(e.toKey)) return "down";
+  return "off";
+}
+
+var fmt = function (n) { return typeof n === "number" ? n.toLocaleString("en-US") : String(n); };
+
+function ago(sec) {
+  if (sec < 60) return sec + "s ago";
+  var m = Math.floor(sec / 60);
+  if (m < 60) return m + "m ago";
+  var hh = Math.floor(m / 60), mm = m % 60;
+  return hh + "h " + (mm < 10 ? "0" : "") + mm + "m ago";
+}
+
+function metricLine(state, node) {
+  var m = state.metrics || {}, out = [];
+  if (m.kubernetes && m.kubernetes.desiredReplicas !== undefined) out.push(m.kubernetes.readyReplicas + "/" + m.kubernetes.desiredReplicas + " ready");
+  if (m.connect && m.connect.tasksTotal !== undefined) out.push(m.connect.tasksRunning + "/" + m.connect.tasksTotal + " tasks");
+  if (m.kafka && m.kafka.maxConsumerLag !== undefined) out.push("lag " + fmt(m.kafka.maxConsumerLag));
+  if (!out.length && node && !node.backings.length) out.push("not observed");
+  return out.join("  ·  ");
+}
+
+/* ============================================================
+   4. Shared pieces
+   ============================================================ */
+
+var ICONS = {
+  service:   "M4 6.5h16v4H4zM4 13.5h16v4H4zM7 8.5h.01M7 15.5h.01",
+  topic:     "M3 7h13M6 12h13M3 17h13",
+  connector: "M9 3v6M15 3v6M7 9h10v4a5 5 0 0 1-10 0zM12 18v3",
+  index:     "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM16.5 16.5 21 21",
+  table:     "M3 5h18v14H3zM3 10h18M9 10v9M15 10v9",
+  engine:    "M5 19V9M10 19V5M15 19v-7M20 19v-4",
+  external:  "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"
+};
+function Icon(p) {
+  return h("svg", { className: p.className, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+    strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" },
+    h("path", { d: ICONS[p.name] || ICONS.external }));
+}
+
+/* ADR-0017 — five states, five shapes. Unchanged by this ticket. */
+function HealthGlyph(p) {
+  var s = p.size || 12, hh = p.health;
+  var common = { className: "hg h-" + hh, width: s, height: s, viewBox: "0 0 16 16", "aria-hidden": "true" };
+  if (hh === "HEALTHY")   return h("svg", common, h("circle", { cx: 8, cy: 8, r: 5.5, fill: "currentColor" }));
+  if (hh === "DEGRADED")  return h("svg", common, h("path", { d: "M8 2 15 14H1Z", fill: "currentColor" }));
+  if (hh === "UNHEALTHY") return h("svg", common, h("path", { d: "M5.4 1h5.2L14.5 5v6l-3.9 4H5.4L1.5 11V5Z", fill: "currentColor" }));
+  if (hh === "DISABLED")  return h("svg", common,
+    h("rect", { x: 3, y: 2.5, width: 3.6, height: 11, rx: 1, fill: "currentColor" }),
+    h("rect", { x: 9.4, y: 2.5, width: 3.6, height: 11, rx: 1, fill: "currentColor" }));
+  return h("svg", common, h("circle", { cx: 8, cy: 8, r: 5.2, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeDasharray: "2.6 2.2" }));
+}
+function HealthChip(p) {
+  return h("span", { className: "chip h-" + p.health + " bg-" + p.health },
+    h(HealthGlyph, { health: p.health, size: 10 }), HEALTH_LABEL[p.health].toUpperCase());
+}
+
+/* The observation glyph. Deliberately a *square* family, so it can never be
+   read as one of ADR-0017's five health shapes, and monochrome, so `outcome`
+   never competes for the hue channel health already owns. */
+function OutcomeGlyph(p) {
+  var s = p.size || 12, o = p.outcome;
+  var cls = "og" + (o === "COMPLETE" ? "" : " og-alert");
+  var common = { className: cls, width: s, height: s, viewBox: "0 0 16 16", "aria-hidden": "true" };
+  if (o === "COMPLETE") return h("svg", common, h("rect", { x: 2.5, y: 2.5, width: 11, height: 11, rx: 2, fill: "currentColor" }));
+  if (o === "PARTIAL") return h("svg", common,
+    h("rect", { x: 2.5, y: 2.5, width: 11, height: 11, rx: 2, fill: "none", stroke: "currentColor", strokeWidth: 1.4 }),
+    h("path", { d: "M3.5 8.5 8.5 3.5M3.5 12.5 12.5 3.5M7.5 12.5 12.5 7.5",
+      stroke: "currentColor", strokeWidth: 1.3, strokeLinecap: "round" }));
+  return h("svg", common,
+    h("rect", { x: 2.5, y: 2.5, width: 11, height: 11, rx: 2, fill: "none", stroke: "currentColor", strokeWidth: 1.6 }),
+    h("path", { d: "M5 5l6 6M11 5l-6 6", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" }));
+}
+
+function Eyebrow(p) { return h("span", { className: "eyebrow" }, p.children); }
+
+/* ============================================================
+   5. Inspector sections (ADR-0019's fixed order, held constant)
+   ============================================================ */
+
+function relationsOf(env, key) {
+  var upstream = [], downstream = [];
+  edgesFor(env).forEach(function (e) {
+    var d = RELATIONS[e.relation];
+    if (e.toKey === key) upstream.push({ peer: e.fromKey, verb: d.reverse });
+    if (e.fromKey === key) downstream.push({ peer: e.toKey, verb: d.forward });
+  });
+  return { upstream: upstream, downstream: downstream };
+}
+
+function SecHealth(props) {
+  var s = props.state, node = props.node, sc = props.sc, variant = props.variant;
+  var blind = blindObservers(sc, node);
+  /* B and the merged D put the caveat here, next to the value it qualifies.
+     A is deliberately environment-level only — the rail chip is its single
+     outcome surface — and C moves it into a section of its own. */
+  var showCaveat = blind.length > 0 && (variant === "B" || variant === "D");
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Health"),
+    h("div", { className: "health-block bg-" + s.health },
+      h(HealthGlyph, { health: s.health, size: 18 }),
+      h("div", null,
+        h("div", { className: "hb-t h-" + s.health }, HEALTH_LABEL[s.health].toUpperCase()),
+        h("div", { className: "hb-s mono" }, s.rawSignal ||
+          (node.backings.length ? "No signal from this refresh." : "No backing observes this node — UNKNOWN is its resting state, not a failure.")))),
+    showCaveat
+      ? h("div", { className: "caveat" },
+          h(OutcomeGlyph, { outcome: sc.health[blind[0]].outcome, size: 14 }),
+          h("div", null,
+            h("b", null, blind.join(" and ") + (blind.length > 1 ? " could not observe" : " could not observe") + " this node this cycle."),
+            " ", HEALTH_LABEL[s.health] + " is composed from " + (s.observers.length ? s.observers.join(" + ") : "nothing") + " only.",
+            sc.health[blind[0]].cause ? h("div", { className: "mono", style: { marginTop: 4, color: "var(--ink-2)", fontSize: 11 } }, sc.health[blind[0]].cause) : null))
+      : null,
+    Object.keys(s.metrics || {}).length
+      ? h("dl", { className: "kv", style: { marginTop: 10 } },
+          [].concat.apply([], Object.keys(s.metrics).map(function (ns) {
+            return Object.keys(s.metrics[ns]).map(function (k) {
+              return h(Fragment, { key: ns + "." + k },
+                h("dt", { className: "mono" }, ns + "." + k),
+                h("dd", { className: "mono num" }, fmt(s.metrics[ns][k])));
+            });
+          })))
+      : null);
+}
+
+/* Variant C only — observation gets a section of its own, right under Health. */
+function SecObservation(props) {
+  var node = props.node, sc = props.sc, s = props.state;
+  var rows = [];
+  var seen = {};
+  node.sources.forEach(function (p) { seen[p] = true; });
+  node.backings.forEach(function (b) { if (PLUGIN_META[b.plugin] && PLUGIN_META[b.plugin].health) seen[b.plugin] = true; });
+  var srcAge = {};
+  sourcesFor(sc, node).forEach(function (x) { srcAge[x.plugin] = x; });
+
+  PLUGINS.forEach(function (p) {
+    if (!seen[p]) return;
+    var isSource = node.sources.indexOf(p) >= 0;
+    var observes = node.backings.some(function (b) { return b.plugin === p; }) && PLUGIN_META[p].health;
+    rows.push({ plugin: p, isSource: isSource, observes: observes,
+      disc: isSource ? sc.discovery[p] : null,
+      hl: observes ? sc.health[p] : null,
+      age: srcAge[p] });
+  });
+
+  if (!rows.length) {
+    return h("div", { className: "sec obs-sec" },
+      h(Eyebrow, null, "Observation"),
+      h("div", { className: "empty" }, "Declared only. Nothing observes this node, so there is no outcome to report — and no reason to be alarmed by that."));
+  }
+  return h("div", { className: "sec obs-sec" },
+    h(Eyebrow, null, "Observation"),
+    rows.map(function (r) {
+      return h("div", { key: r.plugin, style: { padding: "6px 0", borderTop: "1px dotted var(--line)" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+          h("span", { className: "tag mono" }, r.plugin),
+          h("span", { style: { fontSize: 11, color: "var(--muted)" } },
+            [r.isSource ? "discovery" : null, r.observes ? "health" : null].filter(Boolean).join(" + "))),
+        r.disc ? h("div", { className: "obs-cap", style: { marginTop: 4 } },
+          h("span", { className: "cap" }, "Discovery"),
+          h(OutcomeGlyph, { outcome: r.disc.outcome, size: 11 }),
+          h("span", { className: "val" + (r.disc.outcome === "COMPLETE" ? "" : " bad") }, r.disc.outcome),
+          h("span", { className: "ago" }, r.age ? (r.age.stale ? "retained · confirmed " + ago(r.age.age) : "confirmed " + ago(r.age.age)) : "")) : null,
+        r.hl ? h("div", { className: "obs-cap", style: { marginTop: 3 } },
+          h("span", { className: "cap" }, "Health"),
+          h(OutcomeGlyph, { outcome: r.hl.outcome, size: 11 }),
+          h("span", { className: "val" + (r.hl.outcome === "COMPLETE" ? "" : " bad") }, r.hl.outcome),
+          h("span", { className: "ago" }, s.observers.indexOf(r.plugin) >= 0 ? "contributed" : "did not contribute")) : null,
+        (r.disc && r.disc.cause) || (r.hl && r.hl.cause)
+          ? h("div", { className: "mono", style: { fontSize: 10.5, color: "var(--obs-alert)", marginTop: 3 } }, (r.hl && r.hl.cause) || r.disc.cause) : null,
+        (r.disc && r.disc.reasons) ? h("div", { className: "mono", style: { fontSize: 10.5, color: "var(--obs-alert)", marginTop: 3 } }, r.disc.reasons.join("; ")) : null);
+    }));
+}
+
+function SecConnections(props) {
+  var rels = relationsOf(props.env, props.node.key);
+  function group(title, items) {
+    return h("div", { style: { marginBottom: 10 } },
+      h(Eyebrow, null, title),
+      items.length
+        ? items.map(function (r, i) {
+            return h("div", { className: "rel", key: i },
+              h("span", { className: "verb" }, r.verb),
+              h("button", { className: "mono", onClick: function () { props.onSelect(r.peer); } },
+                (nodeByKey(r.peer) || {}).displayName || r.peer));
+          })
+        : h("div", { className: "empty" }, "Nothing " + title.toLowerCase() + " in this environment."));
+  }
+  return h("div", { className: "sec" }, group("Upstream", rels.upstream), group("Downstream", rels.downstream));
+}
+
+function SecOwner(props) {
+  var o = props.node.ownerKey ? OWNERS[props.node.ownerKey] : null;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Ownership"),
+    o ? h("dl", { className: "kv" },
+          h("dt", null, "Team"), h("dd", null, o.displayName),
+          h("dt", null, "Channel"), h("dd", { className: "mono" }, o.channel),
+          h("dt", null, "On-call"), h("dd", null, o.onCall))
+      : h("div", { className: "empty" }, "No owner recorded. Nobody to page."));
+}
+
+function SecLinks(props) {
+  var links = props.node.links;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Go to"),
+    links.length
+      ? h("div", { className: "links" }, links.map(function (l, i) {
+          return h("a", { className: "link-btn", key: i, href: l.url, target: "_blank", rel: "noreferrer noopener" },
+            l.label, h("span", { className: "rel-tag mono" }, l.rel)); }))
+      : h("div", { className: "empty" }, "No links configured."));
+}
+
+function SecBackings(props) {
+  var bs = props.node.backings;
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Backings"),
+    bs.length
+      ? bs.map(function (b, i) {
+          return h("div", { className: "backing", key: i },
+            h("span", { className: "tag mono" }, b.plugin),
+            h("span", { className: "bk-kind" }, b.kind),
+            h("span", { className: "mono", style: { marginLeft: "auto", textAlign: "right", wordBreak: "break-all" } }, b.reference)); })
+      : h("div", { className: "empty" }, "Declared node — no physical object behind it."));
+}
+
+/* Section 7 — Metadata and "Discovered by". This is where ADR-0056's
+   per-source confirmedAt has to land in every variant; what differs is how
+   loud it is and whether anything upstream of here already said it. */
+function SecMetaProv(props) {
+  var node = props.node, sc = props.sc, variant = props.variant;
+  var md = node.metadata || {}, mdKeys = Object.keys(md);
+  var srcs = sourcesFor(sc, node);
+  return h("div", { className: "sec" },
+    h(Eyebrow, null, "Metadata"),
+    mdKeys.length
+      ? h("dl", { className: "kv" }, [].concat.apply([], mdKeys.map(function (ns) {
+          return Object.keys(md[ns]).map(function (k) {
+            return h(Fragment, { key: ns + "." + k },
+              h("dt", { className: "mono" }, ns + "." + k),
+              h("dd", { className: "mono" }, String(md[ns][k]))); }); })))
+      : h("div", { className: "empty" }, "No metadata."),
+    h("div", { style: { marginTop: 14 } },
+      h(Eyebrow, null, "Discovered by"),
+      h("div", { style: { marginTop: 4 } },
+        srcs.map(function (s) {
+          return h("div", { className: "src-row" + (s.stale ? " stale" : ""), key: s.plugin },
+            h("span", { className: "tag mono" }, s.plugin),
+            s.stale && variant !== "A" ? h("span", { className: "retained" }, "retained") : null,
+            h("span", { className: "ago mono" }, "confirmed " + ago(s.age))); })),
+      variant === "A" && srcs.some(function (s) { return s.stale; })
+        ? h("div", { style: { fontSize: 11, color: "var(--muted)", marginTop: 6 } },
+            "Last confirmed before this plugin's most recent poll — retained, not confirmed. See the plugins chip in the top rail for why.")
+        : null));
+}
+
+function InspectorHead(props) {
+  var node = props.node, d = descriptorFor(node.type);
+  return h("div", { className: "ins-head" },
+    h("div", { style: { display: "flex", gap: 10, alignItems: "flex-start" } },
+      h(Icon, { name: d.icon, className: "a-icon" }),
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { className: "ins-title" }, node.displayName),
+        h("div", { className: "ins-key mono" }, node.key)),
+      h("button", { className: "ins-close", onClick: props.onClose, "aria-label": "Close inspector" }, "×")),
+    h("div", { className: "ins-meta" },
+      h(HealthChip, { health: props.state.health }),
+      h("span", { className: "tag" }, d.label),
+      h("span", { className: "tag mono" }, props.env)),
+    node.description ? h("div", { style: { fontSize: 12, color: "var(--muted)", marginTop: 10 } }, node.description) : null);
+}
+
+function Drawer(props) {
+  var node = props.node;
+  if (!node) {
+    return h("div", { className: "drawer" },
+      h("div", { className: "sec", style: { paddingTop: 22 } },
+        h(Eyebrow, null, "Node inspector"),
+        h("p", { style: { color: "var(--muted)", fontSize: 12.5, marginTop: 8 } },
+          "Select a node to inspect it. Selecting also highlights everything upstream (blue) and downstream (amber) of it."),
+        h("div", { style: { marginTop: 18 } },
+          h(Eyebrow, null, "Health — what we found"),
+          h("div", { className: "legend", style: { marginTop: 8 } }, HEALTH_ORDER.map(function (x) {
+            return h("span", { className: "legend-item", key: x }, h(HealthGlyph, { health: x, size: 12 }), HEALTH_LABEL[x]); }))),
+        h("div", { style: { marginTop: 18 } },
+          h(Eyebrow, null, "Outcome — how well we looked"),
+          h("div", { className: "legend", style: { marginTop: 8 } }, ["COMPLETE", "PARTIAL", "FAILED"].map(function (x) {
+            return h("span", { className: "legend-item", key: x }, h(OutcomeGlyph, { outcome: x, size: 12 }), x); })))));
+  }
+  return h("div", { className: "drawer" },
+    h("div", { className: "drawer-scroll" },
+      h(InspectorHead, { node: node, state: props.state, env: props.env, onClose: props.onClose }),
+      h(SecHealth, { state: props.state, node: node, sc: props.sc, variant: props.variant }),
+      props.variant === "C" ? h(SecObservation, { node: node, sc: props.sc, state: props.state }) : null,
+      h(SecConnections, { env: props.env, node: node, onSelect: props.onSelect }),
+      h(SecOwner, { node: node }),
+      h(SecLinks, { node: node }),
+      h(SecBackings, { node: node }),
+      h(SecMetaProv, { node: node, sc: props.sc, variant: props.variant })));
+}
+
+/* ============================================================
+   6. The node card — one component, three treatments
+   ============================================================ */
+
+function NodeCard(props) {
+  var d = props.data;
+  var cls = ["a-node"];
+  if (d.role && d.role !== "self") cls.push(d.role === "off" ? "n-off" : "n-" + d.role);
+  if (d.role === "self") cls.push("n-self");
+  if (d.marks && d.blind.length) cls.push("unwatched");
+
+  var footRight;
+  if (d.marks && d.blind.length) {
+    footRight = h("span", { className: "cov-tok bad mono", style: { marginLeft: "auto" } },
+      h(OutcomeGlyph, { outcome: d.blindOutcome, size: 10 }), d.blind.join("+") + " blind");
+  } else {
+    footRight = h("span", { className: "a-src mono", style: { marginLeft: "auto" } }, d.sources.join(" "));
+  }
+
+  return h("div", { className: cls.join(" ") },
+    d.marks && d.retained ? h("div", { className: "stale-edge" }) : null,
+    h(XY.Handle, { type: "target", position: Position.Left }),
+    h("div", { className: "a-body" },
+      h("div", { className: "a-rail", style: { background: "var(--h-" + d.health.toLowerCase() + ")" } }),
+      h(Icon, { name: d.icon, className: "a-icon" }),
+      h("div", { className: "a-text" },
+        h("div", { className: "a-name", title: d.displayName }, d.displayName),
+        h("div", { className: "a-type" }, d.typeLabel))),
+    h("div", { className: "a-foot" },
+      h(HealthGlyph, { health: d.health, size: 11 }),
+      h("span", { className: "a-metric mono" }, d.showMetrics && d.metric ? d.metric : HEALTH_LABEL[d.health]),
+      footRight),
+    /* Variant C only: the coverage row — a permanent second channel. */
+    d.coverageRow
+      ? h("div", { className: "cov mono" },
+          d.coverage.length
+            ? d.coverage.map(function (c) {
+                return h("span", { key: c.plugin, className: "cov-tok" + (c.bad ? " bad" : c.stale ? " stale" : "") },
+                  h(OutcomeGlyph, { outcome: c.outcome, size: 9 }), c.plugin);
+              })
+            : h("span", { className: "cov-none" }, "not observed"))
+      : null,
+    h(XY.Handle, { type: "source", position: Position.Right }));
+}
+
+/* ============================================================
+   7. Outcome surfaces
+   ============================================================ */
+
+function OutcomeRows(props) {
+  var sc = props.sc;
+  return h("div", null, PLUGINS.map(function (p) {
+    var meta = PLUGIN_META[p], d = sc.discovery[p], hl = sc.health[p];
+    return h("div", { className: "obs-row", key: p },
+      h("div", { className: "pl mono" }, p),
+      h("div", { className: "caps" },
+        h("div", { className: "obs-cap" },
+          h("span", { className: "cap" }, "Discovery"),
+          h(OutcomeGlyph, { outcome: d.outcome, size: 11 }),
+          h("span", { className: "val mono" + (d.outcome === "COMPLETE" ? "" : " bad") }, d.outcome),
+          h("span", { className: "ago mono" }, "recorded " + ago(d.age))),
+        d.reasons ? h("div", { className: "obs-reason mono" }, d.reasons.join("; ")) : null,
+        d.cause ? h("div", { className: "obs-reason mono" }, d.cause) : null,
+        meta.health
+          ? h(Fragment, null,
+              h("div", { className: "obs-cap" },
+                h("span", { className: "cap" }, "Health"),
+                h(OutcomeGlyph, { outcome: hl.outcome, size: 11 }),
+                h("span", { className: "val mono" + (hl.outcome === "COMPLETE" ? "" : " bad") }, hl.outcome),
+                h("span", { className: "ago mono" }, "recorded " + ago(hl.age))),
+              hl.reasons ? h("div", { className: "obs-reason mono" }, hl.reasons.join("; ")) : null,
+              hl.cause ? h("div", { className: "obs-reason mono" }, hl.cause) : null)
+          : h("div", { className: "obs-cap" },
+              h("span", { className: "cap" }, "Health"),
+              h("span", { className: "obs-na" }, "no Health capability — this is where UNKNOWN comes from"))));
+  }));
+}
+
+/* ============================================================
+   8. Canvas
+   ============================================================ */
+
+var GEOM = { dx: 274, dy: 132, ox: 60, oy: 80 };
+var RANK = { COMPLETE: 0, PARTIAL: 1, FAILED: 2 };
+
+function buildGraph(variant, env, sc, showMetrics, selectedKey) {
+  var lay = layout(env);
+  var reach = reachability(lay, selectedKey);
+
+  var rfNodes = lay.nodes.map(function (n) {
+    var s = stateFor(sc, env, n.key);
+    var d = descriptorFor(n.type);
+    var blind = blindObservers(sc, n);
+    var srcs = sourcesFor(sc, n);
+
+    /* Variant C's coverage row: every plugin that touches this node, with the
+       outcome of whatever capability it is providing here. */
+    var coverage = [];
+    var cov = {};
+    function note(p, outcome, stale) {
+      if (!cov[p]) { cov[p] = { plugin: p, outcome: outcome, stale: !!stale }; coverage.push(cov[p]); return; }
+      if (RANK[outcome] > RANK[cov[p].outcome]) cov[p].outcome = outcome;
+      if (stale) cov[p].stale = true;
+    }
+    n.sources.forEach(function (p) {
+      var srow = srcs.filter(function (x) { return x.plugin === p; })[0];
+      note(p, sc.discovery[p].outcome, srow && srow.stale);
+    });
+    n.backings.forEach(function (b) {
+      if (!PLUGIN_META[b.plugin] || !PLUGIN_META[b.plugin].health) return;
+      note(b.plugin, sc.health[b.plugin].outcome, false);
+    });
+    coverage.forEach(function (c) { c.bad = c.outcome !== "COMPLETE"; });
+
+    return {
+      id: n.key, type: "card", position: { x: GEOM.ox + lay.layer[n.key] * GEOM.dx, y: GEOM.oy + (lay.slot[n.key] || 0) * GEOM.dy },
+      draggable: true,
+      data: {
+        marks: variant === "B" || variant === "D",
+        coverageRow: variant === "C",
+        displayName: n.displayName, typeLabel: d.label, icon: d.icon,
+        health: s.health, metric: metricLine(s, n), sources: n.sources,
+        showMetrics: showMetrics, role: nodeRole(reach, n.key, selectedKey),
+        retained: isRetained(sc, n), blind: blind,
+        blindOutcome: blind.length ? sc.health[blind[0]].outcome : "COMPLETE",
+        coverage: coverage
+      }
+    };
+  });
+
+  var rfEdges = lay.edges.map(function (e) {
+    var role = edgeRole(reach, e, selectedKey);
+    var dim = role === "off";
+    var stroke = role === "up" ? "var(--accent)" : role === "down" ? "var(--h-degraded)" : "var(--line-strong)";
+    return {
+      id: e.fromKey + "->" + e.toKey, source: e.fromKey, target: e.toKey, type: "default",
+      animated: role === "down",
+      label: role && role !== "off" ? RELATIONS[e.relation].forward : undefined,
+      style: { stroke: stroke, strokeWidth: role && role !== "off" ? 2 : 1.4, opacity: dim ? 0.2 : 1 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: dim ? "var(--line-strong)" : stroke }
+    };
+  });
+
+  return { nodes: rfNodes, edges: rfEdges, lay: lay };
+}
+
+function Canvas(props) {
+  var g = props.graph;
+  var rf = useRef(null);
+  var ns = XY.useNodesState([]);
+  var rfNodes = ns[0], setRfNodes = ns[1], onNodesChange = ns[2];
+
+  useEffect(function () {
+    setRfNodes(function (prev) {
+      var byId = {};
+      prev.forEach(function (p) { byId[p.id] = p; });
+      return g.nodes.map(function (n) {
+        var p = byId[n.id];
+        return p && p.measured ? Object.assign({}, n, { measured: p.measured }) : n;
+      });
+    });
+  }, [g]);
+
+  useEffect(function () {
+    if (rf.current) {
+      var t = setTimeout(function () { rf.current && rf.current.fitView({ padding: 0.16, duration: 300 }); }, 60);
+      return function () { clearTimeout(t); };
+    }
+  }, [props.env, props.variant, props.showMetrics]);
+
+  return h(XY.ReactFlow, {
+    nodes: rfNodes, edges: g.edges, onNodesChange: onNodesChange, nodeTypes: props.nodeTypes,
+    onInit: function (inst) { rf.current = inst; inst.fitView({ padding: 0.16 }); },
+    onNodeClick: function (_, n) { props.onSelect(n.id); },
+    onPaneClick: function () { props.onSelect(null); },
+    nodesConnectable: false, elementsSelectable: true,
+    proOptions: { hideAttribution: true }, minZoom: 0.25, maxZoom: 2
+  },
+    h(XY.Background, { gap: 22, size: 1.6, color: "var(--canvas-dot)" }),
+    h(XY.Controls, { showInteractive: false }));
+}
+
+/* ============================================================
+   9. App shell
+   ============================================================ */
+
+var VARIANTS = [
+  { key: "A", name: "Quiet rail",     blurb: "Outcome is environment-level and lives beside the environment switcher. The canvas is untouched; freshness is inspector detail." },
+  { key: "B", name: "Exception mark", blurb: "Nothing renders while everything is COMPLETE. A non-COMPLETE poll raises a banner and marks exactly the nodes it touched." },
+  { key: "C", name: "Second channel", blurb: "“How well we looked” is a permanent peer of “what we found”: a rail strip, a coverage row on every node, and its own inspector section." },
+  { key: "D", name: "Merged",          blurb: "B's exception marks, plus A's resting chip so the banner has somewhere to have come from." }
+];
+
+var NOTES = {
+  A: { lead: "Outcome is a property of the environment, not of ten nodes.",
+       body: "A plugin either worked or it did not, and that is one fact per environment — so it sits in the rail beside the thing it is scoped to. The canvas keeps its one job: is anything watching this node?",
+       cost: "Cost: the chip is the only thing standing between a FAILED plugin and a green canvas. Try `blind` and see how long it takes to notice." },
+  B: { lead: "Nothing is decorated until something is wrong.",
+       body: "Four of ten nodes are permanently UNKNOWN with every plugin perfectly healthy, so a permanent indicator is a permanent false alarm. A non-COMPLETE outcome raises a banner and hatches exactly the nodes it retained — ADR-0056's objection to the blanket banner, answered per node.",
+       cost: "Cost: two new canvas encodings that only ever appear during trouble, so nobody has seen them before the day they matter." },
+  D: { lead: "Quiet by default, loud exactly where it bit.",
+       body: "The rail chip is always there, so “is everything actually being watched?” is answerable on a good day and the trouble encodings have somewhere to have come from. Nothing else renders until a poll comes back non-COMPLETE — then a banner names the plugin and cause, a hatched edge marks the nodes it retained, and a border marks the nodes whose observer went blind. The caveat sits inside Health, next to the value it qualifies.",
+       cost: "Cost: three encodings instead of one, and the chip reads “all complete” for weeks at a time — which is the price of it being there on the day it does not." },
+  C: { lead: "Two questions, two channels, everywhere.",
+       body: "ADR-0026 split `health` from `outcome` because they answer different questions. This variant takes that literally: every surface that renders health also renders how well we looked — monochrome squares, so `outcome` never competes for the hue channel health owns.",
+       cost: "Cost: a fifth line on every node card, including the four that will never have an observer, and ≈ an eighth of the drawer spent on a section that reads COMPLETE COMPLETE COMPLETE most days." }
+};
+
+function readVariant() {
+  try {
+    var p = new URLSearchParams(window.location.search).get("variant");
+    if (p && ["A", "B", "C", "D"].indexOf(p.toUpperCase()) >= 0) return p.toUpperCase();
+  } catch (e) {}
+  return "D";
+}
+function writeVariant(v) {
+  try { var u = new URL(window.location.href); u.searchParams.set("variant", v); window.history.replaceState({}, "", u); } catch (e) {}
+}
+
+function App() {
+  var vv = useState(readVariant()), variant = vv[0], setVariant = vv[1];
+  var ee = useState("production"), env = ee[0], setEnv = ee[1];
+  var ss = useState("baseline"), scenarioKey = ss[0], setScenarioKey = ss[1];
+  var mm = useState(true), showMetrics = mm[0], setShowMetrics = mm[1];
+  var kk = useState(null), selectedKey = kk[0], setSelectedKey = kk[1];
+  var pp = useState(false), popOpen = pp[0], setPopOpen = pp[1];
+  var bb = useState(false), bannerDismissed = bb[0], setBannerDismissed = bb[1];
+
+  var sc = scenarioByKey(scenarioKey);
+  var summary = outcomeSummary(sc);
+
+  useEffect(function () { writeVariant(variant); }, [variant]);
+  useEffect(function () { if (env === "staging" && scenarioKey !== "baseline") setScenarioKey("baseline"); }, [env]);
+  useEffect(function () { setBannerDismissed(false); }, [scenarioKey, variant, env]);
+  useEffect(function () {
+    if (selectedKey && !nodesFor(env).some(function (n) { return n.key === selectedKey; })) setSelectedKey(null);
+  }, [env]);
+
+  useEffect(function () {
+    function onKey(ev) {
+      var t = ev.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        var i = VARIANTS.findIndex(function (x) { return x.key === variant; });
+        setVariant(VARIANTS[(i + (ev.key === "ArrowRight" ? 1 : -1) + VARIANTS.length) % VARIANTS.length].key);
+        ev.preventDefault();
+      }
+      if (ev.key === "Escape") { setSelectedKey(null); setPopOpen(false); }
+    }
+    window.addEventListener("keydown", onKey);
+    return function () { window.removeEventListener("keydown", onKey); };
+  }, [variant]);
+
+  var graph = useMemo(function () {
+    return buildGraph(variant, env, sc, showMetrics, selectedKey);
+  }, [variant, env, sc, showMetrics, selectedKey]);
+
+  var nodeTypes = useMemo(function () { return { card: NodeCard }; }, []);
+
+  var selectedNode = selectedKey ? nodeByKey(selectedKey) : null;
+  var selectedState = selectedKey ? stateFor(sc, env, selectedKey) : NO_OBS;
+
+  var ns = nodesFor(env);
+  var counts = HEALTH_ORDER.map(function (x) {
+    return { h: x, n: ns.filter(function (n) { return stateFor(sc, env, n.key).health === x; }).length };
+  }).filter(function (c) { return c.n > 0; });
+
+  var affected = ns.filter(function (n) { return isRetained(sc, n) || blindObservers(sc, n).length > 0; });
+  var cur = VARIANTS.filter(function (x) { return x.key === variant; })[0];
+
+  /* ---- rail ---- */
+  var chipLabel = summary.worst === "COMPLETE"
+    ? "4 plugins · all complete"
+    : summary.failed
+      ? summary.failed + " failed" + (summary.partial ? " · " + summary.partial + " partial" : "")
+      : summary.partial + " partial";
+
+  var railChip = (variant === "A" || variant === "D")
+    ? h("div", { style: { position: "relative" } },
+        h("button", {
+          className: "obs-chip" + (summary.worst === "COMPLETE" ? "" : " alert"),
+          "aria-expanded": popOpen, onClick: function () { setPopOpen(!popOpen); } },
+          h(OutcomeGlyph, { outcome: summary.worst, size: 12 }), chipLabel,
+          h("span", { style: { color: "var(--muted)", fontSize: 11 } }, popOpen ? "▴" : "▾")),
+        popOpen
+          ? h("div", { className: "obs-pop", style: { top: 38, left: 0 } },
+              h("div", { className: "obs-pop-head" },
+                h(Eyebrow, null, "Plugin outcome · " + env),
+                h("div", { style: { fontSize: 11.5, color: "var(--ink-2)", marginTop: 4 } },
+                  "How well we looked. Not what we found — that is the health column on the canvas.")),
+              h(OutcomeRows, { sc: sc }))
+          : null)
+    : null;
+
+  var rail = h("div", { className: "rail" },
+    h("div", { className: "rail-brand" }, h("b", null, "Nodqora"), h("span", { className: "eyebrow" }, "Payments pipeline")),
+    h("div", { className: "rail-group" },
+      h(Eyebrow, null, "Environment"),
+      h("div", { className: "seg" }, ["production", "staging"].map(function (x) {
+        return h("button", { key: x, "aria-pressed": env === x, onClick: function () { setEnv(x); } }, x); }))),
+    railChip,
+    h("div", { className: "rail-group" },
+      h(Eyebrow, null, "Fixture"),
+      h("div", { className: "seg" }, SCENARIOS.map(function (x) {
+        return h("button", { key: x.key, "aria-pressed": scenarioKey === x.key,
+          disabled: env === "staging" && x.key !== "baseline",
+          title: env === "staging" && x.key !== "baseline" ? "The fixture defines this scenario for production only" : x.blurb.replace(/`/g, ""),
+          onClick: function () { setScenarioKey(x.key); } }, x.label); }))),
+    h("div", { className: "rail-spacer" }),
+    h("div", { className: "counts" },
+      h("b", null, ns.length), " nodes  ",
+      counts.map(function (c) {
+        return h("span", { key: c.h, className: "legend-item", style: { display: "inline-flex", marginLeft: 10 } },
+          h(HealthGlyph, { health: c.h, size: 10 }), h("span", { className: "mono" }, c.n)); })),
+    h("span", { className: "counts mono", style: { borderLeft: "1px solid var(--line)", paddingLeft: 14 } }, ENV_CONFIG[env].namespace));
+
+  /* ---- variant B banner ---- */
+  var banner = ((variant === "B" || variant === "D") && summary.worst !== "COMPLETE" && !bannerDismissed)
+    ? h("div", { className: "obs-banner" },
+        h(OutcomeGlyph, { outcome: summary.worst, size: 15 }),
+        h("div", { className: "grow" },
+          h("b", null, summary.items.filter(function (i) { return i.o.outcome !== "COMPLETE"; })
+            .map(function (i) { return i.plugin + " " + i.capability + " " + i.o.outcome; }).join(" · ")),
+          h("div", { className: "why mono" },
+            summary.items.filter(function (i) { return i.o.outcome !== "COMPLETE"; })
+              .map(function (i) { return i.o.cause || (i.o.reasons || []).join("; "); }).filter(Boolean)[0] || "")),
+        h("span", { className: "why mono" }, affected.length + " of " + ns.length + " nodes affected"),
+        h("button", { onClick: function () { setSelectedKey(affected.length ? affected[0].key : null); } }, "Show affected"),
+        h("button", { onClick: function () { setBannerDismissed(true); } }, "Dismiss"))
+    : null;
+
+  /* ---- variant C strip ---- */
+  var strip = variant === "C"
+    ? h("div", { className: "obs-strip" },
+        h("span", { className: "eyebrow", style: { marginRight: 4 } }, "Observation"),
+        PLUGINS.map(function (p) {
+          var d = sc.discovery[p], hl = sc.health[p];
+          var bad = d.outcome !== "COMPLETE" || (hl && hl.outcome !== "COMPLETE");
+          return h("span", { key: p, className: "obs-pill" + (bad ? " alert" : ""),
+            title: (d.cause || (d.reasons || []).join("; ") || "") + " " + ((hl && (hl.cause || (hl.reasons || []).join("; "))) || "") },
+            h("b", { className: "mono" }, p),
+            h(OutcomeGlyph, { outcome: d.outcome, size: 10 }),
+            h("span", { className: "ago mono" }, "disc " + ago(d.age)),
+            h("span", { className: "sep" }, "│"),
+            hl ? h(Fragment, null,
+                  h(OutcomeGlyph, { outcome: hl.outcome, size: 10 }),
+                  h("span", { className: "ago mono" }, "health " + ago(hl.age)))
+               : h("span", { className: "ago mono" }, "no health capability"));
+        }),
+        h("span", { className: "rail-spacer" }),
+        h("span", { className: "ago mono", style: { color: "var(--muted)", fontSize: 10.5 } },
+          "graph 5m · state 30s"))
+    : null;
+
+  var n = NOTES[variant];
+  var note = h("div", { className: "note" },
+    h("b", null, n.lead), " ", n.body,
+    h("span", { className: "cost" }, n.cost));
+
+  var stage = h("div", { className: "stage" },
+    h("div", { className: "canvas-wrap" },
+      banner,
+      h("div", { className: "canvas-inner" },
+        h(Canvas, { graph: graph, variant: variant, nodeTypes: nodeTypes, env: env,
+          showMetrics: showMetrics, onSelect: function (k) { setSelectedKey(k); setPopOpen(false); } }),
+        note)),
+    h(Drawer, { node: selectedNode, state: selectedState, env: env, sc: sc, variant: variant,
+      onClose: function () { setSelectedKey(null); }, onSelect: setSelectedKey }));
+
+  function cycle(dir) {
+    var i = VARIANTS.findIndex(function (x) { return x.key === variant; });
+    setVariant(VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length].key);
+  }
+
+  var switcher = h("div", { className: "switcher", role: "group", "aria-label": "Prototype variant" },
+    h("button", { onClick: function () { cycle(-1); }, "aria-label": "Previous variant" }, "‹"),
+    h("span", { className: "label" }, h("b", null, cur.key), " — ", cur.name),
+    h("button", { onClick: function () { cycle(1); }, "aria-label": "Next variant" }, "›"),
+    h("span", { className: "hint" }, "← →"));
+
+  return h(Fragment, null, rail, strip, stage, switcher);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+
+})();
+</script>
