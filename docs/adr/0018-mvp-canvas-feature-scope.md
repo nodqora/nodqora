@@ -38,6 +38,13 @@ their place on a ten-node graph.
 > what an environment with no nodes renders, and a cold read and an empty
 > environment are opposite statements.
 
+> **Amended by [ADR-0097](0097-a-deep-link-lands-on-the-ordinary-cold-load-viewport.md).**
+> The canvas also has an **initial viewport**. This list named fit-to-screen as a
+> control the user asks for and said nothing about what the canvas is pointed at on
+> load; a URL carrying a selection (ADR-0092) makes that a decision. A deep-linked
+> load fits, then pans per ADR-0069, then selects — so the upstream/downstream
+> highlight above is visible to the reader with the least context.
+
 **Deferred:**
 
 - **minimap** — near-useless at fixture scale, and cheap to restore later

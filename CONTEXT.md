@@ -880,6 +880,78 @@ Mixed-cold — some plugins reported, some not — is the dangerous one, because
 canvas draws a graph that looks whole. It raises a banner naming the plugin and
 capability, with no count and no cause, because neither exists (ADR-0088).
 
+## The URL
+
+The browser URL carries **two facts and no others** (ADR-0092):
+
+```text
+/environments/{envKey}
+/environments/{envKey}?node={key}
+```
+
+The environment is a **path segment** because scope is structural — ADR-0052's
+*"a forgotten parameter is a cross-environment leak rather than a 404"*, which
+bites harder in a browser, where a link is pasted into Slack and reopened by
+someone whose client state differs. The node is a **query parameter** because
+ADR-0053 left no per-node route to mirror and ADR-0020's key has no pinned
+character class, so a path segment would have to answer what a `/` inside a key
+means. The search query is **absent**: ADR-0069 clears it on pick, so `?node=&q=`
+is a state the UI cannot produce.
+
+### Entry points
+
+Bare `/` redirects to `environments[0].key` from the ADR-0055 roster —
+deterministic, so a bookmarked `/` means the same thing forever, and config order
+is meaningful. An unknown environment key renders a not-found **naming the
+environments that do exist**; matching stays exact (ADR-0052), and listing the
+roster is not ADR-0054's unavailable cross-environment surface, because the
+switcher already shows all of it (ADR-0093).
+
+### Deep link
+
+A `?node=` resolving against the loaded graph document — client-side, since there
+is no per-node route. It matches on the **folded key** (ADR-0020's own comparison,
+for ADR-0067's reason), and a non-canonical hit rewrites the parameter to the
+stored key via `replaceState`, so one node has one URL (ADR-0094).
+
+It lands on the **ordinary cold-load viewport**: fit-to-screen, then ADR-0069's
+pan, then select. Zooming to the target would draw the upstream/downstream
+highlight where the reader with the least context cannot see it (ADR-0097).
+
+### Unresolved parameter
+
+A `?node=` naming a node the loaded graph does not hold. This is the **expected**
+case — three of ten fixture nodes are absent from staging and ADR-0047 deletes
+immediately. It is **retained**, never stripped: the fold is self-healing, so the
+next clean poll selects the node rather than the request being discarded.
+
+The drawer's sentence is chosen from `plugins[]` by ADR-0087's method — three
+distinct states, never a headline with a retracting subline (ADR-0095):
+
+| condition | drawer |
+|---|---|
+| empty graph and cold | no drawer; the canvas empty state is the whole answer |
+| every `outcome` is `COMPLETE` | *"No node in `staging` matches `trino-analytics`."* |
+| any `outcome` is `null` / `PARTIAL` / `FAILED` | *"`trino-analytics` is not in what has been read of `production`."* |
+
+The third exists because a mixed-cold graph *looks whole* — with `yaml` unreported
+the four declared-only nodes are silently missing, so the first sentence would be a
+confident false negative printed under ADR-0088's own banner.
+
+### Selection history
+
+Every selection change **pushes**, including clearing to none, so Back retraces the
+walk ADR-0019's peer controls make possible. Uniform, because two paths to one
+state with different history effects is ADR-0069's arbitration one layer up.
+
+The `?node=` key **rides an environment switch** and resolves in the new scope —
+ADR-0004 makes the sibling well-defined, and the absent case lands on the
+unresolved-parameter states above, which is drift-is-absence demonstrated.
+
+The two compose: **Back after a switch returns to the same node in the previous
+environment**, making Back/Forward a per-node diff across scopes. Emergent from
+ADR-0096's two halves, so changing either costs it (ADR-0096).
+
 ## Vocabulary to avoid
 
 | don't say | say | why |
@@ -924,3 +996,7 @@ capability, with no count and no cause, because neither exists (ADR-0088).
 | the graph is empty | **not read yet**, or **no nodes** — never both | opposite statements; the empty state is chosen from `plugins[]`, and one of them is a lie in the other's situation (ADR-0087) |
 | repopulating after an upgrade | **not read yet** | a discard and a fresh install are deliberately indistinguishable; the remedy is the same and nothing survives the bump to tell them apart (ADR-0080, ADR-0087) |
 | no results found | no node **in this environment** matches | search is environment-scoped by construction; three of ten fixture nodes are absent from staging (ADR-0054, ADR-0070) |
+| the node route / the node page | the **`?node=` parameter** | there is no per-node route in the API or in the URL; selection is state within a scope, not a resource (ADR-0053, ADR-0092) |
+| a shareable search / the search URL | the URL holds **scope and node only** | a query and a selection are exclusive under ADR-0069, so `?q=` would express a state the UI cannot produce (ADR-0092) |
+| a broken / dead link | the key is **not in the loaded graph** | that absence is drift, deletion, or a plugin that has not reported — three different sentences, and one of them is a lie in the others' situation (ADR-0095) |
+| the deep link jumps to the node | it **fits, then pans** | zooming to the target hides the upstream/downstream highlight that selection exists to draw (ADR-0018, ADR-0097) |
