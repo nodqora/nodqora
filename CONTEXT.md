@@ -118,6 +118,11 @@ An **open string** on a Node — `service`, `kafka-topic`, `connect-connector`,
 `iceberg-table`. The core never branches on its value. Presentation and
 semantics come from a TypeDescriptor looked up at runtime (ADR-0001).
 
+**A node may have no type.** `kubernetes` derives none from the workload kind — a
+kind is a deployment mechanism, not a component role — so an unannotated
+Deployment arrives with `type: null` and renders on ADR-0001's fallback
+descriptor, the same path ADR-0048's stub node already uses (ADR-0091).
+
 Say *type*. There is no `subtype` in the MVP (ADR-0009).
 
 ### TypeDescriptor
@@ -446,7 +451,10 @@ yaml  >  connect  >  kubernetes  >  kafka
 ```
 
 One **global** order, applied identically to `type`, `displayName`, `description`
-and `ownerKey`; nothing else on a Node is contestable (ADR-0044). It is §34's own
+and `ownerKey`; nothing else on a Node is contestable (ADR-0044). It settles less
+than it looks: **every scalar `kubernetes` emits is annotated or `null`**
+(ADR-0091), so `type` is contested only when a YAML stanza and a
+`topology.io/type` annotation both speak. It is §34's own
 tiers translated, and it is what makes `yaml` the §56 manual-override mechanism
 with no pinned-fields list behind it (ADR-0051).
 
@@ -478,20 +486,27 @@ my graph is gone" rather than as one subtly absent node.
 |---|---|---|---|
 | `kubernetes` | enumerated namespaces, one cluster per environment (ADR-0035) | Deployment, StatefulSet, CronJob (ADR-0030) | none (ADR-0033) |
 | `kafka` | required topic-name **prefix** list (ADR-0037) | topic (ADR-0036) | none |
-| `connect` | the configured cluster, whole | connector (ADR-0036) | from the `topics` key only (ADR-0041) |
+| `connect` | required connector-name **prefix** list (ADR-0090) | connector (ADR-0036) | from the `topics` key only (ADR-0041) |
 | `yaml` | one **directory** per environment, every `*.yaml` in it (ADR-0061) | any | any — seven of the fixture's nine |
 
-Suppression is **subtractive and exact** in both scoped plugins — an exact
-`kind/name` or topic name, never a narrowing selector and never a glob
-(ADR-0031, ADR-0037) — because subtraction fails toward a visibly-wrong *extra*
-node while narrowing fails toward a *missing* one.
+Suppression is **subtractive and exact** in every code plugin — an exact
+`kind/name`, topic name or connector name, never a narrowing selector and never
+a glob (ADR-0031, ADR-0037, ADR-0090) — because subtraction fails toward a
+visibly-wrong *extra* node while narrowing fails toward a *missing* one.
+
+`kubernetes` alone is **default-in**, so it alone has a second, in-band route:
+the `topology.io/ignore` annotation, for objects you cannot edit in the config
+repo (ADR-0031). The two prefix-scoped plugins are **default-out** and have one
+route each — nothing is read out of a topic or a connector's own config to
+control node emission, because a `topology.io.*` key inside a connector config
+would be Nodqora's vocabulary in a third party's document, the line ADR-0041
+drew when it parsed `topics` alone (ADR-0090).
 
 An enumerated scope unit that yields **zero nodes** ⇒ `PARTIAL` — a prefix
-matching no topics, a namespace with no workloads, a Connect cluster with no
-connectors, a topology directory with no node stanza anywhere in it. The zero-output guard lives in the plugin because only the plugin can
-tell an empty scope from an empty result, and a `PARTIAL` deletes nothing
-(ADR-0047). `connect` has **no** suppression mechanism at all — a known scope gap,
-not a merge problem.
+matching no topics, a prefix matching no connectors, a namespace with no
+workloads, a topology directory with no node stanza anywhere in it. The
+zero-output guard lives in the plugin because only the plugin can tell an empty
+scope from an empty result, and a `PARTIAL` deletes nothing (ADR-0047).
 
 Brokers, Kafka clusters, Connect clusters, workers and consumer groups are
 **not** nodes: they are physical (ADR-0005), or they duplicate the Environment,

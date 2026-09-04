@@ -1,8 +1,14 @@
 # ADR-0044: Scalars settle by one global plugin precedence; collections are additive with element identity
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0091](0091-kubernetes-emits-no-type-default.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Discovery-engine merge semantics](https://github.com/fredskor/nodqora/issues/12)
+
+> **Amendment (ADR-0091).** The contested-scalar table's `kubernetes`/`type`
+> cell read *"kind-derived, or `topology.io/type`"*. There is no kind-derived
+> value: it is `topology.io/type`, else `null`. The precedence order is unchanged
+> and simply has less to settle — `type` is contested only when a YAML stanza and
+> an annotation both speak.
 
 ## Context
 
@@ -18,7 +24,7 @@ plugin). Exactly four scalars can be contested:
 
 | field | `yaml` | `kubernetes` | `kafka` | `connect` |
 |---|---|---|---|---|
-| `type` | declares | kind-derived, or `topology.io/type` (ADR-0032) | `kafka-topic` | `connect-connector` |
+| `type` | declares | `topology.io/type`, else `null` (ADR-0091) | `kafka-topic` | `connect-connector` |
 | `displayName` | declares | `null` on purpose (ADR-0034) | `null` (ADR-0038) | `null` (ADR-0038) |
 | `description` | declares | — | — | — |
 | `ownerKey` | declares | `topology.io/owner` | `null` | `null` |

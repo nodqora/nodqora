@@ -57,6 +57,10 @@ concerned. The `ignore` list is what removes them.
 - **Prefix matching is not a fuzzy tier.** ADR-0021 banned fuzziness in
   *identity resolution* — which node an object belongs to. This is scope
   selection, a different job, and the match is still exact.
+- **This shape is reused for connectors.** ADR-0090 adopts the required
+  include-prefix list for `connect` on the strength of this ADR's own rejection
+  of enumerated names — which turned on topics being *created constantly*, a
+  property connectors do not have.
 - **The scope decision pays for the cadence decision.** ADR-0042 puts
   `describeConfigs` on the 5-minute loop; research #5 warned its response is
   very large over *every* topic on a cluster. Prefix scope is what keeps it

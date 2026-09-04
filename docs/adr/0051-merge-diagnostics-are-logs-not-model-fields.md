@@ -1,9 +1,18 @@
 # ADR-0051: Merge diagnostics are logs and metrics, not model fields
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0091](0091-kubernetes-emits-no-type-default.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Discovery-engine merge semantics](https://github.com/fredskor/nodqora/issues/12)
 - **Amends**: ADR-0008, ADR-0012
+
+> **Amendment (ADR-0091).** The decision below stands; one sentence of its
+> rationale does not. It rejected "two snapshots disagree about `type`" as a
+> collision detector by citing a **kind-derived default** that ADR-0091 has since
+> established never existed. A `kubernetes` type is always an explicit human
+> annotation, so such a disagreement is two people contradicting each other on
+> purpose, not a human correcting a machine's guess. The conclusion holds by the
+> shorter route this ADR already gives: `yaml` plus one code plugin is the
+> *designed* case.
 
 ## Context
 
@@ -35,7 +44,9 @@ rather than infer per connector class. There is no inferred edge for a confidenc
 score to describe. Confirmed dead, not reopened.
 
 **There is no YAML suppression in the MVP.** Suppression stays per-plugin and
-subtractive — ADR-0031's exact `kind/name` deny-list, ADR-0037's prefix list.
+subtractive — ADR-0031's exact `kind/name` deny-list, ADR-0037's prefix list,
+and ADR-0090's connector prefix list, which closes the `connect` gap this ADR
+left open.
 
 **Descriptors come from the stored snapshot, whatever put it there** (clarifying
 ADR-0012's *"latest **successful** result"*, written before `PARTIAL` had a
@@ -46,9 +57,9 @@ scope — all unchanged.
 ## Consequences
 
 - **The detector is narrower than it first looks.** "Two snapshots disagree about
-  `type`" does not work: ADR-0032 has `topology.io/type` override a kind-derived
-  default, so YAML calling a StatefulSet `service` is a **legitimate** disagreement
-  settled by precedence. What is clean is that `yaml` + any code plugin is the
+  `type`" does not work: under ADR-0091 a `kubernetes` type is an explicit
+  `topology.io/type` annotation, so YAML overriding it is a **legitimate**
+  disagreement between two authors, settled by precedence. What is clean is that `yaml` + any code plugin is the
   *designed* case — literally the fixture's `sources: [yaml, kubernetes]` — while
   two code plugins on one key has no legitimate MVP instance. `kubernetes` makes
   workloads, `kafka` topics, `connect` connectors; the one near-overlap, the

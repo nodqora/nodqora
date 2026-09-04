@@ -139,11 +139,34 @@ logical service. Resolution must come from annotations, not string equality:
 ```yaml
 # on Deployment enricher-v2
 topology.io/node:            payments-enricher
+topology.io/type:            service
 topology.io/owner:           payments-platform
 topology.io/consumer-groups: enrich-consumer-prod
 topology.io/repository:      github.com/acme/payments-enricher
 topology.io/grafana:         payments-enricher-overview
 ```
+
+Deployment `payments-api` is §9's **full** case, and needs no `topology.io/node`
+because it matches its own name:
+
+```yaml
+# on Deployment payments-api
+topology.io/type:            service
+topology.io/owner:           payments-platform
+topology.io/repository:      github.com/acme/payments-api
+topology.io/runbook:         wiki/runbooks/payments-api
+topology.io/docs:            docs.acme.io/payments-api
+topology.io/grafana:         payments-api-overview
+# argocd.argoproj.io/instance is Argo CD's own label, not ours (ADR-0032)
+```
+
+**`topology.io/type` is not optional decoration on either.**
+[ADR-0091](adr/0091-kubernetes-emits-no-type-default.md) established that
+`kubernetes` derives no `type` from the workload kind — a kind is a deployment
+mechanism, not a component role — so without these two lines both Deployments
+arrive as `type: null` and §2's `type` column is wrong. Declaring `type: service`
+in YAML instead is unavailable: ADR-0063 uses exactly that as its worked example
+of a field that *"looks like documentation and behaves like a veto"*.
 
 The vocabulary is fixed by [ADR-0032](adr/0032-closed-annotation-vocabulary-and-composed-links.md):
 `topology.io/service` was renamed **`topology.io/node`**, because ADR-0030 admits
@@ -189,7 +212,17 @@ a single rule.
 
 ## 7. Kafka Connect objects
 
-Cluster `connect-prod.internal:8083`, hosted on StatefulSet `kafka-connect`.
+Cluster `connect-prod.internal:8083`, hosted on StatefulSet `kafka-connect`,
+scoped by connector-name prefix ([ADR-0090](adr/0090-connect-scope-is-a-required-include-prefix-list.md)):
+
+```yaml
+connect:
+  connectors:
+    include: [payments-]      # required; both connectors below match
+```
+
+Without it the plugin's scope is the whole cluster, which on a shared Connect
+cluster is every team's connectors on the payments canvas.
 
 | connector | class | state | tasks (baseline) |
 |---|---|---|---|

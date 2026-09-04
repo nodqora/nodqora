@@ -64,5 +64,8 @@ to precisely what was typed.
   cannot know what `connect` emitted, and the outcome would depend on poll
   order. It also fails toward *missing*, and it is a cross-plugin engine rule,
   which is #12's and strains ADR-0015.
+- **`connect` does not inherit the two-route design.** ADR-0090 gives it a
+  single config route, because the second route here exists for objects you
+  cannot edit — and that class has no analogue in a default-out plugin.
 - The cost is two places to look when asking "why isn't my service on the
   graph?" The per-poll suppression count is what makes that answerable.

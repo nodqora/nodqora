@@ -1,6 +1,6 @@
 # ADR-0042: Kafka and Connect configuration, cadence, outcome semantics, and GET-only enforcement
 
-- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md)
+- **Status**: Amended by [ADR-0047](0047-deletion-is-immediate-and-the-zero-output-guard-is-a-plugin-obligation.md), [ADR-0090](0090-connect-scope-is-a-required-include-prefix-list.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kafka and Kafka Connect discovery scope](https://github.com/fredskor/nodqora/issues/11)
 
@@ -10,6 +10,12 @@
 > and `kubernetes` gains the namespace equivalent (ADR-0035). `kafka`'s two reasons
 > below are unchanged, and the undetectable ACL residual handed to #12 is answered
 > there: it stays undetectable, and ADR-0047 accepts it rather than guarding it.
+
+> **Amendment (ADR-0090).** The `connect` config below gains a required
+> `connectors: { include: [...], ignore: [...] }` block — `connect` had no scope
+> knob at all, which put every connector on a shared cluster onto the canvas. Its
+> zero-output reason sharpens with it: **a zero-match include prefix**, not "a
+> configured cluster with zero connectors".
 
 
 ## Context
@@ -55,6 +61,9 @@ kafka:
 connect:
   url: https://connect-prod.internal:8083          # required
   auth: { username: nodqora, password: "${env:CONNECT_PROD_PASSWORD}" }   # optional
+  connectors:                                      # ADR-0090
+    include: [payments-]                           # required, non-empty, no empty-string element
+    ignore: [payments-debug-reprocessor]           # exact connector names
   workload:                                        # optional (ADR-0022)
     plugin: kubernetes
     kind: statefulset

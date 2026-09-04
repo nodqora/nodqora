@@ -1,8 +1,13 @@
 # ADR-0032: The `topology.io/*` vocabulary is closed; annotations hold ids and links are composed per environment
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0091](0091-kubernetes-emits-no-type-default.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
+
+> **Amendment (ADR-0091).** The table's `topology.io/type` row said it overrode
+> *"ADR-0030's kind-derived default"* — a default ADR-0030 never states. There is
+> none: `kubernetes` emits `type: null` unless annotated, so this key **sets**
+> `type` rather than overriding anything.
 
 ## Context
 
@@ -29,7 +34,7 @@ logged — never turned into links, metadata, or anything else.**
 | annotation | becomes |
 |---|---|
 | `topology.io/node` | the node `key` — ADR-0021 tier 1 (renamed from `service`) |
-| `topology.io/type` | `type`, overriding ADR-0030's kind-derived default |
+| `topology.io/type` | `type` — the plugin's **only** route to one; absent, `type` is `null` (ADR-0091) |
 | `topology.io/owner` | `ownerKey` (ADR-0007) |
 | `topology.io/ignore` | suppression (ADR-0031) |
 | `topology.io/consumer-groups` | `{ plugin: kafka, kind: consumer-group }` backings (ADR-0022); comma-separated |
