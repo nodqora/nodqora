@@ -414,6 +414,13 @@
       "category": "compute",
       "icon": "terminal",
       "source": "yaml"
+    },
+    {
+      "type": "service",
+      "label": "Service",
+      "category": "compute",
+      "icon": "service",
+      "source": "yaml"
     }
   ],
   "relationDescriptors": [

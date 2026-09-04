@@ -38,6 +38,9 @@ whether the merge did what ADR-0044 says.
   nothing was added and nothing was split. What did change is inside the two service nodes —
   backings, composed links, an annotated `type`, an `ownerKey`, and `sources: [yaml, kubernetes]`.
   Four nodes still carry no `type`: the topics wait for `kafka` and the connectors for `connect`.
+  `typeDescriptors` gains `service`, declared in YAML — `kubernetes` sets the `type` from an
+  annotation and guesses no descriptor for it (ADR-0091), so ADR-0001's "registered by plugins and
+  by the YAML topology alike" is what keeps the two services off the fallback descriptor.
 - **Slice 3** — `kafka` adds the topics' `type` and the first `NodeState` rows.
 - **Slice 4** — `connect` closes the edge set with the two `SOURCES_FROM` edges (ADR-0041), taking
   production to 9 edges and staging to 6, at which point the graph goldens match §3 exactly and

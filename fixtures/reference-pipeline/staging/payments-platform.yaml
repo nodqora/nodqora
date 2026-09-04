@@ -16,6 +16,16 @@ types:
     label: External API
     category: external
     icon: cloud
+  # ADR-0001: a descriptor is registered by plugins and by the YAML topology alike, and `service`
+  # has no plugin behind it — ADR-0091 has `kubernetes` emit `topology.io/type` verbatim and guess
+  # no label, category or icon for it, so without this line §2's two services render on the
+  # fallback descriptor. This is not ADR-0063's anti-pattern: the veto it warns about is a `type:`
+  # field on a node stanza, which would override whatever `kubernetes` reports forever. A
+  # descriptor overrides nothing — it says how the type draws, not which type the node is.
+  - type: service
+    label: Service
+    category: compute
+    icon: service
 
 nodes:
   - key: stripe-webhooks

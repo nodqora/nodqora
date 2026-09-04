@@ -145,7 +145,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         // node always arrives with it, and global, so what staging receives is a superset of the
         // types staging uses. That is harmless and deliberate, not environment-scoped leakage.
         assertThat(staging.get("typeDescriptors").findValuesAsText("type"))
-                .contains("external-api", "elasticsearch-index", "iceberg-table");
+                .contains("external-api", "elasticsearch-index", "iceberg-table", "service");
         assertThat(staging.get("relationDescriptors")).hasSize(6);
     }
 
@@ -280,6 +280,23 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     }
 
     @Test
+    void the_type_the_annotation_sets_draws_with_a_descriptor_nobody_guessed() {
+        JsonNode graph = graph("production");
+        JsonNode service = descriptor(graph, "service");
+
+        // The two halves of ADR-0001 meeting. `kubernetes` sets `type` from `topology.io/type` and
+        // guesses no label, category or icon for it (ADR-0091: a guessed default would put a type
+        // nobody chose into the global set served inside /graph), so `service`'s descriptor comes
+        // from the YAML `types:` block — "registered by plugins and by the YAML topology alike"
+        // doing exactly the work it was designed for. Without it the fixture's two most important
+        // nodes would render on the fallback descriptor.
+        assertThat(node(graph, "payments-api").get("type").asText()).isEqualTo("service");
+        assertThat(service.get("source").asText()).isEqualTo("yaml");
+        assertThat(service.get("label").asText()).isEqualTo("Service");
+        assertThat(service.get("icon").asText()).isEqualTo("service");
+    }
+
+    @Test
     void a_verb_only_stanza_becomes_indistinguishable_from_a_described_node() {
         JsonNode api = node(graph("production"), "payments-api");
 
@@ -288,6 +305,15 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         // with an ownerKey — provenance is per node, not per field, and ADR-0008 says so.
         assertThat(api.get("sources").findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
         assertThat(api.get("ownerKey").asText()).isEqualTo("payments-platform");
+    }
+
+    private static JsonNode descriptor(JsonNode graph, String type) {
+        for (JsonNode descriptor : graph.get("typeDescriptors")) {
+            if (descriptor.get("type").asText().equals(type)) {
+                return descriptor;
+            }
+        }
+        throw new AssertionError("no descriptor for type " + type);
     }
 
     private static List<String> backings(JsonNode node) {
