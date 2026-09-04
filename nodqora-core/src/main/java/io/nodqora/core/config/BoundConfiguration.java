@@ -6,12 +6,16 @@ import io.nodqora.plugin.api.DiscoveryCapability;
 import io.nodqora.plugin.api.HealthCapability;
 import io.nodqora.plugin.api.Plugin;
 import jakarta.annotation.PostConstruct;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -32,23 +36,27 @@ public class BoundConfiguration {
     private final NodqoraProperties properties;
     private final List<Plugin<?>> plugins;
     private final ObjectMapper mapper;
+    private final Validator validator;
     private final SecretReferences secrets;
 
     private final Map<String, Map<String, Object>> boundConfigs = new LinkedHashMap<>();
 
     @Autowired
-    public BoundConfiguration(NodqoraProperties properties, List<Plugin<?>> plugins, ObjectMapper mapper) {
-        this(properties, plugins, mapper, SecretReferences.fromProcess());
+    public BoundConfiguration(
+            NodqoraProperties properties, List<Plugin<?>> plugins, ObjectMapper mapper, Validator validator) {
+        this(properties, plugins, mapper, validator, SecretReferences.fromProcess());
     }
 
     BoundConfiguration(
             NodqoraProperties properties,
             List<Plugin<?>> plugins,
             ObjectMapper mapper,
+            Validator validator,
             SecretReferences secrets) {
         this.properties = properties;
         this.plugins = List.copyOf(plugins);
         this.mapper = mapper;
+        this.validator = validator;
         this.secrets = secrets;
     }
 
@@ -60,10 +68,31 @@ public class BoundConfiguration {
             environment.plugins().forEach((pluginId, slice) -> {
                 Plugin<?> plugin = plugin(pluginId).orElseThrow(() -> new IllegalStateException(
                         "environment %s configures unknown plugin '%s'".formatted(environmentKey, pluginId)));
-                bound.put(pluginId, mapper.convertValue(secrets.resolveConfig(slice), plugin.configType()));
+                bound.put(pluginId, validated(environmentKey, plugin, slice));
             });
             boundConfigs.put(environmentKey, bound);
         });
+    }
+
+    /**
+     * ADR-0014: a plugin declares {@code Class<C> configType()} and the core binds its slice of the
+     * file into it <em>with Bean Validation</em>, so bad configuration fails at startup rather than
+     * at first poll. Secret references resolve first, because a reference is not a value until it
+     * has been looked up and a constraint on the value would otherwise see {@code "${env:...}"}.
+     */
+    private Object validated(String environmentKey, Plugin<?> plugin, Map<String, Object> slice) {
+        Object config = mapper.convertValue(secrets.resolveConfig(slice), plugin.configType());
+        Set<ConstraintViolation<Object>> violations = validator.validate(config);
+        if (!violations.isEmpty()) {
+            throw new IllegalStateException("environment %s, plugin %s: %s".formatted(
+                    environmentKey,
+                    plugin.id(),
+                    violations.stream()
+                            .map(violation -> violation.getPropertyPath() + " " + violation.getMessage())
+                            .sorted()
+                            .collect(Collectors.joining("; "))));
+        }
+        return config;
     }
 
     /**

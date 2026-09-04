@@ -161,6 +161,25 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         assertThat(response.getBody().get("environmentKey").asText()).isEqualTo("nope");
     }
 
+    @Test
+    void an_error_we_did_not_raise_ourselves_is_problem_json_too() {
+        ResponseEntity<JsonNode> response = http.getForEntity("/api/nope", JsonNode.class);
+
+        // ADR-0060 says *errors* are problem+json, not "the errors we happen to throw". The frontend
+        // has one error path and reads `detail` off it; a default Spring error body has no `detail`.
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().getContentType().toString()).startsWith("application/problem+json");
+    }
+
+    @Test
+    void a_node_key_carrying_dots_survives_route_matching() {
+        // ADR-0052: node keys carry dots (`analytics.payments_events`), so route matching must do no
+        // suffix or extension handling. No per-node route exists yet, but the environment path is
+        // the same matcher and the keys ride inside the document either way.
+        assertThat(node(graph("production"), "payments.events.enriched.v1")).isNotNull();
+        assertThat(node(graph("production"), "analytics.payments_events")).isNotNull();
+    }
+
     static JsonNode node(JsonNode graph, String key) {
         for (JsonNode node : graph.get("nodes")) {
             if (node.get("key").asText().equals(key)) {

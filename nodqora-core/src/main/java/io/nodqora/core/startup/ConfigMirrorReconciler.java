@@ -53,14 +53,15 @@ public class ConfigMirrorReconciler {
         reconcilePlugins();
 
         // ADR-0080: a payload written under a different contract version is discarded rather than
-        // migrated. The graph goes empty and repopulating, not partial and wrong.
+        // migrated, so the graph goes empty and repopulating rather than partial and wrong.
+        //
+        // Deliberately not a second WARN. ADR-0101 grants exactly one guard, to ADR-0074's cascade,
+        // on the grounds that it is destructive *and* triggered by an ordinary text edit *and*
+        // silent. A version bump fails the middle test — it is a deliberate developer act — which is
+        // why ADR-0101 did not grant it one, and the empty graph it causes is on this slice's
+        // must-not-fix list.
         int discarded = snapshots.discardStalePayloads();
-        if (discarded > 0) {
-            log.warn(
-                    "discarded {} stored rows written under a different payload version; "
-                            + "the graph will be empty until each plugin's next poll",
-                    discarded);
-        }
+        log.debug("discarded {} stored rows written under a different payload version", discarded);
     }
 
     private void reconcileEnvironments() {

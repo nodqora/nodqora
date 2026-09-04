@@ -9,6 +9,12 @@ spring:
     enabled: true
   jackson:
     default-property-inclusion: always   # ADR-0058: the API returns nulls unresolved.
+  mvc:
+    # ADR-0060: errors are RFC 9457 problem+json. Without this only the errors we raise ourselves
+    # are, and an unknown path or an unhandled failure returns Spring's default body instead — so
+    # the frontend's one error path would read `detail` off a document that has none.
+    problemdetails:
+      enabled: true
 
 server:
   port: 8080

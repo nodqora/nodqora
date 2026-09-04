@@ -102,7 +102,7 @@ public class GraphFold {
      * {@code type}, {@code displayName}, {@code description} and {@code ownerKey}. Nothing else on a
      * node is contestable.
      */
-    private static String first(List<Claim<DiscoveredNode>> claims, Function<DiscoveredNode, String> field) {
+    private static <T> String first(List<Claim<T>> claims, Function<T, String> field) {
         return claims.stream()
                 .map(claim -> field.apply(claim.value()))
                 .filter(Objects::nonNull)
@@ -212,19 +212,11 @@ public class GraphFold {
         return claims.values().stream()
                 .map(carried -> new FoldedOwner(
                         Keys.verbatim(carried.getFirst().value().key()),
-                        firstOwner(carried, DiscoveredOwner::displayName),
-                        firstOwner(carried, DiscoveredOwner::channel),
-                        firstOwner(carried, DiscoveredOwner::onCall)))
+                        first(carried, DiscoveredOwner::displayName),
+                        first(carried, DiscoveredOwner::channel),
+                        first(carried, DiscoveredOwner::onCall)))
                 .sorted(Comparator.comparing(owner -> Keys.folded(owner.key())))
                 .toList();
-    }
-
-    private static String firstOwner(List<Claim<DiscoveredOwner>> claims, Function<DiscoveredOwner, String> field) {
-        return claims.stream()
-                .map(claim -> field.apply(claim.value()))
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
     }
 
     // ---------------------------------------------------------------- shared

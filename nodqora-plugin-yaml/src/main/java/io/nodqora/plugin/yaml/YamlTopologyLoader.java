@@ -63,7 +63,7 @@ class YamlTopologyLoader {
     DiscoveryResult load(String environmentKey, Path directory) {
         try {
             return read(environmentKey, directory);
-        } catch (TopologyFileException e) {
+        } catch (InvalidTopologyException e) {
             return DiscoveryResult.failed(e.getMessage());
         } catch (IOException e) {
             return DiscoveryResult.failed(
@@ -73,7 +73,7 @@ class YamlTopologyLoader {
 
     private DiscoveryResult read(String environmentKey, Path directory) throws IOException {
         if (!Files.isDirectory(directory)) {
-            throw new TopologyFileException("topology directory %s does not exist".formatted(directory));
+            throw new InvalidTopologyException("topology directory %s does not exist".formatted(directory));
         }
 
         Accumulator accumulator = new Accumulator();
@@ -100,10 +100,10 @@ class YamlTopologyLoader {
         rejectUnknownKeys(name, "file", document.keySet(), TOP_LEVEL_KEYS);
         String declared = string(document.get("environment"));
         if (declared == null) {
-            throw new TopologyFileException("%s declares no environment:".formatted(name));
+            throw new InvalidTopologyException("%s declares no environment:".formatted(name));
         }
         if (!declared.equals(environmentKey)) {
-            throw new TopologyFileException(
+            throw new InvalidTopologyException(
                     "%s declares environment: %s but sits in the directory bound to %s"
                             .formatted(name, declared, environmentKey));
         }
@@ -130,13 +130,13 @@ class YamlTopologyLoader {
                 return Map.of();
             }
             if (!(loaded instanceof Map<?, ?> map)) {
-                throw new TopologyFileException("%s is not a mapping".formatted(name));
+                throw new InvalidTopologyException("%s is not a mapping".formatted(name));
             }
             return castKeys(name, map);
-        } catch (TopologyFileException e) {
+        } catch (InvalidTopologyException e) {
             throw e;
         } catch (RuntimeException e) {
-            throw new TopologyFileException("%s will not parse: %s".formatted(name, rootMessage(e)));
+            throw new InvalidTopologyException("%s will not parse: %s".formatted(name, rootMessage(e)));
         }
     }
 
@@ -150,7 +150,7 @@ class YamlTopologyLoader {
         Map<String, Object> result = new LinkedHashMap<>();
         map.forEach((key, value) -> {
             if (!(key instanceof String text)) {
-                throw new TopologyFileException("%s has a non-string key %s".formatted(name, key));
+                throw new InvalidTopologyException("%s has a non-string key %s".formatted(name, key));
             }
             result.put(text, value);
         });
@@ -162,12 +162,12 @@ class YamlTopologyLoader {
             return List.of();
         }
         if (!(value instanceof List<?> list)) {
-            throw new TopologyFileException("%s: %s must be a list".formatted(name, section));
+            throw new InvalidTopologyException("%s: %s must be a list".formatted(name, section));
         }
         List<Map<String, Object>> result = new ArrayList<>(list.size());
         for (Object element : list) {
             if (!(element instanceof Map<?, ?> map)) {
-                throw new TopologyFileException("%s: every %s entry must be a mapping".formatted(name, section));
+                throw new InvalidTopologyException("%s: every %s entry must be a mapping".formatted(name, section));
             }
             result.add(castKeys(name, map));
         }
@@ -177,7 +177,7 @@ class YamlTopologyLoader {
     private static void rejectUnknownKeys(String file, String what, Set<String> present, Set<String> allowed) {
         for (String key : present) {
             if (!allowed.contains(key)) {
-                throw new TopologyFileException(
+                throw new InvalidTopologyException(
                         "%s: unknown %s key '%s'".formatted(file, what, key));
             }
         }
@@ -188,7 +188,7 @@ class YamlTopologyLoader {
             return null;
         }
         if (!(value instanceof String text)) {
-            throw new TopologyFileException("expected a string but found %s".formatted(value));
+            throw new InvalidTopologyException("expected a string but found %s".formatted(value));
         }
         String trimmed = text.trim();
         return trimmed.isEmpty() ? null : trimmed;
@@ -199,7 +199,7 @@ class YamlTopologyLoader {
             return List.of();
         }
         if (!(value instanceof List<?> list)) {
-            throw new TopologyFileException("%s: %s must be a list".formatted(file, what));
+            throw new InvalidTopologyException("%s: %s must be a list".formatted(file, what));
         }
         return list.stream().map(YamlTopologyLoader::string).filter(java.util.Objects::nonNull).toList();
     }
@@ -237,7 +237,7 @@ class YamlTopologyLoader {
             rejectUnknownKeys(file, "type", stanza.keySet(), TYPE_KEYS);
             String type = string(stanza.get("type"));
             if (type == null) {
-                throw new TopologyFileException("%s: a types entry has no type:".formatted(file));
+                throw new InvalidTopologyException("%s: a types entry has no type:".formatted(file));
             }
             claim(typeFiles, type, file, "type", type);
             descriptors.add(new TypeDescriptor(
@@ -263,9 +263,8 @@ class YamlTopologyLoader {
                     backings(file, stanza.get("consumerGroups")),
                     Map.of()));
 
-            for (String verbKey : Verb.keys()) {
-                Verb verb = Verb.byKey(verbKey);
-                for (String target : strings(file, stanza.get(verbKey), verbKey)) {
+            for (Verb verb : Verb.values()) {
+                for (String target : strings(file, stanza.get(verb.key()), verb.key())) {
                     edges.add(new DiscoveredEdge(
                             verb.fromKey(key, target), verb.toKey(key, target), verb.relation()));
                 }
@@ -275,7 +274,7 @@ class YamlTopologyLoader {
         private static String required(String file, Map<String, Object> stanza, String what) {
             String key = string(stanza.get("key"));
             if (key == null) {
-                throw new TopologyFileException("%s: a %s stanza has no key:".formatted(file, what));
+                throw new InvalidTopologyException("%s: a %s stanza has no key:".formatted(file, what));
             }
             return key;
         }
@@ -283,7 +282,7 @@ class YamlTopologyLoader {
         private static void claim(Map<String, String> claims, String identity, String file, String what, String shown) {
             String previous = claims.putIfAbsent(identity, file);
             if (previous != null) {
-                throw new TopologyFileException(
+                throw new InvalidTopologyException(
                         "%s is declared twice: %s and %s".formatted(what + " " + shown, previous, file));
             }
         }
@@ -296,7 +295,7 @@ class YamlTopologyLoader {
                 String rel = string(stanza.get("rel"));
                 String url = string(stanza.get("url"));
                 if (rel == null || url == null) {
-                    throw new TopologyFileException("%s: a link needs both rel: and url:".formatted(file));
+                    throw new InvalidTopologyException("%s: a link needs both rel: and url:".formatted(file));
                 }
                 result.add(new Link(rel, string(stanza.get("label")), url));
             }
@@ -309,7 +308,7 @@ class YamlTopologyLoader {
                     return list;
                 }
             }
-            throw new TopologyFileException("%s: links must be a list of mappings".formatted(file));
+            throw new InvalidTopologyException("%s: links must be a list of mappings".formatted(file));
         }
 
         private static List<Backing> backings(String file, Object consumerGroups) {

@@ -3,9 +3,9 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { api } from './api/client'
 import { Canvas } from './canvas/Canvas'
 import { Drawer } from './inspector/Drawer'
+import { sameKey } from './api/keys'
 import type { Graph, Meta, State } from './api/types'
 
-const CASE_FOLD = (key: string) => key.trim().toLowerCase()
 
 export function App() {
   const [meta, setMeta] = useState<Meta | null>(null)
@@ -57,11 +57,11 @@ export function App() {
   }
 
   const selectedNode = useMemo(
-    () => graph?.nodes.find((node) => CASE_FOLD(node.key) === CASE_FOLD(selectedKey ?? '')) ?? null,
+    () => graph?.nodes.find((node) => sameKey(node.key, selectedKey)) ?? null,
     [graph, selectedKey],
   )
   const selectedState = useMemo(
-    () => state?.nodes.find((node) => CASE_FOLD(node.nodeKey) === CASE_FOLD(selectedKey ?? '')) ?? null,
+    () => state?.nodes.find((node) => sameKey(node.nodeKey, selectedKey)) ?? null,
     [state, selectedKey],
   )
 
@@ -87,11 +87,6 @@ export function App() {
           <input type="checkbox" checked={showMetrics} onChange={(e) => setShowMetrics(e.target.checked)} />
           Metrics
         </label>
-        {graph && (
-          <span className="counts">
-            {graph.nodes.length} nodes · {graph.edges.length} edges
-          </span>
-        )}
         {error && <span className="error">{error}</span>}
       </header>
 

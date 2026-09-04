@@ -48,6 +48,10 @@ enum Verb {
         return BY_KEY.keySet();
     }
 
+    String key() {
+        return key;
+    }
+
     String relation() {
         return relation;
     }

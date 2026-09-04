@@ -28,7 +28,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,8 +36,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GraphDocuments {
 
-    private static final String DISCOVERY = "DISCOVERY";
-    private static final String HEALTH = "HEALTH";
+    /**
+     * ADR-0010: exactly two capabilities, either or both. Each names where its roster comes from and
+     * where its last poll was recorded, so the read path picks a capability rather than branching on
+     * a string in two places that could disagree.
+     */
+    private enum Capability {
+        DISCOVERY,
+        HEALTH;
+
+        List<BoundConfiguration.ConfiguredCapability> configured(
+                BoundConfiguration configuration, String environmentKey) {
+            return this == DISCOVERY
+                    ? configuration.discoveryPairs(environmentKey)
+                    : configuration.healthPairs(environmentKey);
+        }
+
+        Map<String, SnapshotHeader> reported(SnapshotStore snapshots, String environmentKey) {
+            // The health store arrives with the health loop in slice 3; until then nothing has
+            // reported, which under ADR-0085 is a null outcome rather than a missing entry.
+            return this == DISCOVERY
+                    ? snapshots.headers(environmentKey).stream()
+                            .collect(Collectors.toMap(SnapshotHeader::pluginId, header -> header))
+                    : Map.of();
+        }
+    }
 
     private final BoundConfiguration configuration;
     private final GraphStore graph;
@@ -69,10 +92,10 @@ public class GraphDocuments {
     private static List<String> capabilities(Plugin<?> plugin) {
         List<String> capabilities = new ArrayList<>();
         if (plugin instanceof DiscoveryCapability<?>) {
-            capabilities.add(DISCOVERY);
+            capabilities.add(Capability.DISCOVERY.name());
         }
         if (plugin instanceof HealthCapability<?>) {
-            capabilities.add(HEALTH);
+            capabilities.add(Capability.HEALTH.name());
         }
         return capabilities;
     }
@@ -118,7 +141,7 @@ public class GraphDocuments {
                 // mistakes it for environment-scoped descriptors.
                 snapshots.typeDescriptors(configuration.byPluginPrecedence(), configuration.byEnvironmentOrder()),
                 RelationDescriptors.builtIns(),
-                outcomes(environmentKey, DISCOVERY));
+                outcomes(environmentKey, Capability.DISCOVERY));
     }
 
     private List<Source> sources(List<String> plugins, Map<String, Instant> confirmedAt) {
@@ -149,7 +172,7 @@ public class GraphDocuments {
                                 row.metrics(),
                                 row.observedAt()))
                         .toList(),
-                outcomes(environmentKey, HEALTH));
+                outcomes(environmentKey, Capability.HEALTH));
     }
 
     /**
@@ -157,23 +180,15 @@ public class GraphDocuments {
      * with the store. The denominator is a config count, so it never shrinks because nothing has
      * reported — which is what makes a cold environment distinguishable from an empty one.
      */
-    private List<PluginOutcome> outcomes(String environmentKey, String capability) {
-        Map<String, SnapshotHeader> reported = capability.equals(DISCOVERY)
-                ? snapshots.headers(environmentKey).stream()
-                        .collect(java.util.stream.Collectors.toMap(SnapshotHeader::pluginId, header -> header))
-                // The health store arrives with the health loop; until then nothing has reported.
-                : Map.of();
+    private List<PluginOutcome> outcomes(String environmentKey, Capability capability) {
+        Map<String, SnapshotHeader> reported = capability.reported(snapshots, environmentKey);
 
-        List<BoundConfiguration.ConfiguredCapability> configured = capability.equals(DISCOVERY)
-                ? configuration.discoveryPairs(environmentKey)
-                : configuration.healthPairs(environmentKey);
-
-        return configured.stream()
+        return capability.configured(configuration, environmentKey).stream()
                 .map(pair -> {
                     SnapshotHeader header = reported.get(pair.plugin().id());
                     return new PluginOutcome(
                             pair.plugin().id(),
-                            capability,
+                            capability.name(),
                             header == null ? null : header.outcome().name(),
                             header == null ? List.of() : header.reasons(),
                             header == null ? null : header.recordedAt());
@@ -197,9 +212,5 @@ public class GraphDocuments {
         if (!configuration.knows(environmentKey)) {
             throw new UnknownEnvironmentException(environmentKey);
         }
-    }
-
-    Optional<String> knownEnvironment(String environmentKey) {
-        return configuration.knows(environmentKey) ? Optional.of(environmentKey) : Optional.empty();
     }
 }

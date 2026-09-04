@@ -15,6 +15,8 @@ import '@xyflow/react/dist/style.css'
 import { NodeCard, type NodeCardData } from './NodeCard'
 import { layout } from './layout'
 import { edgeIsHighlighted, highlightFrom } from './highlight'
+import { foldKey } from '../api/keys'
+import { crossesTeams, ownersByNodeKey } from './crossTeam'
 import type { Graph, Health, State } from '../api/types'
 
 const COLUMN_WIDTH = 300
@@ -26,7 +28,6 @@ const CARD_WIDTH = 236
 const CARD_HEIGHT = 62
 const CARD_HEIGHT_WITH_METRIC = 84
 const NODE_TYPES = { card: NodeCard }
-const CASE_FOLD = (key: string) => key.trim().toLowerCase()
 
 /**
  * ADR-0018's MVP canvas: pan, zoom, fit-to-screen, node rendering, an optional metric line behind a
@@ -59,13 +60,13 @@ export function Canvas({
 
   const health = useMemo(() => {
     const byKey = new Map<string, Health>()
-    state?.nodes.forEach((node) => byKey.set(CASE_FOLD(node.nodeKey), node.health))
+    state?.nodes.forEach((node) => byKey.set(foldKey(node.nodeKey), node.health))
     return byKey
   }, [state])
 
   const metricLines = useMemo(() => {
     const byKey = new Map<string, string | null>()
-    state?.nodes.forEach((node) => byKey.set(CASE_FOLD(node.nodeKey), summarizeMetrics(node.metrics)))
+    state?.nodes.forEach((node) => byKey.set(foldKey(node.nodeKey), summarizeMetrics(node.metrics)))
     return byKey
   }, [state])
 
@@ -75,9 +76,9 @@ export function Canvas({
   )
 
   const laidOut = useMemo<Node[]>(() => {
-    const placements = new Map(layout(graph.nodes, graph.edges).map((p) => [CASE_FOLD(p.key), p]))
+    const placements = new Map(layout(graph.nodes, graph.edges).map((p) => [foldKey(p.key), p]))
     return graph.nodes.map((node) => {
-      const folded = CASE_FOLD(node.key)
+      const folded = foldKey(node.key)
       const placement = placements.get(folded)
       const data: NodeCardData = {
         nodeKey: node.key,
@@ -104,6 +105,8 @@ export function Canvas({
     })
   }, [graph.nodes, graph.edges, descriptors, health, metricLines, showMetrics, selectedKey, highlight])
 
+  const owners = useMemo(() => ownersByNodeKey(graph.nodes), [graph.nodes])
+
   const drawn = useMemo<Edge[]>(
     () =>
       graph.edges.map((edge) => {
@@ -117,12 +120,17 @@ export function Canvas({
           markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
           animated: false,
         }
+        const classes: string[] = []
+        // ADR-0016: an edge treatment, not a layout axis. The fixture crosses at the connectors,
+        // which is the hand-off the product exists to make visible.
+        if (crossesTeams(edge, owners)) classes.push('edge-cross-team')
         if (highlight) {
-          drawnEdge.className = edgeIsHighlighted(edge, highlight) ? 'edge-highlighted' : 'edge-dimmed'
+          classes.push(edgeIsHighlighted(edge, highlight) ? 'edge-highlighted' : 'edge-dimmed')
         }
+        if (classes.length > 0) drawnEdge.className = classes.join(' ')
         return drawnEdge
       }),
-    [graph.edges, highlight],
+    [graph.edges, highlight, owners],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(laidOut)
@@ -134,9 +142,10 @@ export function Canvas({
   useEffect(() => setNodes(laidOut), [laidOut, setNodes])
   useEffect(() => setEdges(drawn), [drawn, setEdges])
 
-  // ADR-0018 as amended by ADR-0097: the canvas has an initial viewport, not just a fit control the
-  // user asks for. Re-fitting on an environment switch is the same act — a different graph, and the
-  // switcher's whole point is that the graph changes rather than a label.
+  // ADR-0018 lists fit-to-screen as a control the user asks for and says nothing about what the
+  // canvas is pointed at on load, so it also gets an initial viewport. Re-fitting on an environment
+  // switch is the same act — a different graph, and the switcher's whole point is that the graph
+  // changes rather than a label.
   //
   // Two things have to hold before it can run. XYFlow fits to the bounding box of the nodes it has
   // *measured*, so fitting before `useNodesInitialized` fits to nothing and parks the graph unscaled

@@ -39,8 +39,7 @@ public final class SecretReferences {
     }
 
     /** Resolves every reference in a plugin's config slice, leaving the structure alone. */
-    @SuppressWarnings("unchecked")
-    public Object resolve(Object value) {
+    private Object resolve(Object value) {
         return switch (value) {
             case String text -> resolveText(text);
             case Map<?, ?> map -> {

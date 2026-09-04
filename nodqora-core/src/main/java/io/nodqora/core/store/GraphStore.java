@@ -19,6 +19,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -58,10 +61,42 @@ public class GraphStore {
         writeOwners(environmentKey, graph.owners(), now);
     }
 
-    // ---------------------------------------------------------------- nodes
-
-    /** A stored row reduced to its identity and the fields ADR-0050 compares. */
+    /** A stored row reduced to its surrogate id and the fields ADR-0050 compares. */
     private record StoredRow(long id, Object[] compared) {}
+
+    /**
+     * ADR-0050's rule, written once: <b>insert what is new, update iff the folded row differs from
+     * the stored row in any compared field, and delete whatever the fold did not produce.</b>
+     *
+     * <p>The SQL stays with each table because each table's columns are its own; the <em>decision</em>
+     * does not, because it is the part that would rot. Three copies of it is three places to forget
+     * that an unchanged row must keep its {@code updatedAt} — and forgetting that has no symptom
+     * beyond {@code updatedAt} quietly becoming a poll clock.
+     *
+     * @param stored every row currently in the table, keyed by identity; drained as it is matched, so
+     *     what remains at the end is exactly what is gone
+     */
+    private <T> void reconcile(
+            String table,
+            List<T> folded,
+            Map<String, StoredRow> stored,
+            Function<T, String> identity,
+            Function<T, Object[]> compared,
+            Consumer<T> insert,
+            BiConsumer<T, Long> update) {
+        for (T row : folded) {
+            StoredRow prior = stored.remove(identity.apply(row));
+            if (prior == null) {
+                insert.accept(row);
+            } else if (!Objects.deepEquals(prior.compared(), compared.apply(row))) {
+                update.accept(row, prior.id());
+            }
+        }
+        // ADR-0047: absence deletes immediately. For a node this cascades its NodeState with it.
+        deleteById(table, stored.values().stream().map(StoredRow::id).toList());
+    }
+
+    // ---------------------------------------------------------------- nodes
 
     private void writeNodes(String environmentKey, List<FoldedNode> nodes, Instant now) {
         Map<String, StoredRow> stored = new LinkedHashMap<>();
@@ -88,21 +123,23 @@ public class GraphStore {
                 },
                 environmentKey);
 
-        for (FoldedNode node : nodes) {
-            StoredRow prior = stored.remove(Keys.folded(node.key()));
-            Object[] folded = new Object[] {
-                node.key(),
-                node.type(),
-                node.displayName(),
-                node.description(),
-                node.ownerKey(),
-                json.canonical(node.links()),
-                json.canonical(node.backings()),
-                json.canonical(node.metadata()),
-                json.canonical(node.sources()),
-            };
-            if (prior == null) {
-                jdbc.update(
+        reconcile(
+                "node",
+                nodes,
+                stored,
+                node -> Keys.folded(node.key()),
+                node -> new Object[] {
+                    node.key(),
+                    node.type(),
+                    node.displayName(),
+                    node.description(),
+                    node.ownerKey(),
+                    json.canonical(node.links()),
+                    json.canonical(node.backings()),
+                    json.canonical(node.metadata()),
+                    json.canonical(node.sources()),
+                },
+                node -> jdbc.update(
                         """
                         insert into node (environment_key, key, type, display_name, description, owner_key,
                                           links, backings, metadata, sources, discovered_at, updated_at)
@@ -119,9 +156,8 @@ public class GraphStore {
                         json.write(node.metadata()),
                         json.write(node.sources()),
                         Timestamp.from(now),
-                        Timestamp.from(now));
-            } else if (!Objects.deepEquals(prior.compared(), folded)) {
-                jdbc.update(
+                        Timestamp.from(now)),
+                (node, id) -> jdbc.update(
                         """
                         update node set key = ?, type = ?, display_name = ?, description = ?, owner_key = ?,
                                         links = ?::jsonb, backings = ?::jsonb, metadata = ?::jsonb,
@@ -138,11 +174,7 @@ public class GraphStore {
                         json.write(node.metadata()),
                         json.write(node.sources()),
                         Timestamp.from(now),
-                        prior.id());
-            }
-        }
-        // Whatever the fold did not produce is gone (ADR-0047), which cascades its NodeState with it.
-        deleteById("node", stored.values().stream().map(StoredRow::id).toList());
+                        id));
     }
 
     // ---------------------------------------------------------------- edges
@@ -166,13 +198,17 @@ public class GraphStore {
                 },
                 environmentKey);
 
-        for (FoldedEdge edge : edges) {
-            StoredRow prior = stored.remove(edgeIdentity(edge.fromKey(), edge.toKey(), edge.relation()));
-            Object[] folded = new Object[] {
-                edge.fromKey(), edge.toKey(), json.canonical(edge.metadata()), json.canonical(edge.sources()),
-            };
-            if (prior == null) {
-                jdbc.update(
+        reconcile(
+                "edge",
+                edges,
+                stored,
+                edge -> edgeIdentity(edge.fromKey(), edge.toKey(), edge.relation()),
+                // The relation is in the identity, so it is not a compared field: ADR-0045 leaves an
+                // edge with no contestable scalar at all.
+                edge -> new Object[] {
+                    edge.fromKey(), edge.toKey(), json.canonical(edge.metadata()), json.canonical(edge.sources()),
+                },
+                edge -> jdbc.update(
                         """
                         insert into edge (environment_key, from_key, to_key, relation, metadata, sources,
                                           discovered_at, updated_at)
@@ -185,9 +221,8 @@ public class GraphStore {
                         json.write(edge.metadata()),
                         json.write(edge.sources()),
                         Timestamp.from(now),
-                        Timestamp.from(now));
-            } else if (!Objects.deepEquals(prior.compared(), folded)) {
-                jdbc.update(
+                        Timestamp.from(now)),
+                (edge, id) -> jdbc.update(
                         """
                         update edge set from_key = ?, to_key = ?, metadata = ?::jsonb, sources = ?::jsonb,
                                         updated_at = ?
@@ -198,10 +233,7 @@ public class GraphStore {
                         json.write(edge.metadata()),
                         json.write(edge.sources()),
                         Timestamp.from(now),
-                        prior.id());
-            }
-        }
-        deleteById("edge", stored.values().stream().map(StoredRow::id).toList());
+                        id));
     }
 
     /** ADR-0045: endpoints case-folded, the relation matched exactly. */
@@ -227,11 +259,13 @@ public class GraphStore {
                 },
                 environmentKey);
 
-        for (FoldedOwner owner : owners) {
-            StoredRow prior = stored.remove(Keys.folded(owner.key()));
-            Object[] folded = new Object[] {owner.key(), owner.displayName(), owner.channel(), owner.onCall()};
-            if (prior == null) {
-                jdbc.update(
+        reconcile(
+                "owner",
+                owners,
+                stored,
+                owner -> Keys.folded(owner.key()),
+                owner -> new Object[] {owner.key(), owner.displayName(), owner.channel(), owner.onCall()},
+                owner -> jdbc.update(
                         """
                         insert into owner (environment_key, key, display_name, channel, on_call,
                                            discovered_at, updated_at)
@@ -243,9 +277,8 @@ public class GraphStore {
                         owner.channel(),
                         owner.onCall(),
                         Timestamp.from(now),
-                        Timestamp.from(now));
-            } else if (!Objects.deepEquals(prior.compared(), folded)) {
-                jdbc.update(
+                        Timestamp.from(now)),
+                (owner, id) -> jdbc.update(
                         """
                         update owner set key = ?, display_name = ?, channel = ?, on_call = ?, updated_at = ?
                         where id = ?
@@ -255,10 +288,7 @@ public class GraphStore {
                         owner.channel(),
                         owner.onCall(),
                         Timestamp.from(now),
-                        prior.id());
-            }
-        }
-        deleteById("owner", stored.values().stream().map(StoredRow::id).toList());
+                        id));
     }
 
     private void deleteById(String table, List<Long> ids) {

@@ -1,5 +1,6 @@
 import { HealthGlyph, healthLabel } from '../canvas/HealthGlyph'
 import { connectionsOf } from './connections'
+import { sameKey } from '../api/keys'
 import type { Graph, GraphNode, NodeState, PluginRef } from '../api/types'
 
 /**
@@ -33,7 +34,10 @@ export function Drawer({
   onSelect: (key: string) => void
   onClose: () => void
 }) {
-  const owner = graph.owners.find((candidate) => candidate.key.toLowerCase() === node.ownerKey?.toLowerCase())
+  // ADR-0020's folding, all of it. Comparing only the case would leave a padded key resolving to
+  // no Owner, which ADR-0048 makes an *ordinary* state — so the bug renders as an empty contact
+  // section rather than as an error.
+  const owner = graph.owners.find((candidate) => sameKey(candidate.key, node.ownerKey))
   const descriptor = node.type ? graph.typeDescriptors.find((d) => d.type === node.type) : undefined
   const connections = connectionsOf(node.key, graph.edges, graph.relationDescriptors)
   const health = state?.health ?? 'UNKNOWN'
@@ -95,8 +99,8 @@ export function Drawer({
           <Empty>Nothing connects to this node.</Empty>
         ) : (
           <>
-            <Peers title="Upstream" connections={connections.upstream} onSelect={onSelect} subject={node} />
-            <Peers title="Downstream" connections={connections.downstream} onSelect={onSelect} subject={node} />
+            <Peers direction="upstream" connections={connections.upstream} onSelect={onSelect} subject={node} />
+            <Peers direction="downstream" connections={connections.downstream} onSelect={onSelect} subject={node} />
           </>
         )}
       </Section>
@@ -197,22 +201,27 @@ function Empty({ children, inline }: { children: React.ReactNode; inline?: boole
   return <span className={inline ? 'empty empty-inline' : 'empty'}>{children}</span>
 }
 
+const PEERS = {
+  upstream: { heading: 'Upstream', empty: 'Nothing feeds this node.' },
+  downstream: { heading: 'Downstream', empty: 'Nothing reads from this node.' },
+} as const
+
 function Peers({
-  title,
+  direction,
   connections,
   onSelect,
   subject,
 }: {
-  title: string
+  direction: keyof typeof PEERS
   connections: ReturnType<typeof connectionsOf>['upstream']
   onSelect: (key: string) => void
   subject: GraphNode
 }) {
   return (
     <div className="peers">
-      <h4>{title}</h4>
+      <h4>{PEERS[direction].heading}</h4>
       {connections.length === 0 ? (
-        <Empty>{title === 'Upstream' ? 'Nothing feeds this node.' : 'Nothing reads from this node.'}</Empty>
+        <Empty>{PEERS[direction].empty}</Empty>
       ) : (
         <ul>
           {connections.map((connection) => (

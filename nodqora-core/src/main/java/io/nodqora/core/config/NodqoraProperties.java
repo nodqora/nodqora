@@ -1,6 +1,5 @@
 package io.nodqora.core.config;
 
-import jakarta.validation.constraints.NotEmpty;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,8 +27,13 @@ public record NodqoraProperties(Plugins plugins, Refresh refresh, Map<String, En
      * The two orders over plugin ids (ADR-0011, ADR-0044, ADR-0050). They are configuration rather
      * than constants because ADR-0011 says precedence is "expressed as config over plugin ids", and
      * because ADR-0015 forbids the core naming a plugin in its own source at all.
+     *
+     * <p>Neither list carries a Bean Validation constraint, because
+     * {@code BoundConfiguration.requireOrdersCoverEveryPlugin} already checks something strictly
+     * stronger than non-emptiness — that each names <em>exactly</em> the registered plugins — and
+     * says which ids are missing when it fails.
      */
-    public record Plugins(@NotEmpty List<String> registryOrder, @NotEmpty List<String> precedence) {}
+    public record Plugins(List<String> registryOrder, List<String> precedence) {}
 
     /** ADR-0035, ADR-0042: 5 minute discovery, 30 second health, both file-declared. */
     public record Refresh(Duration discovery, Duration health) {

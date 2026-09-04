@@ -1,3 +1,4 @@
+import { foldKey } from '../api/keys'
 import type { GraphEdge, RelationDescriptor } from '../api/types'
 
 /**
@@ -13,7 +14,6 @@ import type { GraphEdge, RelationDescriptor } from '../api/types'
  * optional presentation polish.
  */
 
-const CASE_FOLD = (key: string) => key.trim().toLowerCase()
 
 export interface Connection {
   /** The node at the other end. */
@@ -33,21 +33,21 @@ export function connectionsOf(
   descriptors: RelationDescriptor[],
 ): Connections {
   const byRelation = new Map(descriptors.map((descriptor) => [descriptor.relation, descriptor]))
-  const self = CASE_FOLD(nodeKey)
+  const self = foldKey(nodeKey)
 
   const downstream: Connection[] = []
   const upstream: Connection[] = []
 
   for (const edge of edges) {
     const descriptor = byRelation.get(edge.relation)
-    if (CASE_FOLD(edge.fromKey) === self) {
+    if (foldKey(edge.fromKey) === self) {
       downstream.push({
         peerKey: edge.toKey,
         // An unregistered relation still renders, exactly as an unregistered type does (ADR-0001).
         phrasing: descriptor?.forwardPhrasing ?? edge.relation,
         relation: edge.relation,
       })
-    } else if (CASE_FOLD(edge.toKey) === self) {
+    } else if (foldKey(edge.toKey) === self) {
       upstream.push({
         peerKey: edge.fromKey,
         phrasing: descriptor?.reversePhrasing ?? edge.relation,

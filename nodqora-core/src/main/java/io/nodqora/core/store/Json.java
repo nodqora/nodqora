@@ -1,5 +1,6 @@
 package io.nodqora.core.store;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -30,27 +31,15 @@ public class Json {
     }
 
     public String write(Object value) {
-        try {
-            return mapper.writeValueAsString(value);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new UncheckedIOException(e);
-        }
+        return unchecked(() -> mapper.writeValueAsString(value));
     }
 
     public <T> T read(String json, Class<T> type) {
-        try {
-            return mapper.readValue(json, type);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new UncheckedIOException(e);
-        }
+        return unchecked(() -> mapper.readValue(json, type));
     }
 
     public <T> T read(String json, TypeReference<T> type) {
-        try {
-            return mapper.readValue(json, type);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new UncheckedIOException(e);
-        }
+        return unchecked(() -> mapper.readValue(json, type));
     }
 
     /** The comparable form of a value, whether it came from the fold or from the database. */
@@ -59,10 +48,23 @@ public class Json {
     }
 
     private JsonNode parse(String json) {
+        return unchecked(() -> mapper.readTree(json));
+    }
+
+    /**
+     * Every payload here has already been produced or accepted by this process, so a Jackson failure
+     * is a bug in a mapping rather than a condition a caller could handle.
+     */
+    private static <T> T unchecked(JacksonCall<T> call) {
         try {
-            return mapper.readTree(json);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return call.get();
+        } catch (JsonProcessingException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    @FunctionalInterface
+    private interface JacksonCall<T> {
+        T get() throws JsonProcessingException;
     }
 }

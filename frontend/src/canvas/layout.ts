@@ -1,3 +1,4 @@
+import { foldKey } from '../api/keys'
 import type { GraphEdge, GraphNode } from '../api/types'
 
 /**
@@ -21,7 +22,6 @@ export interface Placement {
   row: number
 }
 
-const CASE_FOLD = (key: string) => key.trim().toLowerCase()
 
 /**
  * Longest path from any source. A node with no incoming edge sits at column 0; every other node
@@ -30,10 +30,10 @@ const CASE_FOLD = (key: string) => key.trim().toLowerCase()
  */
 export function columnsOf(nodes: Pick<GraphNode, 'key'>[], edges: Pick<GraphEdge, 'fromKey' | 'toKey'>[]) {
   const predecessors = new Map<string, string[]>()
-  nodes.forEach((node) => predecessors.set(CASE_FOLD(node.key), []))
+  nodes.forEach((node) => predecessors.set(foldKey(node.key), []))
   edges.forEach((edge) => {
-    const to = CASE_FOLD(edge.toKey)
-    const from = CASE_FOLD(edge.fromKey)
+    const to = foldKey(edge.toKey)
+    const from = foldKey(edge.fromKey)
     if (predecessors.has(to) && predecessors.has(from)) predecessors.get(to)!.push(from)
   })
 
@@ -54,7 +54,7 @@ export function columnsOf(nodes: Pick<GraphNode, 'key'>[], edges: Pick<GraphEdge
     return column
   }
 
-  nodes.forEach((node) => depth(CASE_FOLD(node.key)))
+  nodes.forEach((node) => depth(foldKey(node.key)))
   return { columns, predecessors }
 }
 
@@ -71,7 +71,7 @@ export function layout(
   edges: Pick<GraphEdge, 'fromKey' | 'toKey'>[],
 ): Placement[] {
   const { columns, predecessors } = columnsOf(nodes, edges)
-  const spelling = new Map(nodes.map((node) => [CASE_FOLD(node.key), node.key]))
+  const spelling = new Map(nodes.map((node) => [foldKey(node.key), node.key]))
 
   const byColumn = new Map<number, string[]>()
   columns.forEach((column, key) => {

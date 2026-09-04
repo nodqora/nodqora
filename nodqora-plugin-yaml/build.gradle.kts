@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":nodqora-plugin-api"))
     implementation("org.springframework:spring-context")
     implementation("org.yaml:snakeyaml")
+    implementation("jakarta.validation:jakarta.validation-api")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

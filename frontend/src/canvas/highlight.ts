@@ -1,3 +1,4 @@
+import { foldKey } from '../api/keys'
 import type { GraphEdge } from '../api/types'
 
 /**
@@ -16,7 +17,6 @@ import type { GraphEdge } from '../api/types'
  * "follow outgoing", upstream is always "follow incoming".
  */
 
-const CASE_FOLD = (key: string) => key.trim().toLowerCase()
 
 export interface Highlight {
   /** The selection itself. */
@@ -27,7 +27,7 @@ export interface Highlight {
 
 export function highlightFrom(selectedKey: string, edges: GraphEdge[]): Highlight {
   return {
-    selected: CASE_FOLD(selectedKey),
+    selected: foldKey(selectedKey),
     upstream: reach(selectedKey, edges, 'upstream'),
     downstream: reach(selectedKey, edges, 'downstream'),
   }
@@ -36,14 +36,14 @@ export function highlightFrom(selectedKey: string, edges: GraphEdge[]): Highligh
 function reach(startKey: string, edges: GraphEdge[], direction: 'upstream' | 'downstream'): Set<string> {
   const adjacency = new Map<string, string[]>()
   for (const edge of edges) {
-    const from = CASE_FOLD(edge.fromKey)
-    const to = CASE_FOLD(edge.toKey)
+    const from = foldKey(edge.fromKey)
+    const to = foldKey(edge.toKey)
     const [tail, head] = direction === 'downstream' ? [from, to] : [to, from]
     adjacency.set(tail, [...(adjacency.get(tail) ?? []), head])
   }
 
   const reached = new Set<string>()
-  const queue = [CASE_FOLD(startKey)]
+  const queue = [foldKey(startKey)]
   while (queue.length > 0) {
     for (const next of adjacency.get(queue.shift()!) ?? []) {
       // Visited-guard doubles as the cycle guard; the model permits one even if the fixture has none.
@@ -53,7 +53,7 @@ function reach(startKey: string, edges: GraphEdge[], direction: 'upstream' | 'do
       }
     }
   }
-  reached.delete(CASE_FOLD(startKey))
+  reached.delete(foldKey(startKey))
   return reached
 }
 
@@ -61,7 +61,7 @@ function reach(startKey: string, edges: GraphEdge[], direction: 'upstream' | 'do
 export function edgeIsHighlighted(edge: GraphEdge, highlight: Highlight | null): boolean {
   if (!highlight) return false
   const inPath = (key: string) => {
-    const folded = CASE_FOLD(key)
+    const folded = foldKey(key)
     return folded === highlight.selected || highlight.upstream.has(folded) || highlight.downstream.has(folded)
   }
   return inPath(edge.fromKey) && inPath(edge.toKey)
