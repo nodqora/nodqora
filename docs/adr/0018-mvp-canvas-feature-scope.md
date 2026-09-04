@@ -23,6 +23,15 @@ their place on a ten-node graph.
 - environment switching
 - simple name search (issue #15)
 
+> **Amended by [ADR-0081](0081-outcome-is-a-resting-chip-and-an-exception-surface.md)
+> and [ADR-0083](0083-retained-and-blind-are-separate-marks.md).** Node rendering
+> also carries **conditional outcome marks** — a hatched top edge when a source
+> was retained, an outlined border and a named plugin when a health observer went
+> blind. They are conditional by construction: neither can fire while every
+> plugin's `outcome` is `COMPLETE`, so the list above is what the canvas renders
+> on an ordinary day. The scope discipline stands; this is the one thing
+> ADR-0056 put on the wire that had nowhere to go.
+
 **Deferred:**
 
 - **minimap** — near-useless at fixture scale, and cheap to restore later

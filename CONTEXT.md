@@ -785,6 +785,28 @@ row** (ADR-0056). There are **three**: each plugin's `outcome` — discovery on
 would put a per-poll timestamp inside a collection ADR-0050 diffs, degenerating
 `updatedAt` into a poll clock.
 
+Each `plugins[]` entry carries **`recordedAt`** beside its `outcome` — when that
+outcome was last recorded for this environment (ADR-0056, name pinned by
+ADR-0084).
+
+### Retained
+
+A source whose `confirmedAt` is **older than its plugin's `recordedAt`**
+(ADR-0084). Not a duration and not a threshold: a `COMPLETE` poll replaces its
+snapshot, so every key it carries was confirmed at that poll and the two
+timestamps agree; anything older was carried forward by a `PARTIAL` or a
+`FAILED`.
+
+The comparison is **per key**, so a `PARTIAL` that confirmed eight nodes and
+retained two marks exactly two — the distinction ADR-0056 said an
+environment-level banner could not make. Both timestamps come from the same
+server in the same document, so there is **no clock skew** and no TTL; ADR-0026's
+refusal of a staleness TTL is honoured rather than worked around.
+
+**Retained is a topology fact.** Its health-side counterpart is a *blind*
+observer — a health-capable plugin backing the node that abstained this cycle —
+and the two are marked differently on the canvas (ADR-0083).
+
 ### What the API does not do
 
 - **It never fabricates.** `displayName: null` reaches the client unresolved and
@@ -830,7 +852,8 @@ would put a per-poll timestamp inside a collection ADR-0050 diffs, degenerating
 | the merge updates a node | the **fold recomputes** it | nothing writes Node rows directly; they are derived from the snapshot store (ADR-0043) |
 | the discovery run | a **snapshot**, per (plugin, environment) | the four land independently; there is no moment when "the run" finishes (ADR-0012, ADR-0043) |
 | the node was deleted | the key is **carried by no snapshot** | deletion is arithmetic over the store, not an event someone emits (ADR-0047) |
-| stale / retained node | a key **retained through a `PARTIAL`** | absence means nothing in a snapshot that admits it was blind (ADR-0046) |
+| stale node / a staleness timeout | **retained** — `confirmedAt` older than that plugin's `recordedAt` | retention is a comparison between two server timestamps, not a duration; there is no TTL to tune (ADR-0046, ADR-0084) |
+| the plugin is down (of a node) | the node's observer is **blind** this cycle | a plugin's `outcome` is per environment; what reaches a node is whether one of *its* health-capable backings abstained (ADR-0026, ADR-0083) |
 | override / pinned field | `yaml` wins by **merge precedence** | §56 needs no second mechanism — YAML is a plugin that always wins (ADR-0044, ADR-0051) |
 | edge confidence / inferred edge | just an **edge** | every MVP edge is asserted; ADR-0009 dropped `confidence` and ADR-0041 removed the last inference |
 | the edge's `from` / `to` in YAML | the **verb** on the acting node | YAML never writes a direction; three of six relations read against the flow, and a reversed one is silently wrong (ADR-0062) |
