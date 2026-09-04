@@ -1,0 +1,294 @@
+{
+  "environment": {
+    "key": "staging",
+    "displayName": "Staging"
+  },
+  "nodes": [
+    {
+      "key": "payments-api",
+      "type": null,
+      "displayName": null,
+      "description": null,
+      "ownerKey": null,
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-enricher",
+      "type": null,
+      "displayName": null,
+      "description": null,
+      "ownerKey": null,
+      "links": [],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "consumer-group",
+          "reference": "enrich-consumer-staging"
+        }
+      ],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-es-sink",
+      "type": null,
+      "displayName": null,
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-events-v1",
+      "type": "elasticsearch-index",
+      "displayName": "payments-events-v1",
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Kibana",
+          "url": "https://kibana-staging.acme.io/app/discover#/?_a=(index:'payments-events-v1')"
+        }
+      ],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments.events.enriched.v1",
+      "type": null,
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments.events.raw.v1",
+      "type": null,
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "stripe-webhooks",
+      "type": "external-api",
+      "displayName": "Stripe Webhooks",
+      "description": null,
+      "ownerKey": null,
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    }
+  ],
+  "edges": [
+    {
+      "fromKey": "payments-api",
+      "toKey": "payments.events.raw.v1",
+      "relation": "PRODUCES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-enricher",
+      "toKey": "payments.events.enriched.v1",
+      "relation": "PRODUCES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-es-sink",
+      "toKey": "payments-events-v1",
+      "relation": "WRITES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments.events.raw.v1",
+      "toKey": "payments-enricher",
+      "relation": "CONSUMES_FROM",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "stripe-webhooks",
+      "toKey": "payments-api",
+      "relation": "CALLS",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    }
+  ],
+  "owners": [
+    {
+      "key": "data-platform",
+      "displayName": "Data Platform",
+      "channel": "#data-platform",
+      "onCall": "Data Platform SRE"
+    },
+    {
+      "key": "payments-platform",
+      "displayName": "Payments Platform",
+      "channel": "#payments-oncall",
+      "onCall": "Payments SRE"
+    }
+  ],
+  "typeDescriptors": [
+    {
+      "type": "elasticsearch-index",
+      "label": "Elasticsearch Index",
+      "category": "datastore",
+      "icon": "search",
+      "source": "yaml"
+    },
+    {
+      "type": "external-api",
+      "label": "External API",
+      "category": "external",
+      "icon": "cloud",
+      "source": "yaml"
+    },
+    {
+      "type": "iceberg-table",
+      "label": "Iceberg Table",
+      "category": "datastore",
+      "icon": "table",
+      "source": "yaml"
+    },
+    {
+      "type": "query-engine",
+      "label": "Query Engine",
+      "category": "compute",
+      "icon": "terminal",
+      "source": "yaml"
+    }
+  ],
+  "relationDescriptors": [
+    {
+      "relation": "CALLS",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "calls",
+      "reversePhrasing": "is called by"
+    },
+    {
+      "relation": "PRODUCES_TO",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "produces to",
+      "reversePhrasing": "is produced by"
+    },
+    {
+      "relation": "CONSUMES_FROM",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "delivers to",
+      "reversePhrasing": "consumes from"
+    },
+    {
+      "relation": "SOURCES_FROM",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "feeds",
+      "reversePhrasing": "sources from"
+    },
+    {
+      "relation": "WRITES_TO",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "writes to",
+      "reversePhrasing": "is written by"
+    },
+    {
+      "relation": "QUERIES",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "is queried by",
+      "reversePhrasing": "queries"
+    }
+  ],
+  "plugins": [
+    {
+      "plugin": "yaml",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    }
+  ]
+}

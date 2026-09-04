@@ -1,0 +1,32 @@
+# docs/reference-pipeline.md, staging, the data-platform half.
+#
+# Staging's drift is written nowhere (ADR-0004, ADR-0061): `payments-iceberg-sink`,
+# `analytics.payments_events` and `trino-analytics` simply have no stanza here, and
+# `iceberg-table` / `query-engine` no descriptor, because staging uses neither type.
+environment: staging
+
+owners:
+  - key: data-platform
+    displayName: Data Platform
+    channel: "#data-platform"
+    onCall: Data Platform SRE
+
+types:
+  - type: elasticsearch-index
+    label: Elasticsearch Index
+    category: datastore
+    icon: search
+
+nodes:
+  - key: payments-es-sink
+    owner: data-platform
+    writesTo: [payments-events-v1]
+
+  - key: payments-events-v1
+    type: elasticsearch-index
+    displayName: payments-events-v1
+    owner: data-platform
+    links:
+      - rel: dashboard
+        label: Kibana
+        url: https://kibana-staging.acme.io/app/discover#/?_a=(index:'payments-events-v1')

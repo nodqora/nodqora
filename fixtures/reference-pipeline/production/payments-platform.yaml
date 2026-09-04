@@ -1,0 +1,43 @@
+# docs/reference-pipeline.md, production, the payments-platform half.
+#
+# ADR-0063: declare the gaps, not the graph. `yaml` wins every contested scalar, so a field
+# written here that another plugin also knows is a silent override. The two services and the
+# two topics are therefore one and two line stanzas — `kubernetes` supplies their type,
+# `kafka` their partitions, and neither can supply an owner or an edge.
+environment: production
+
+owners:
+  - key: payments-platform
+    displayName: Payments Platform
+    channel: "#payments-oncall"
+    onCall: Payments SRE
+
+types:
+  - type: external-api
+    label: External API
+    category: external
+    icon: cloud
+
+nodes:
+  # Declared: nothing observes Stripe, so `yaml` is the only source for every field.
+  # §9's bare case — a name, a type and nothing else.
+  - key: stripe-webhooks
+    type: external-api
+    displayName: Stripe Webhooks
+    calls: [payments-api]
+
+  - key: payments-api
+    producesTo: [payments.events.raw.v1]
+
+  # `consumerGroups` is the one backing route `yaml` may write (ADR-0063): the plugin that can
+  # read this group's lag is not the plugin that can say whose lag it is (ADR-0022).
+  - key: payments-enricher
+    consumesFrom: [payments.events.raw.v1]
+    producesTo: [payments.events.enriched.v1]
+    consumerGroups: [enrich-consumer-prod]
+
+  - key: payments.events.raw.v1
+    owner: payments-platform
+
+  - key: payments.events.enriched.v1
+    owner: payments-platform

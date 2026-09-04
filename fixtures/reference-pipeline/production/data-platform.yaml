@@ -1,0 +1,59 @@
+# docs/reference-pipeline.md, production, the data-platform half.
+#
+# The pipeline crosses a team boundary at the connectors, and the two files share no key —
+# ADR-0062 puts every edge in the stanza of the node doing the thing, so a cross-team edge
+# never needs the other team's key.
+environment: production
+
+owners:
+  - key: data-platform
+    displayName: Data Platform
+    channel: "#data-platform"
+    onCall: Data Platform SRE
+
+types:
+  - type: elasticsearch-index
+    label: Elasticsearch Index
+    category: datastore
+    icon: search
+  - type: iceberg-table
+    label: Iceberg Table
+    category: datastore
+    icon: table
+  - type: query-engine
+    label: Query Engine
+    category: compute
+    icon: terminal
+
+nodes:
+  # `connect` emits no ownerKey, and cannot see its own destination: `connection.url` is the
+  # Elasticsearch cluster endpoint, not an index name (ADR-0041). Both facts are this stanza.
+  - key: payments-es-sink
+    owner: data-platform
+    writesTo: [payments-events-v1]
+
+  - key: payments-iceberg-sink
+    owner: data-platform
+    writesTo: [analytics.payments_events]
+
+  # Declared. Links here hold verbatim URLs — `yaml` is the one writer in the MVP that does,
+  # because the file is read once, for one environment (ADR-0061).
+  - key: payments-events-v1
+    type: elasticsearch-index
+    displayName: payments-events-v1
+    owner: data-platform
+    links:
+      - rel: dashboard
+        label: Kibana
+        url: https://kibana.acme.io/app/discover#/?_a=(index:'payments-events-v1')
+
+  - key: analytics.payments_events
+    type: iceberg-table
+    displayName: analytics.payments_events
+    owner: data-platform
+
+  - key: trino-analytics
+    type: query-engine
+    displayName: analytics (Trino)
+    owner: data-platform
+    queries: [analytics.payments_events]

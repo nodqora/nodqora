@@ -1,0 +1,17 @@
+{
+  "environment": "production",
+  "claim": "ADR-0016: plain longest-path layering over flow-directed edges reproduces docs/reference-pipeline.md §1's shape with no hand-placed positions.",
+  "input": "graph-production.json plus the two ADR-0041 SOURCES_FROM edges that arrive with the `connect` plugin in slice 4. The layers below are §1's, over §3's complete edge set.",
+  "layers": {
+    "stripe-webhooks": 0,
+    "payments-api": 1,
+    "payments.events.raw.v1": 2,
+    "payments-enricher": 3,
+    "payments.events.enriched.v1": 4,
+    "payments-es-sink": 5,
+    "payments-iceberg-sink": 5,
+    "payments-events-v1": 6,
+    "analytics.payments_events": 6,
+    "trino-analytics": 7
+  }
+}

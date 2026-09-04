@@ -1,0 +1,38 @@
+# docs/reference-pipeline.md, staging, the payments-platform half.
+#
+# `environment:` is redundant against the directory by design (ADR-0061): staging is written by
+# copying production, so a half-edited copy is this layout's characteristic failure and the guard
+# belongs where the mistake is made.
+environment: staging
+
+owners:
+  - key: payments-platform
+    displayName: Payments Platform
+    channel: "#payments-oncall"
+    onCall: Payments SRE
+
+types:
+  - type: external-api
+    label: External API
+    category: external
+    icon: cloud
+
+nodes:
+  - key: stripe-webhooks
+    type: external-api
+    displayName: Stripe Webhooks
+    calls: [payments-api]
+
+  - key: payments-api
+    producesTo: [payments.events.raw.v1]
+
+  - key: payments-enricher
+    consumesFrom: [payments.events.raw.v1]
+    producesTo: [payments.events.enriched.v1]
+    consumerGroups: [enrich-consumer-staging]
+
+  - key: payments.events.raw.v1
+    owner: payments-platform
+
+  - key: payments.events.enriched.v1
+    owner: payments-platform

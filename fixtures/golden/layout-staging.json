@@ -1,0 +1,14 @@
+{
+  "environment": "staging",
+  "claim": "ADR-0016: staging's missing Iceberg branch re-flows to a straight line with no hand-placed positions. Drift as absence (ADR-0004) needs no layout special-casing.",
+  "input": "graph-staging.json plus the one ADR-0041 SOURCES_FROM edge that arrives in slice 4.",
+  "layers": {
+    "stripe-webhooks": 0,
+    "payments-api": 1,
+    "payments.events.raw.v1": 2,
+    "payments-enricher": 3,
+    "payments.events.enriched.v1": 4,
+    "payments-es-sink": 5,
+    "payments-events-v1": 6
+  }
+}

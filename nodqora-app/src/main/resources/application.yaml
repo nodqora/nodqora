@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: nodqora
+  datasource:
+    url: ${NODQORA_DB_URL:jdbc:postgresql://localhost:5432/nodqora}
+    username: ${NODQORA_DB_USER:nodqora}
+    password: ${NODQORA_DB_PASSWORD:nodqora}
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: always   # ADR-0058: the API returns nulls unresolved.
+
+server:
+  port: 8080
+
+logging:
+  level:
+    io.nodqora: INFO
+
+nodqora:
+  # The two orders over plugin ids (ADR-0011, ADR-0044, ADR-0050). They live here rather than in
+  # core source because ADR-0015 forbids the core naming a plugin at all, and because ADR-0011 says
+  # precedence is "expressed as config over plugin ids, not baked into the interface".
+  #
+  # Registry order is the canonical order of `sources[]` and the order rawSignal contributions join
+  # in. Precedence settles a contested scalar, first non-null wins: manual beats connector config
+  # beats Kubernetes config, with kafka last. They are genuinely different orders.
+  #
+  # Both lists must name exactly the registered plugins, checked at startup: a misspelled id would
+  # otherwise sort last in silence and the graph would go on being folded with the wrong precedence.
+  # Slices 2-4 extend these as `kubernetes`, `connect` and `kafka` arrive, to
+  # `[yaml, kubernetes, kafka, connect]` and `[yaml, connect, kubernetes, kafka]`.
+  plugins:
+    registry-order: [yaml]
+    precedence: [yaml]
+
+  # ADR-0035, ADR-0042. Timeouts sit strictly below their interval (see DiscoveryEngine).
+  refresh:
+    discovery: 5m
+    health: 30s
+
+  # ADR-0004, ADR-0014: environment is a first-class entity holding its own discovery connection
+  # configuration, declared in a file and bound at startup. Declaration order is ADR-0077's second
+  # tiebreak for a contested type descriptor.
+  environments:
+    production:
+      display-name: Production
+      plugins:
+        # ADR-0061: one directory per environment, every *.yaml in it read together as one snapshot.
+        yaml: { dir: fixtures/reference-pipeline/production }
+    staging:
+      display-name: Staging
+      plugins:
+        yaml: { dir: fixtures/reference-pipeline/staging }
