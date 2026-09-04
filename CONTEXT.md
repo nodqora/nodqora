@@ -24,7 +24,24 @@ which also amended ADR-0033; ADR-0043 through ADR-0051 by
 which also amended ADR-0008, ADR-0012, ADR-0035 and ADR-0042; and ADR-0052
 through ADR-0060 by [REST API shape](https://github.com/fredskor/nodqora/issues/13);
 and ADR-0061 through ADR-0065 by
-[YAML topology format](https://github.com/fredskor/nodqora/issues/14).
+[YAML topology format](https://github.com/fredskor/nodqora/issues/14);
+ADR-0066 through ADR-0070 by
+[Simple name search behaviour](https://github.com/fredskor/nodqora/issues/15);
+ADR-0071 through ADR-0080 by
+[PostgreSQL schema and persistence](https://github.com/fredskor/nodqora/issues/16),
+which also amended ADR-0013, ADR-0048, ADR-0049, ADR-0055, ADR-0056 and
+ADR-0059; ADR-0081 through ADR-0084 by
+[Surfacing plugin outcome and node freshness in the UI](https://github.com/fredskor/nodqora/issues/17);
+ADR-0085 through ADR-0089 by
+[The empty and repopulating environment](https://github.com/fredskor/nodqora/issues/19),
+which also amended ADR-0071, ADR-0081 and ADR-0083; ADR-0090 and ADR-0091 by
+[Unowned plugin-scope gaps](https://github.com/fredskor/nodqora/issues/20),
+which also amended ADR-0031, ADR-0032, ADR-0037, ADR-0042, ADR-0044 and
+ADR-0051; ADR-0092 through ADR-0097 by
+[Frontend routing and deep-linking](https://github.com/fredskor/nodqora/issues/21);
+and ADR-0098 through ADR-0102 by
+[Implementation slice ordering and handoff](https://github.com/fredskor/nodqora/issues/18),
+which also amended ADR-0074. ADR-0018 was amended by tickets #17, #19 and #21.
 
 ---
 
