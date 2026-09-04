@@ -30,6 +30,13 @@ connectors are dishonestly calm. Under ADR-0017 alone, all three render quiet.
 
 ## Decision
 
+> **Amended by [ADR-0088](0088-unreported-banners-over-a-non-empty-graph.md).**
+> A health-capable backing whose plugin has **never reported** counts as blind,
+> on the same mark, token and caveat. It also breaks the "four permanently
+> `UNKNOWN` nodes are never marked" symmetry in the useful direction: a node with
+> health-capable backings that have not reported *is* marked, so
+> `UNKNOWN`-not-yet-looked stops rendering as `UNKNOWN`-nothing-watches-this.
+
 **Two marks on the canvas, and neither is a colour (ADR-0082).**
 
 | condition | canvas mark |

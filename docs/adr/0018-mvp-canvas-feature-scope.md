@@ -32,6 +32,12 @@ their place on a ten-node graph.
 > on an ordinary day. The scope discipline stands; this is the one thing
 > ADR-0056 put on the wire that had nowhere to go.
 
+> **Amended by [ADR-0087](0087-the-canvas-has-three-empty-states.md).** The
+> canvas also has **three empty states**, selected by `plugins[]` alone: no
+> plugins configured, not read yet, and no nodes. This list said nothing about
+> what an environment with no nodes renders, and a cold read and an empty
+> environment are opposite statements.
+
 **Deferred:**
 
 - **minimap** — near-useless at fixture scale, and cheap to restore later

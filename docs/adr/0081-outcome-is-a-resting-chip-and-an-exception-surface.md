@@ -33,6 +33,14 @@ inspector held fixed at ADR-0016–0019, and four fixtures: all-clear, a 23-minu
 
 ## Decision
 
+> **Amended by [ADR-0088](0088-unreported-banners-over-a-non-empty-graph.md) and
+> [ADR-0089](0089-the-chip-counts-states-rather-than-ranking-them.md).** A
+> **`null`** outcome (ADR-0085) banners only when the graph is non-empty, naming
+> the plugin and capability with no count and no cause; the all-cold case is
+> carried by ADR-0087's empty state instead. And the chip's resting clause
+> **names the states present with counts and ranks nothing** — `4 plugins · 1
+> failed, 2 not reported` — because `FAILED` and unreported do not rank.
+
 **A resting chip in the rail, and exception surfaces below it.**
 
 - A **plugins chip** sits beside the environment switcher at all times. At rest

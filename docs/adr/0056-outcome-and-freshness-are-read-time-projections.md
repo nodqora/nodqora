@@ -21,6 +21,15 @@ turns `updatedAt` into the poll clock ADR-0050 exists to prevent.
 
 ## Decision
 
+> **Amended by [ADR-0085](0085-plugins-is-a-config-roster.md).** The outcome
+> block is a **config roster left-joined with the store**, not a store
+> projection: it carries an entry for every configured `(plugin, capability)`
+> pair whether or not that pair has ever reported, and an unreported pair ships
+> `outcome: null` and `recordedAt: null`. "Computed at read time from the
+> snapshot store" read literally makes a cold environment indistinguishable from
+> an empty one, and under ADR-0046 absence already means *looked and not there*.
+> `sources[]` is unaffected — it is still joined from stored entries alone.
+
 **Per environment**, each payload carries the outcome that explains it:
 
 - `/graph` carries each plugin's **discovery** `outcome`, its reasons or cause,

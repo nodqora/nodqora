@@ -20,6 +20,12 @@ re-indexed by the read path on every request.
 
 ## Decision
 
+> **Amended by [ADR-0086](0086-every-poll-writes-the-header.md).** *"`FAILED`
+> does nothing"* is scoped to `plugin_snapshot_entry`. **The header is written on
+> every poll**, whatever the outcome — which is what ADR-0084's `FAILED` row
+> ("every key is older") already required, and what lets a first-ever `FAILED`
+> be told from a pair nobody has polled.
+
 **The store is two tables: a header per `(plugin, environment)`, and one entry
 row per key that snapshot carries.**
 

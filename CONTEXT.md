@@ -605,11 +605,17 @@ Edge and Owner rows are derived from it and can be rebuilt from it at any time
 
 `outcome` is its transition function (ADR-0046):
 
-| `outcome` | effect |
+| `outcome` | effect on the entries |
 |---|---|
 | `COMPLETE` | **replace wholesale** — keys absent from it are absent |
 | `PARTIAL` | **upsert the keys present, retain the keys absent**, whole nodes |
 | `FAILED` | **no change** |
+
+The table governs the **entries**. The **header is written on every poll**
+whatever the outcome (ADR-0086), so a pair reads three ways rather than one: no
+header at all is *nobody has ever polled this*, a `FAILED` header with no entries
+is *we tried and could not look*, and a `COMPLETE` header with no entries is *we
+looked and there is nothing here*.
 
 > **Absence is honoured at exactly one granularity per level: key-level within a
 > plugin's snapshot, field-level never.** Across plugins, fields are settled by
@@ -789,6 +795,14 @@ Each `plugins[]` entry carries **`recordedAt`** beside its `outcome` — when th
 outcome was last recorded for this environment (ADR-0056, name pinned by
 ADR-0084).
 
+`plugins[]` itself is a **config roster**, not a store projection: one entry per
+configured `(plugin, capability)` pair, always, and an unreported pair carries
+`outcome: null` and `recordedAt: null` (ADR-0085). A missing entry could not have
+meant *never polled*, because absence already means *looked and not there*
+everywhere else in the system. The `outcome` enum stays three-valued — every
+value in it names a store transition, and an unreported pair has no result to
+transition on.
+
 ### Retained
 
 A source whose `confirmedAt` is **older than its plugin's `recordedAt`**
@@ -804,8 +818,13 @@ server in the same document, so there is **no clock skew** and no TTL; ADR-0026'
 refusal of a staleness TTL is honoured rather than worked around.
 
 **Retained is a topology fact.** Its health-side counterpart is a *blind*
-observer — a health-capable plugin backing the node that abstained this cycle —
-and the two are marked differently on the canvas (ADR-0083).
+observer — a health-capable plugin backing the node that abstained this cycle, or
+one that has never reported at all — and the two are marked differently on the
+canvas (ADR-0083, ADR-0088).
+
+On a cold store the comparison is **unreachable, not undefined**: `sources[]` is
+joined from stored entries, so a plugin that has never reported appears in no
+node's `sources[]` and there is nothing to compare (ADR-0079, ADR-0085).
 
 ### What the API does not do
 
@@ -825,6 +844,26 @@ and the two are marked differently on the canvas (ADR-0083).
   unbuilt (ADR-0054).
 - **It never returns configuration or secrets** (§40, ADR-0014). The environment
   roster is `{key, displayName}` and nothing else.
+
+### Not read yet
+
+An environment whose snapshot store holds nothing for any discovery-capable pair.
+It is **not** the same as an environment with no nodes, and the two must never
+render alike (ADR-0087). Two routes reach it — a fresh deployment before any
+first poll, and an ADR-0080 `payload_version` discard — and they are
+**deliberately indistinguishable**, because the remedy is identical and a marker
+that survived its own version bump would be tolerant deserialization by another
+name.
+
+The canvas has three empty states, chosen by `plugins[]` alone: *no plugins are
+configured for `production`*, *`production` has not been read yet*, and *no nodes
+in `production`*. **None promises a time** — `refresh.graphSeconds` is a minimum
+over cadences (ADR-0059), so a countdown built on it would be the same dishonest
+threshold ADR-0084 refused for staleness.
+
+Mixed-cold — some plugins reported, some not — is the dangerous one, because the
+canvas draws a graph that looks whole. It raises a banner naming the plugin and
+capability, with no count and no cause, because neither exists (ADR-0088).
 
 ## Vocabulary to avoid
 
@@ -866,4 +905,7 @@ and the two are marked differently on the canvas (ADR-0083).
 | search filters the canvas | search produces a **result list** | dimming non-matches is ADR-0018's deferred filter with no off-switch, and it attacks both of ADR-0017's health channels (ADR-0068) |
 | aliases are searchable | the **identifying string set** is | there is no alias field; the set is `key`, `displayName` and backing references, whole and by segment (ADR-0023, ADR-0066) |
 | search disambiguates similar names | the **result list** disambiguates | `payments-e` matches `payments-enricher` and `payments-events-v1` and both are correct; the matcher owes a total order, not fewer hits (ADR-0067) |
+| the plugin is pending / hasn't run | the pair is **not reported** — `outcome: null` | there is no fourth outcome; the enum is the store's transition function and there is no result to transition on (ADR-0085) |
+| the graph is empty | **not read yet**, or **no nodes** — never both | opposite statements; the empty state is chosen from `plugins[]`, and one of them is a lie in the other's situation (ADR-0087) |
+| repopulating after an upgrade | **not read yet** | a discard and a fresh install are deliberately indistinguishable; the remedy is the same and nothing survives the bump to tell them apart (ADR-0080, ADR-0087) |
 | no results found | no node **in this environment** matches | search is environment-scoped by construction; three of ten fixture nodes are absent from staging (ADR-0054, ADR-0070) |
