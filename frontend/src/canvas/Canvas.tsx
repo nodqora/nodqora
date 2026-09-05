@@ -8,6 +8,7 @@ import {
   useNodesInitialized,
   useNodesState,
   useReactFlow,
+  useUpdateNodeInternals,
   type Edge,
   type Node,
 } from '@xyflow/react'
@@ -167,6 +168,7 @@ export function Canvas({
   const [edges, setEdges, onEdgesChange] = useEdgesState(drawn)
   const flow = useReactFlow()
   const measured = useNodesInitialized()
+  const updateNodeInternals = useUpdateNodeInternals()
   const fittedFor = useRef<string | null>(null)
   const pane = useRef<HTMLDivElement>(null)
   // Whether the initial fit has *landed*, which is a different fact from having been asked for — see
@@ -175,6 +177,34 @@ export function Canvas({
 
   useEffect(() => setNodes(laidOut), [laidOut, setNodes])
   useEffect(() => setEdges(drawn), [drawn, setEdges])
+
+  // A canvas that mounts in a hidden tab never gets measured, and never repairs itself.
+  //
+  // XYFlow measures each node once, from a `ResizeObserver` callback delivered on an animation
+  // frame. A background tab gets no frames, so that callback never runs — and because the sizes
+  // never subsequently change, the observer never fires again either. The store is then left with
+  // `measured` and `handleBounds` undefined on every node, permanently.
+  //
+  // The cards still draw, because ADR-0016's card size is declared rather than measured, so the
+  // failure does not look like a failure: a complete graph with **no arrows at all**, since an edge
+  // whose endpoints have no handle position cannot be placed. Switching tabs back does not fix it,
+  // and neither does fit-to-screen; only a reload does.
+  //
+  // `useNodesInitialized` is exactly the "measurement landed" predicate — the fit effect below
+  // already waits on it — so this asks for the measurement XYFlow could not take, on becoming
+  // visible, and only while it is still missing.
+  useEffect(() => {
+    if (measured) return
+    const remeasure = () => {
+      if (document.visibilityState !== 'visible') return
+      updateNodeInternals(flow.getNodes().map((node) => node.id))
+    }
+    // Once now, for the tab that became visible before this effect attached, and once per later
+    // visibility change. Both are no-ops before the cards are in the DOM.
+    remeasure()
+    document.addEventListener('visibilitychange', remeasure)
+    return () => document.removeEventListener('visibilitychange', remeasure)
+  }, [measured, flow, updateNodeInternals])
 
   // ADR-0018 lists fit-to-screen as a control the user asks for and says nothing about what the
   // canvas is pointed at on load, so it also gets an initial viewport. Re-fitting on an environment
