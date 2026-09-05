@@ -4,22 +4,33 @@ A topology and health canvas for event-driven systems. The decisions are in
 [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/); the worked example everything is tested
 against is [`docs/reference-pipeline.md`](docs/reference-pipeline.md).
 
-**Status: slice 1 of five (ADR-0098).** The `yaml` plugin runs end to end — snapshot store, the
-fold, the derived tables, the three GETs, the canvas and the drawer. Production renders at 10 nodes
-and 7 edges, staging at 7 and 5, and every node is grey: `yaml` declares no Health capability, so
-`UNKNOWN` is the honest answer rather than a placeholder.
+**Status: all five slices merged (ADR-0098).** Four discovery plugins — `yaml`, `kubernetes`,
+`kafka`, `connect` — fold into one graph under a configured precedence, three of them also reporting
+Health on their own cadence. Production renders at 10 nodes and 9 edges, staging at 7 and 6.
+
+Health carries five values that are **not a ladder**: `UNKNOWN` is an abstention and `DISABLED` is
+judgement suspended, so only `HEALTHY < DEGRADED < UNHEALTHY` is a severity order. Alongside it every
+plugin reports an `outcome` — **`health` says what we found; `outcome` says how well we looked** — so
+a failed poll leaves the last reading standing and says so, rather than turning a node green or red
+on evidence nobody gathered.
+
+To point it at infrastructure you actually run, see
+[docs/running-against-your-own-cluster.md](docs/running-against-your-own-cluster.md).
 
 ## Layout
 
 ```text
-nodqora-plugin-api/    immutable records only. No Spring, no persistence, no core dependency.
-nodqora-core/       →  depends on plugin-api. Never on any plugin (ADR-0015, enforced by ArchUnit).
-nodqora-plugin-yaml/ → depends on plugin-api.
-nodqora-app/        →  the deployable: core plus the plugins, wired together.
-frontend/              Vite + React + XYFlow.
+nodqora-plugin-api/         immutable records only. No Spring, no persistence, no core dependency.
+nodqora-core/            →  depends on plugin-api. Never on a plugin (ADR-0015, enforced by ArchUnit).
+nodqora-plugin-yaml/     →  declared topology: the edges and ownership nothing else can observe.
+nodqora-plugin-kubernetes/  workloads, Service and Ingress backings, readiness. Emits no edges.
+nodqora-plugin-kafka/       topics and consumer-group lag against a threshold you choose.
+nodqora-plugin-connect/     connectors and their tasks.
+nodqora-app/             →  the deployable: core plus the plugins, wired together.
+frontend/                   Vite + React + XYFlow.
 fixtures/
-  reference-pipeline/  the demo topology, in the product's own format. Not a test double.
-  golden/              ADR-0099's assertions.
+  reference-pipeline/       the demo topology, in the product's own format. Not a test double.
+  golden/                   ADR-0099's assertions: two graphs, three states, two layouts.
 ```
 
 ## Running it
@@ -37,6 +48,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5173, proxying /a
 ```
 
 `NODQORA_DB_URL`, `NODQORA_DB_USER` and `NODQORA_DB_PASSWORD` override the connection.
+
+Out of the box this renders the reference pipeline and nothing else: the `kubernetes`, `kafka` and
+`connect` blocks point at hosts that do not exist, so the canvas shows the declared topology in grey
+with four banners saying so. That is the honesty layer working, not a broken install — every node is
+`UNKNOWN` because nothing observed it.
 
 The topology comes from `fixtures/reference-pipeline/{production,staging}/*.yaml`. Editing it is
 invisible for up to one discovery cadence — five minutes — which is the accepted cost of there being
@@ -63,3 +79,8 @@ cd frontend && npm run typecheck
 
 `ReferencePipelineCountsTest` is the only thing in the build that reads
 `docs/reference-pipeline.md`, and it reads exactly §4's four numbers (ADR-0099).
+
+**No test reaches a real cluster, broker or Connect worker.** Each plugin's outbound seam is an
+interface and everything above it is exercised against a recording, which keeps the suite
+deterministic and offline — at the price that "the client cannot start" is a class of defect only
+running against real infrastructure will find. #32 was exactly that.
