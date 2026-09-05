@@ -21,8 +21,10 @@ describe('the metric overlay renders what a plugin allow-listed', () => {
   it('reads the golden document rather than a hand-written shape', () => {
     // The same fixture the backend asserts against, so the two cannot drift into disagreeing about
     // the wire shape — which is the whole reason ADR-0099 chose real documents over restatements.
+    // The enricher carries two namespaces now that `kafka` observes it too, and the card flattens
+    // them into one line without knowing that anything changed.
     expect(summarizeMetrics(stateOf(baseline, 'payments-enricher').metrics)).toBe(
-      'desired replicas 3 · ready replicas 2',
+      'max consumer lag 40000 · desired replicas 3 · ready replicas 2',
     )
   })
 

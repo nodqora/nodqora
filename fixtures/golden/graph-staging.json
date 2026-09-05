@@ -144,16 +144,68 @@
     },
     {
       "key": "payments-es-sink",
-      "type": null,
+      "type": "connect-connector",
       "displayName": null,
       "description": null,
       "ownerKey": "data-platform",
-      "links": [],
-      "backings": [],
-      "metadata": {},
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/connect-config"
+        },
+        {
+          "rel": "runbook",
+          "label": "Runbook",
+          "url": "https://wiki/runbooks/connect-sinks"
+        },
+        {
+          "rel": "connector",
+          "label": "Connect UI",
+          "url": "https://connect-ui-staging.acme.io/staging/payments-es-sink"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana-staging.acme.io/explore?connector=payments-es-sink"
+        },
+        {
+          "rel": "config",
+          "label": "Config",
+          "url": "https://connect-ui-staging.acme.io/staging/payments-es-sink/config"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "connect",
+          "kind": "connector",
+          "reference": "payments-es-sink"
+        },
+        {
+          "plugin": "kafka",
+          "kind": "consumer-group",
+          "reference": "connect-payments-es-sink"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "statefulset",
+          "reference": "payments-staging/kafka-connect"
+        }
+      ],
+      "metadata": {
+        "connect": {
+          "type": "sink",
+          "class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+          "tasksMax": "3"
+        }
+      },
       "sources": [
         {
           "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "connect",
           "confirmedAt": "<timestamp>"
         }
       ],
@@ -186,16 +238,43 @@
     },
     {
       "key": "payments.events.enriched.v1",
-      "type": null,
+      "type": "kafka-topic",
       "displayName": null,
       "description": null,
       "ownerKey": "payments-platform",
-      "links": [],
-      "backings": [],
-      "metadata": {},
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana-staging.acme.io/d/kafka-topic?var-topic=payments.events.enriched.v1"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "topic",
+          "reference": "payments.events.enriched.v1"
+        }
+      ],
+      "metadata": {
+        "kafka": {
+          "partitions": 12,
+          "retentionMs": 2592000000,
+          "cleanupPolicy": "delete",
+          "replicationFactor": 3
+        }
+      },
       "sources": [
         {
           "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kafka",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "connect",
           "confirmedAt": "<timestamp>"
         }
       ],
@@ -204,16 +283,39 @@
     },
     {
       "key": "payments.events.raw.v1",
-      "type": null,
+      "type": "kafka-topic",
       "displayName": null,
       "description": null,
       "ownerKey": "payments-platform",
-      "links": [],
-      "backings": [],
-      "metadata": {},
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana-staging.acme.io/d/kafka-topic?var-topic=payments.events.raw.v1"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "topic",
+          "reference": "payments.events.raw.v1"
+        }
+      ],
+      "metadata": {
+        "kafka": {
+          "partitions": 12,
+          "retentionMs": 604800000,
+          "cleanupPolicy": "delete",
+          "replicationFactor": 3
+        }
+      },
       "sources": [
         {
           "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kafka",
           "confirmedAt": "<timestamp>"
         }
       ],
@@ -274,6 +376,17 @@
       "updatedAt": "<timestamp>"
     },
     {
+      "fromKey": "payments.events.enriched.v1",
+      "toKey": "payments-es-sink",
+      "relation": "SOURCES_FROM",
+      "metadata": {},
+      "sources": [
+        "connect"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
       "fromKey": "payments.events.raw.v1",
       "toKey": "payments-enricher",
       "relation": "CONSUMES_FROM",
@@ -312,6 +425,13 @@
   ],
   "typeDescriptors": [
     {
+      "type": "connect-connector",
+      "label": "Connect Connector",
+      "category": "integration",
+      "icon": "connector",
+      "source": "connect"
+    },
+    {
       "type": "elasticsearch-index",
       "label": "Elasticsearch Index",
       "category": "datastore",
@@ -331,6 +451,13 @@
       "category": "datastore",
       "icon": "table",
       "source": "yaml"
+    },
+    {
+      "type": "kafka-topic",
+      "label": "Kafka Topic",
+      "category": "messaging",
+      "icon": "stream",
+      "source": "kafka"
     },
     {
       "type": "query-engine",
@@ -395,6 +522,20 @@
     },
     {
       "plugin": "kubernetes",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "kafka",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "connect",
       "capability": "DISCOVERY",
       "outcome": "COMPLETE",
       "reasons": [],

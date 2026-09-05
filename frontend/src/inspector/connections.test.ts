@@ -47,10 +47,14 @@ describe('traversal is uniform because edges are stored flow-directed', () => {
   it('follows the declared tail two hops past the last discovered node', () => {
     const highlight = highlightFrom('payments-enricher', graph.edges)
 
-    // `trino-analytics` is not reachable yet — the two SOURCES_FROM edges that connect the sinks to
-    // `enriched.v1` are `connect`'s and arrive in slice 4. What is reachable is reachable without a
-    // depth limit, which is the property that matters here.
+    // The test's own name, finally assertable. Until `connect` supplied the two SOURCES_FROM edges
+    // the sinks were disconnected from `enriched.v1`, so the tail stopped there; now the walk runs
+    // enricher → enriched.v1 → iceberg-sink → analytics.payments_events → trino-analytics, and the
+    // last two of those are declared nodes no plugin observes. Traversal counts them like any other
+    // (§10), and it is unbounded, so reaching them costs no depth setting.
     expect([...highlight.downstream]).toContain('payments.events.enriched.v1')
+    expect([...highlight.downstream]).toContain('trino-analytics')
+    expect([...highlight.downstream]).toContain('payments-events-v1')
     expect([...highlight.upstream]).toEqual(
       expect.arrayContaining(['payments.events.raw.v1', 'payments-api', 'stripe-webhooks']),
     )

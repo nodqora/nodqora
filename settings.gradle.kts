@@ -10,5 +10,7 @@ include(
     "nodqora-core",
     "nodqora-plugin-yaml",
     "nodqora-plugin-kubernetes",
+    "nodqora-plugin-connect",
+    "nodqora-plugin-kafka",
     "nodqora-app",
 )

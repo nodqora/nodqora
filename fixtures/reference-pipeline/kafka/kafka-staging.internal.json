@@ -1,0 +1,40 @@
+{
+  "topics": [
+    {
+      "name": "payments.events.raw.v1",
+      "partitions": 12,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "604800000", "cleanup.policy": "delete" }
+    },
+    {
+      "name": "payments.events.enriched.v1",
+      "partitions": 12,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "2592000000", "cleanup.policy": "delete" }
+    },
+    {
+      "name": "connect-offsets",
+      "partitions": 25,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "-1", "cleanup.policy": "compact" }
+    }
+  ],
+  "groups": [
+    {
+      "groupId": "enrich-consumer-staging",
+      "partitions": [
+        { "topic": "payments.events.raw.v1", "partition": 0, "committedOffset": 51200, "endOffset": 51200 },
+        { "topic": "payments.events.raw.v1", "partition": 1, "committedOffset": 48900, "endOffset": 48900 },
+        { "topic": "payments.events.raw.v1", "partition": 2, "committedOffset": 49700, "endOffset": 49700 }
+      ]
+    },
+    {
+      "groupId": "connect-payments-es-sink",
+      "partitions": [
+        { "topic": "payments.events.enriched.v1", "partition": 0, "committedOffset": 50100, "endOffset": 50100 },
+        { "topic": "payments.events.enriched.v1", "partition": 1, "committedOffset": 47600, "endOffset": 47600 },
+        { "topic": "payments.events.enriched.v1", "partition": 2, "committedOffset": 48800, "endOffset": 48800 }
+      ]
+    }
+  ]
+}

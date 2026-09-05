@@ -37,7 +37,12 @@ class ScaledToZeroTest extends NodqoraIntegrationTest {
         // Not UNHEALTHY. Nought ready of nought desired is not a failure, and paging an on-call at
         // 3am for a deliberate scale-down is the outcome ADR-0034 exists to prevent.
         assertThat(enricher.get("health").asText()).isEqualTo("DISABLED");
-        assertThat(enricher.get("rawSignal").asText()).isEqualTo("scaled to 0");
+        // And not DEGRADED either, which is the sharper half now that `kafka` watches this node too.
+        // Turning the consumer off does not stop its lag growing, so `kafka` contributes DEGRADED at
+        // 40,000 in the same breath — a real severity, over a real reading, that ADR-0024 discards
+        // anyway. This is step 2 of the collapse in its plainest form: DISABLED wins outright
+        // because the lag *is* the scale-down, observed from the other side.
+        assertThat(enricher.get("rawSignal").asText()).isEqualTo("scaled to 0; lag 40000");
     }
 
     @Test

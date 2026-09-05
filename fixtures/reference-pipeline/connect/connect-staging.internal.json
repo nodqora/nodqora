@@ -1,0 +1,45 @@
+{
+  "connectors": [
+    {
+      "name": "payments-es-sink",
+      "type": "sink",
+      "config": {
+        "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+        "tasks.max": "3",
+        "topics": "payments.events.enriched.v1",
+        "connection.url": "https://es-staging.internal:9200",
+        "type.name": "_doc"
+      },
+      "state": "RUNNING",
+      "tasks": [
+        { "id": 0, "state": "RUNNING" },
+        { "id": 1, "state": "RUNNING" },
+        { "id": 2, "state": "RUNNING" }
+      ]
+    },
+    {
+      "name": "payments-debug-reprocessor",
+      "type": "sink",
+      "config": {
+        "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+        "tasks.max": "1",
+        "topics": "payments.events.enriched.v1"
+      },
+      "state": "RUNNING",
+      "tasks": [{ "id": 0, "state": "RUNNING" }]
+    },
+    {
+      "name": "orders-jdbc-source",
+      "type": "source",
+      "config": {
+        "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+        "tasks.max": "2"
+      },
+      "state": "RUNNING",
+      "tasks": [
+        { "id": 0, "state": "RUNNING" },
+        { "id": 1, "state": "RUNNING" }
+      ]
+    }
+  ]
+}

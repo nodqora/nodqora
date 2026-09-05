@@ -1,0 +1,60 @@
+{
+  "topics": [
+    {
+      "name": "payments.events.raw.v1",
+      "partitions": 12,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "604800000", "cleanup.policy": "delete" }
+    },
+    {
+      "name": "payments.events.enriched.v1",
+      "partitions": 12,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "2592000000", "cleanup.policy": "delete" }
+    },
+    {
+      "name": "connect-offsets",
+      "partitions": 25,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "-1", "cleanup.policy": "compact" }
+    },
+    {
+      "name": "orders.events.v1",
+      "partitions": 6,
+      "replicationFactor": 3,
+      "configs": { "retention.ms": "604800000", "cleanup.policy": "delete" }
+    }
+  ],
+  "groups": [
+    {
+      "groupId": "enrich-consumer-prod",
+      "partitions": [
+        { "topic": "payments.events.raw.v1", "partition": 0, "committedOffset": 4120000, "endOffset": 4160000 },
+        { "topic": "payments.events.raw.v1", "partition": 1, "committedOffset": 4098500, "endOffset": 4111000 },
+        { "topic": "payments.events.raw.v1", "partition": 2, "committedOffset": 4105900, "endOffset": 4109000 }
+      ]
+    },
+    {
+      "groupId": "connect-payments-es-sink",
+      "partitions": [
+        { "topic": "payments.events.enriched.v1", "partition": 0, "committedOffset": 3901880, "endOffset": 3902000 },
+        { "topic": "payments.events.enriched.v1", "partition": 1, "committedOffset": 3877960, "endOffset": 3878000 },
+        { "topic": "payments.events.enriched.v1", "partition": 2, "committedOffset": 3884000, "endOffset": 3884000 }
+      ]
+    },
+    {
+      "groupId": "connect-payments-iceberg-sink",
+      "partitions": [
+        { "topic": "payments.events.enriched.v1", "partition": 0, "committedOffset": 3893600, "endOffset": 3902000 },
+        { "topic": "payments.events.enriched.v1", "partition": 1, "committedOffset": 3875900, "endOffset": 3878000 },
+        { "topic": "payments.events.enriched.v1", "partition": 2, "committedOffset": 3883100, "endOffset": 3884000 }
+      ]
+    },
+    {
+      "groupId": "orders-consumer-prod",
+      "partitions": [
+        { "topic": "orders.events.v1", "partition": 0, "committedOffset": 120000, "endOffset": 999999999 }
+      ]
+    }
+  ]
+}

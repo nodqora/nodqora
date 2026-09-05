@@ -11,17 +11,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 
 /**
- * The slice's done-when: §8's <b>baseline</b> scenario, read off the real endpoint, against
- * ADR-0099's golden documents — for the observer set that exists.
+ * The slice's done-when: §8's <b>baseline</b> scenario in full, read off the real endpoint, against
+ * ADR-0099's golden documents.
  *
- * <p>Only {@code kubernetes} declares Health in this slice, so the goldens assert §8's baseline
- * column <em>restricted to the Kubernetes signal</em>: {@code payments-api} HEALTHY,
- * {@code payments-enricher} DEGRADED, everything else UNKNOWN. The four values §8 derives from lag
- * and connector state — both topics and both connectors — are not weakened here, they are
- * <b>absent</b>, and absence is the honest rendering of a plugin that has not been built. Slice 4
- * adds them, and the diff on these files is the review surface for whether ADR-0024's collapse did
- * what it says: {@code payments-enricher} must go from DEGRADED-by-one-observer to
- * DEGRADED-by-two, and {@code payments-iceberg-sink} from UNKNOWN to DEGRADED.
+ * <p>Slice 2 asserted this column restricted to the Kubernetes signal and named the diff these files
+ * would show once the other two observers arrived. They did, and it did: {@code payments-enricher}
+ * went from DEGRADED-by-one-observer to DEGRADED-by-two, and {@code payments-iceberg-sink} from
+ * UNKNOWN to DEGRADED. Every one of §8's five normalized states is now produced by a plugin rather
+ * than by an absence, which is the difference between a fixture the MVP reproduces and one it merely
+ * does not contradict.
  */
 class ReferencePipelineStateTest extends NodqoraIntegrationTest {
 
@@ -39,7 +37,7 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
     @Test
     void the_production_state_document_matches_its_golden() {
         assertThat(state("production"))
-                .as("§8 baseline, for the `kubernetes`-only observer set")
+                .as("§8 baseline, over all three observers")
                 .isEqualTo(Golden.read(mapper, "state-production-baseline.json"));
     }
 
@@ -61,16 +59,23 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
         // now" says two of three when two of three are up.
         assertThat(health(state, "payments-api")).isEqualTo("HEALTHY");
         assertThat(health(state, "payments-enricher")).isEqualTo("DEGRADED");
-        assertThat(node(state, "payments-enricher").get("rawSignal").asText()).isEqualTo("3 desired / 2 ready");
+        // ADR-0028: the signal is joined in registry order and each writer names only what it saw.
+        // Two observers now agree the enricher is DEGRADED for two unrelated reasons, and the
+        // operator gets both rather than the winner — a composed `health` says which colour to draw,
+        // and this string is the only place the reason survives.
+        assertThat(node(state, "payments-enricher").get("rawSignal").asText())
+                .isEqualTo("3 desired / 2 ready; lag 40000");
     }
 
     @Test
     void a_node_nobody_observes_is_unknown_by_arithmetic_rather_than_by_rule() {
         JsonNode state = state("production");
 
-        // ADR-0028: no contributions, no row, and the outer join synthesizes all four fields. Six of
-        // the ten production nodes take that path in this slice — four permanently (nothing will
-        // ever observe them) and two waiting for `kafka` and `connect`.
+        // ADR-0028: no contributions, no row, and the outer join synthesizes all four fields. With
+        // every plugin built, exactly §2's four declared nodes take that path, and they take it
+        // permanently — nothing in the MVP will ever observe an Elasticsearch index, an Iceberg
+        // table, a Trino cluster or a third party's webhook. That UNKNOWN is now a fact about the
+        // pipeline rather than a fact about the roster is the whole of what slice 4 changed here.
         JsonNode declared = node(state, "trino-analytics");
         assertThat(declared.get("health").asText()).isEqualTo("UNKNOWN");
         assertThat(declared.get("rawSignal").isNull()).isTrue();
@@ -80,10 +85,6 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
         assertThat(unknownKeys(state))
                 .containsExactlyInAnyOrder(
                         "stripe-webhooks",
-                        "payments.events.raw.v1",
-                        "payments.events.enriched.v1",
-                        "payments-es-sink",
-                        "payments-iceberg-sink",
                         "payments-events-v1",
                         "analytics.payments_events",
                         "trino-analytics");
@@ -116,12 +117,18 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
         // of an *object* is `jsonb`'s own (by length, then bytes) and it overwrites whatever the fold
         // chose. Asserting our order here would assert a thing the storage layer does not preserve.
         // The golden still pins the order that actually ships.
-        assertThat(metrics.fieldNames()).toIterable().containsExactly("kubernetes");
+        assertThat(metrics.fieldNames()).toIterable().containsExactlyInAnyOrder("kubernetes", "kafka");
         assertThat(metrics.get("kubernetes").fieldNames())
                 .toIterable()
                 .containsExactlyInAnyOrder("desiredReplicas", "readyReplicas");
         assertThat(metrics.get("kubernetes").get("desiredReplicas").asInt()).isEqualTo(3);
         assertThat(metrics.get("kubernetes").get("readyReplicas").asInt()).isEqualTo(2);
+        // The namespacing earning its keep: two plugins write to one node's metrics and neither can
+        // reach the other's object. ADR-0038 is why `kafka`'s namespace holds one key and not the
+        // throughput and topic size an operator would ask for first — both are diffs across polls,
+        // which ADR-0012 forbids a stateless plugin from taking.
+        assertThat(metrics.get("kafka").fieldNames()).toIterable().containsExactly("maxConsumerLag");
+        assertThat(metrics.get("kafka").get("maxConsumerLag").asInt()).isEqualTo(40000);
     }
 
     @Test
@@ -143,13 +150,17 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
     void the_outcome_block_reports_the_health_roster_and_not_the_discovery_one() {
         JsonNode plugins = state("production").get("plugins");
 
-        // ADR-0085: a *config* roster, so this has one row because one configured plugin declares
-        // Health — not because only one has reported. ADR-0072: two headers, written by different
-        // loops, so /graph's block and this one cannot disagree by construction.
-        assertThat(plugins).hasSize(1);
-        assertThat(plugins.get(0).get("plugin").asText()).isEqualTo("kubernetes");
-        assertThat(plugins.get(0).get("capability").asText()).isEqualTo("HEALTH");
-        assertThat(plugins.get(0).get("outcome").asText()).isEqualTo("COMPLETE");
+        // ADR-0085: a *config* roster, so this has three rows because three configured plugins
+        // declare Health — not because three have reported. It is one shorter than /graph's four,
+        // and the missing one is `yaml`, which declares Discovery and never Health (ADR-0011). That
+        // the two blocks differ is the point: ADR-0072 has them written by different loops, so they
+        // cannot disagree about a shared row by construction.
+        assertThat(plugins).hasSize(3);
+        assertThat(plugins.findValuesAsText("plugin")).containsExactly("kubernetes", "kafka", "connect");
+        plugins.forEach(plugin -> {
+            assertThat(plugin.get("capability").asText()).isEqualTo("HEALTH");
+            assertThat(plugin.get("outcome").asText()).isEqualTo("COMPLETE");
+        });
     }
 
     @Test

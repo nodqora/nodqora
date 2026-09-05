@@ -32,12 +32,24 @@ import org.springframework.beans.factory.annotation.Autowired;
  * </ul>
  *
  * <p>These drive {@link HealthStore} directly rather than through a plugin, because the properties
- * are the store's and must hold for the three plugins that do not exist yet.
+ * are the store's and hold for every plugin regardless of what any of them observes.
  */
 class ContributionStoreTest extends NodqoraIntegrationTest {
 
     private static final String PLUGIN = "kubernetes";
-    private static final String NODE = "payments-enricher";
+
+    /**
+     * The node under test must be one that <em>only</em> {@code PLUGIN} observes, or the composed
+     * row stops being a function of the contribution this test wrote — a store that correctly
+     * deleted its row would still read DEGRADED because somebody else's survived, and the assertion
+     * would pass or fail on the wrong plugin's behaviour.
+     *
+     * <p>Slice 2 could use any node for this. From slice 4 exactly one qualifies:
+     * {@code payments-api} has no consumer group and hosts no connector, so it is the only node in
+     * the fixture with a single observer. That the choice narrowed to one is a fact about the
+     * fixture being complete, and it is why this is stated rather than assumed.
+     */
+    private static final String NODE = "payments-api";
 
     @Autowired
     HealthStore contributions;
@@ -151,7 +163,7 @@ class ContributionStoreTest extends NodqoraIntegrationTest {
                 "production",
                 PLUGIN,
                 new HealthResult(
-                        Map.of("Payments-Enricher", new StateContribution(Health.HEALTHY, "3 desired / 3 ready", Map.of())),
+                        Map.of("Payments-API", new StateContribution(Health.HEALTHY, "3 desired / 3 ready", Map.of())),
                         Outcome.complete()),
                 now());
         folds.run("production");
@@ -201,15 +213,21 @@ class ContributionStoreTest extends NodqoraIntegrationTest {
      * Scoped to production, because staging polls the same recording and holds contributions of its
      * own. ADR-0004 is a scope and not a filter, and a count that spanned both would pass or fail on
      * the other environment's data.
+     *
+     * <p>Scoped to {@code PLUGIN} for the same reason {@link #NODE} is what it is: {@code kafka} and
+     * {@code connect} hold production rows of their own, and "this plugin wrote no row" is the claim
+     * being made. A total would only ever have been zero while three quarters of the roster did not
+     * exist.
      */
     private int storedContributions() {
         return jdbc.queryForObject(
                 """
                 select count(*) from health_contribution c
                 join node n on n.id = c.node_id
-                where n.environment_key = 'production'
+                where n.environment_key = 'production' and c.plugin_id = ?
                 """,
-                Integer.class);
+                Integer.class,
+                PLUGIN);
     }
 
     private String outcome() {
