@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 plugins {
     // Lets the toolchain provision a JDK 21 that may not be installed locally, exactly as the
     // product build does.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The wire shapes of ADR-0053's three GETs.
  *

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { GraphNode, PluginOutcome, PluginRef, Source } from '../api/types'
 import type { Rosters } from './plugins'
 

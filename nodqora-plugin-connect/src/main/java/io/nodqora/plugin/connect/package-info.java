@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The {@code connect} plugin (ADR-0036 … ADR-0042, ADR-0090). It depends on
  * {@code nodqora-plugin-api} and nothing else of ours (ADR-0015).

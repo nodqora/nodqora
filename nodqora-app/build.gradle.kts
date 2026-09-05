@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 plugins {
     id("org.springframework.boot")
     id("io.spring.dependency-management")

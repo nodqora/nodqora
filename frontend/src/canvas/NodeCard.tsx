@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { HealthGlyph } from './HealthGlyph'
 import { TypeIcon } from './TypeIcon'

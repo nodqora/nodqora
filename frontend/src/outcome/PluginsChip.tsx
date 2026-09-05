@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { useEffect, useRef, useState } from 'react'
 import { OutcomeGlyph, outcomeLabel } from './OutcomeGlyph'
 import { chipText, popoverRows, type Rosters } from './plugins'

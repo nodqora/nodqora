@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * What jsdom does not give XYFlow, and the two canvas tests that need a DOM both install.
  *

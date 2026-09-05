@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { OutcomeGlyph } from './OutcomeGlyph'
 import { bannerSentence, type Banner } from './plugins'
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.plugin.connect;
 
 import io.nodqora.plugin.api.Link;
