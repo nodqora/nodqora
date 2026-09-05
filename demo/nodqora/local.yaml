@@ -1,0 +1,67 @@
+# Layer this over the packaged configuration rather than editing it:
+#
+#   ./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./demo/nodqora/local.yaml"
+#
+# Environments merge by key, so `homelab` joins the demo `production` and `staging` in the
+# switcher rather than replacing them.
+nodqora:
+  refresh:
+    # The shipped cadence is 5m/30s. This is a pipeline you are watching, not one you are running.
+    discovery: 30s
+    health: 15s
+  environments:
+    homelab:
+      display-name: Homelab
+      plugins:
+        yaml: { dir: demo/nodqora/topology/homelab }
+
+        kubernetes:
+          namespaces: [market-demo]
+          # ADR-0031: exact `kind/name`, no globs. `kafka-connect` hosts both sink connectors and
+          # is not itself a node — suppression removes node emission only, so `connect` can still
+          # stamp it as a backing on all four. The rest are operators and a console: real
+          # workloads in this namespace that are not part of the pipeline.
+          ignore:
+            - deployment/kafka-connect
+            - deployment/strimzi-cluster-operator
+            - deployment/market-entity-operator
+            - deployment/kafka-ui
+          # No `links:` block. There is no Kubernetes UI on this cluster, and ADR-0032 is explicit
+          # that no template means no link rather than a half-composed URL.
+
+        connect:
+          url: http://192.168.0.214:8083
+          connectors:
+            # Every connector in this demo is prefixed `market-`. On a dedicated worker the
+            # required prefix list degenerates into an enumeration, which ADR-0090 accepts.
+            include: [market-]
+          # ADR-0022: the workload this Connect cluster runs on, stamped onto every connector it
+          # discovers. This is why Connect is a Deployment and not a Strimzi KafkaConnect — a
+          # StrimziPodSet is not a kind `kubernetes` produces nodes or backings from.
+          workload:
+            plugin: kubernetes
+            kind: deployment
+            reference: market-demo/kafka-connect
+          links:
+            connector: "http://192.168.0.215/ui/clusters/market/connects/market-connect/connectors/{name}"
+            logs: "http://192.168.0.215/ui/clusters/market/connects/market-connect/connectors/{name}/tasks"
+            # ADR-0039 requires this to point at a UI: `GET /connectors/{name}/config` applies no
+            # masking, so an inlined password would be served in plaintext to whoever clicked.
+            config: "http://192.168.0.215/ui/clusters/market/connects/market-connect/connectors/{name}/config"
+
+        kafka:
+          # The MetalLB address of Strimzi's external bootstrap listener.
+          bootstrap: 192.168.0.211:9094
+          topics:
+            # Streams' internal topics are prefixed `market-aggregator-`, not `market.`, so the
+            # dot in this prefix is what keeps changelogs and repartition topics off the canvas.
+            include: [market.]
+          # ADR-0025: one threshold, required, no built-in number. The two source connectors put
+          # roughly a hundred trades a minute on the raw topics, and the aggregator cuts one-minute
+          # bars — so a thousand records behind is a quarter of an hour of bars nobody has, which
+          # is degraded by any reading. It is also reachable in a demo: scale the aggregator to
+          # zero and the topics cross it in about fifteen minutes.
+          lag:
+            default: 1000
+          links:
+            dashboard: "http://192.168.0.215/ui/clusters/market/all-topics/{name}"

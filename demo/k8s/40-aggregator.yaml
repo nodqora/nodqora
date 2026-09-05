@@ -1,0 +1,57 @@
+# The one service in this pipeline that is neither a broker nor a connector: two replicas of a
+# Kafka Streams application, annotated so Nodqora can join what three different plugins each know
+# about it — the workload (`kubernetes`), the lag of its consumer group (`kafka`), and nothing at
+# all from `connect`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-aggregator
+  namespace: market-demo
+  annotations:
+    # ADR-0032's closed vocabulary. Anything outside it is ignored and logged.
+    topology.io/type: service
+    topology.io/owner: market-demo
+    # ADR-0063: the plugin that can read this group's lag is not the plugin that can say whose
+    # lag it is. This annotation is the join.
+    topology.io/consumer-groups: "market-aggregator"
+    topology.io/repository: https://github.com/fredskor/nodqora/tree/main/demo/aggregator
+spec:
+  # Three partitions per topic, so both replicas get work and neither idles.
+  replicas: 2
+  selector:
+    matchLabels: { app: market-aggregator }
+  template:
+    metadata:
+      labels: { app: market-aggregator }
+    spec:
+      containers:
+        - name: aggregator
+          # ttl.sh is anonymous and ephemeral: this tag stops resolving 24h after the push.
+          # IfNotPresent keeps a restarted pod running off the node's cached copy.
+          image: ttl.sh/nodqora-market-aggregator:24h
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: KAFKA_BOOTSTRAP, value: "market-kafka-bootstrap:9092" }
+          ports:
+            - { containerPort: 8080, name: http }
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: market-aggregator
+  namespace: market-demo
+spec:
+  selector: { app: market-aggregator }
+  ports: [{ port: 8080, targetPort: 8080 }]

@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opensearch-data
+  namespace: market-demo
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests: { storage: 10Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch
+  namespace: market-demo
+  annotations:
+    topology.io/type: search-index
+    topology.io/owner: market-demo
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: opensearch }
+  template:
+    metadata:
+      labels: { app: opensearch }
+    spec:
+      initContainers:
+        # OpenSearch refuses to start under the default vm.max_map_count. The node sysctl is not
+        # namespaced, so this sets it for the whole node — acceptable on a homelab, and the reason
+        # this container is privileged.
+        - name: sysctl
+          image: busybox:1.36
+          command: ["sh", "-c", "sysctl -w vm.max_map_count=262144"]
+          securityContext: { privileged: true, runAsUser: 0 }
+        - name: chown-data
+          image: busybox:1.36
+          command: ["sh", "-c", "chown -R 1000:1000 /usr/share/opensearch/data"]
+          securityContext: { runAsUser: 0 }
+          volumeMounts:
+            - { name: data, mountPath: /usr/share/opensearch/data }
+      containers:
+        - name: opensearch
+          image: opensearchproject/opensearch:2.19.0
+          env:
+            - { name: discovery.type, value: single-node }
+            # No TLS and no admin password: this is a LAN demo, and the sink connector's config
+            # stays a two-line block instead of a truststore.
+            - { name: DISABLE_SECURITY_PLUGIN, value: "true" }
+            - { name: DISABLE_INSTALL_DEMO_CONFIG, value: "true" }
+            - { name: bootstrap.memory_lock, value: "false" }
+            - { name: OPENSEARCH_JAVA_OPTS, value: "-Xms512m -Xmx512m" }
+          ports:
+            - { containerPort: 9200, name: http }
+          volumeMounts:
+            - { name: data, mountPath: /usr/share/opensearch/data }
+          resources:
+            requests: { cpu: 200m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          readinessProbe:
+            httpGet: { path: /_cluster/health, port: 9200 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: opensearch-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch
+  namespace: market-demo
+spec:
+  selector: { app: opensearch }
+  ports: [{ port: 9200, targetPort: 9200 }]
+---
+# A LAN address so you can curl the index yourself.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-lb
+  namespace: market-demo
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.0.213
+spec:
+  type: LoadBalancer
+  selector: { app: opensearch }
+  ports: [{ port: 9200, targetPort: 9200 }]

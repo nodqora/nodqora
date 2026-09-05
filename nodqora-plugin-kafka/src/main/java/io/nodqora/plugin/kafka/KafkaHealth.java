@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,9 +168,12 @@ class KafkaHealth {
         Verdict worst = verdicts.stream()
                 .max(Comparator.comparingLong(Verdict::maxLag))
                 .orElseThrow();
-        return verdicts.size() == 1
+        // Distinct groups rather than verdicts, because a verdict is now per (group, topic): a node
+        // backed by two topics one group reads collects two of them, and the sentence says groups.
+        long groups = verdicts.stream().map(Verdict::groupId).distinct().count();
+        return groups == 1
                 ? "lag %d".formatted(worst.maxLag())
-                : "max lag %d over %d groups".formatted(worst.maxLag(), verdicts.size());
+                : "max lag %d over %d groups".formatted(worst.maxLag(), groups);
     }
 
     /**
@@ -195,7 +199,21 @@ class KafkaHealth {
      */
     private record Verdict(String groupId, long maxLag, Health health) {}
 
-    /** The two indexes one response produces: group → verdict, and topic → the verdicts on it. */
+    /**
+     * The two indexes one response produces: group → verdict, and topic → the verdicts on it.
+     *
+     * <p><b>They are scoped differently on purpose, and that is the whole of this class.</b> A
+     * group's verdict is the max over <em>all</em> its partitions, because that is what a service
+     * routed by a {@code consumer-group} backing is behind by. A topic's verdict is the max over
+     * that group's partitions <em>on that topic</em>, because that is what the topic is behind by.
+     * The threshold is the same one either way — ADR-0025 keys it by group, and a topic borrows the
+     * threshold of whoever reads it.
+     *
+     * <p>One number for both was wrong, and invisible until a group read two topics: every topic a
+     * group consumed reported the group's worst lag wherever it was, so a single busy topic turned
+     * the group's quiet ones amber for a backlog they did not have. The reference pipeline has one
+     * topic per group throughout, which is why the fixtures agree with either reading.
+     */
     private record Verdicts(Map<String, Verdict> byGroup, Map<String, List<Verdict>> byTopic) {
 
         static Verdicts of(List<ObservedGroup> observed, KafkaConfig config) {
@@ -210,23 +228,32 @@ class KafkaHealth {
                 if (committed.isEmpty()) {
                     continue;
                 }
-                long maxLag = committed.stream()
-                        .mapToLong(partition -> partition.lag())
-                        .max()
-                        .orElse(0L);
-                Health health = maxLag >= config.lag().thresholdFor(group.groupId())
-                        ? Health.DEGRADED
-                        : Health.HEALTHY;
-                Verdict verdict = new Verdict(group.groupId(), maxLag, health);
-                byGroup.put(folded(group.groupId()), verdict);
+                long threshold = config.lag().thresholdFor(group.groupId());
+                byGroup.put(folded(group.groupId()), verdict(group.groupId(), committed, threshold));
+
+                // `listConsumerGroupOffsets` keys by topic-partition, so the per-topic split costs
+                // a grouping over a list already in hand — no second round trip.
                 committed.stream()
-                        .map(PartitionOffsets::topic)
-                        .distinct()
-                        .forEach(topic -> byTopic
+                        .collect(Collectors.groupingBy(
+                                PartitionOffsets::topic, LinkedHashMap::new, Collectors.toList()))
+                        .forEach((topic, partitions) -> byTopic
                                 .computeIfAbsent(folded(topic), ignored -> new ArrayList<>())
-                                .add(verdict));
+                                .add(verdict(group.groupId(), partitions, threshold)));
             }
             return new Verdicts(byGroup, byTopic);
+        }
+
+        /**
+         * ADR-0025's arithmetic over whatever slice of a group's partitions it is handed: <b>max lag
+         * over the partitions → the group's threshold → one health</b>. Applied to all of a group's
+         * partitions it answers for the group; applied to one topic's, for the topic.
+         */
+        private static Verdict verdict(String groupId, List<PartitionOffsets> partitions, long threshold) {
+            long maxLag = partitions.stream()
+                    .mapToLong(partition -> partition.lag())
+                    .max()
+                    .orElse(0L);
+            return new Verdict(groupId, maxLag, maxLag >= threshold ? Health.DEGRADED : Health.HEALTHY);
         }
 
         List<Verdict> byGroup(String groupId) {

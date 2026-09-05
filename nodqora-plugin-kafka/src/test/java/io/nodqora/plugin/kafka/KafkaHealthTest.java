@@ -68,6 +68,39 @@ class KafkaHealthTest {
     }
 
     @Test
+    void a_topic_carries_the_lag_on_itself_and_not_the_groups_worst_elsewhere() {
+        // One Streams application reading two topics — ordinary, and absent from the reference
+        // pipeline, where every group reads exactly one topic. `busy` is 1,200 behind and over the
+        // threshold; `quiet` is 26 behind and nowhere near it.
+        ObservedGroup aggregator = new ObservedGroup(
+                "market-aggregator",
+                List.of(
+                        new PartitionOffsets("market.trades.busy", 0, 0L, 1_200L),
+                        new PartitionOffsets("market.trades.quiet", 0, 0L, 26L)));
+        List<ObservableNode> nodes = List.of(
+                group("market-aggregator", "market-aggregator"),
+                topic("market.trades.busy"),
+                topic("market.trades.quiet"));
+
+        Map<String, StateContribution> observed = observe(api(aggregator), nodes, config(1_000L, Map.of()));
+
+        // The service is behind by its worst partition wherever that partition is: it is the thing
+        // that has to catch up on all of them.
+        assertThat(observed.get("market-aggregator").health()).isEqualTo(Health.DEGRADED);
+        assertThat(observed.get("market-aggregator").rawSignal()).isEqualTo("lag 1200");
+
+        // The topics are behind by what is behind *on them*. Reporting the group's 1,200 on the
+        // quiet topic would turn it amber for a backlog it does not have, and send whoever is
+        // paging to a topic with 26 records outstanding.
+        assertThat(observed.get("market.trades.busy").health()).isEqualTo(Health.DEGRADED);
+        assertThat(observed.get("market.trades.busy").rawSignal()).isEqualTo("lag 1200");
+        assertThat(observed.get("market.trades.quiet").health()).isEqualTo(Health.HEALTHY);
+        assertThat(observed.get("market.trades.quiet").rawSignal()).isEqualTo("lag 26");
+        assertThat(observed.get("market.trades.quiet").metrics())
+                .containsOnly(Map.entry("maxConsumerLag", 26L));
+    }
+
+    @Test
     void lag_never_reads_unhealthy_not_even_at_two_point_one_million() {
         StateContribution enricher = observe(RecordedKafkaApi.scenario("incident")).get("payments-enricher");
 

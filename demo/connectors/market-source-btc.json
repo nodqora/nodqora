@@ -1,0 +1,21 @@
+{
+  "name": "market-source-btc",
+  "config": {
+    "connector.class": "com.github.castorm.kafka.connect.http.HttpSourceConnector",
+    "tasks.max": "1",
+
+    "http.request.url": "https://api.exchange.coinbase.com/products/BTC-USD/trades",
+    "http.request.params": "limit=50",
+    "http.request.headers": "User-Agent: nodqora-demo/0.1",
+    "http.timer.interval.millis": "5000",
+
+    "http.response.list.pointer": "/",
+    "http.response.list.order.direction": "DESC",
+    "http.response.record.offset.pointer": "id=/trade_id",
+    "http.response.record.mapper": "com.github.castorm.kafka.connect.http.record.StringKvSourceRecordMapper",
+
+    "kafka.topic": "market.trades.btc-usd",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter"
+  }
+}

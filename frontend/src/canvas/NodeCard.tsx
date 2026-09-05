@@ -68,7 +68,14 @@ export function NodeCard({ data }: NodeProps) {
         {/* An unregistered type resolves to the fallback descriptor and still renders. */}
         {card.descriptor?.label ?? card.descriptor?.type ?? 'Unknown type'}
       </div>
-      {card.showMetrics && card.metricLine && <div className="node-card-metric">{card.metricLine}</div>}
+      {/* The line is clamped to one line in CSS, because Canvas.tsx declares the height of one and
+          a node observed by three plugins composes five metrics. `title` is where the rest goes on
+          the canvas; section 2 of the drawer has them all, namespaced by plugin. */}
+      {card.showMetrics && card.metricLine && (
+        <div className="node-card-metric" title={card.metricLine}>
+          {card.metricLine}
+        </div>
+      )}
       {/* ADR-0083: during trouble, which plugin went blind is worth more than which plugins
           discovered the node, and the full source list is one click away in section 7. */}
       {card.blind.length > 0 && (

@@ -1,0 +1,91 @@
+# The gaps in the market-demo pipeline, and nothing else (ADR-0063).
+#
+# Everything observable is left out on purpose: `kubernetes` supplies the workloads and their
+# types, `kafka` the topics, `connect` the connectors and their tasks. `yaml` wins every contested
+# scalar, so a field written here that a plugin also knows would be a silent, permanent override.
+environment: homelab
+
+owners:
+  - key: market-demo
+    displayName: Market Demo
+    channel: "#nodqora"
+    onCall: Fyodor
+
+# Descriptors, not types: this says how a type draws, never which type a node is. `kubernetes`
+# emits `topology.io/type` verbatim and guesses no label, category or icon for it (ADR-0091), so
+# without these four the cards render on the fallback descriptor.
+types:
+  - type: external-api
+    label: External API
+    category: external
+    icon: cloud
+  - type: service
+    label: Service
+    category: compute
+    icon: service
+  - type: database
+    label: Database
+    category: datastore
+    icon: database
+  - type: search-index
+    label: Search Index
+    category: datastore
+    icon: search
+
+nodes:
+  # Nothing observes Coinbase, so `yaml` is the only source for every field it has.
+  - key: coinbase-api
+    type: external-api
+    displayName: Coinbase Exchange API
+    owner: market-demo
+    links:
+      - rel: docs
+        label: API reference
+        url: https://docs.cdp.coinbase.com/exchange/reference/exchangerestapi_getproducttrades
+
+  # `connect` infers edges from a connector's `topics` key alone (ADR-0041). A *source* connector
+  # has no `topics` key — this one writes to `kafka.topic` — so both of its edges are gaps, the
+  # upstream one doubly so: no key in any connector config names a third-party HTTP API as a node.
+  - key: market-source-btc
+    owner: market-demo
+    sourcesFrom: [coinbase-api]
+    producesTo: [market.trades.btc-usd]
+
+  - key: market-source-eth
+    owner: market-demo
+    sourcesFrom: [coinbase-api]
+    producesTo: [market.trades.eth-usd]
+
+  # `kubernetes` sees the Deployment and `kafka` sees the consumer group's lag; neither can say
+  # which topics the Streams topology reads and writes.
+  - key: market-aggregator
+    owner: market-demo
+    consumesFrom: [market.trades.btc-usd, market.trades.eth-usd]
+    producesTo: [market.ohlc.1m]
+
+  # The inbound edge for both sinks comes free from `connect` — it is in the `topics` key. The
+  # outbound one cannot: `connection.uri` is a MongoDB endpoint and `connection.url` an OpenSearch
+  # cluster, neither of which is a collection or an index name.
+  - key: market-mongo-sink
+    owner: market-demo
+    writesTo: [mongodb]
+
+  - key: market-opensearch-sink
+    owner: market-demo
+    writesTo: [opensearch]
+
+  # One line each: ownership is the only thing here that no plugin can observe.
+  - key: market.trades.btc-usd
+    owner: market-demo
+
+  - key: market.trades.eth-usd
+    owner: market-demo
+
+  - key: market.ohlc.1m
+    owner: market-demo
+
+  - key: mongodb
+    owner: market-demo
+
+  - key: opensearch
+    owner: market-demo

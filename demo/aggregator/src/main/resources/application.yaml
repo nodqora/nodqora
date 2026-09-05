@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: market-aggregator
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    streams:
+      # The application id is the consumer group Nodqora's `kafka` plugin reports lag for, and it
+      # is routed onto this node by the `topology.io/consumer-groups` annotation on the Deployment.
+      # Deliberately dash-separated: Streams' internal topics inherit this prefix, so they fall
+      # outside the `market.` include prefix and stay off the canvas.
+      application-id: market-aggregator
+      properties:
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        commit.interval.ms: 5000
+        num.stream.threads: 1
+        # Late trades still count: the API is polled, so a trade can arrive well after its window.
+        max.task.idle.ms: 0
+
+market:
+  input-topic-pattern: "market\\.trades\\..*"
+  output-topic: market.ohlc.1m
+  window-seconds: 60
+  grace-seconds: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+server:
+  port: 8080
+
+logging:
+  level:
+    io.nodqora.demo: INFO

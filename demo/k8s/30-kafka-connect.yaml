@@ -1,0 +1,110 @@
+# Kafka Connect as a plain Deployment rather than a Strimzi `KafkaConnect`, for two reasons.
+#
+# 1. Strimzi builds connector plugins into an image and needs a registry to push it to; an
+#    initContainer that downloads the three plugins into an emptyDir needs none.
+# 2. Strimzi runs Connect as a StrimziPodSet, and Nodqora's `kubernetes` plugin produces nodes
+#    from Deployments, StatefulSets and CronJobs only (ADR-0030) — so a Strimzi-run Connect is
+#    invisible to it and `connect.workload` would have nothing to point at. A Deployment gives
+#    the connector nodes their third backing and their readiness contribution (ADR-0022).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-connect
+  namespace: market-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kafka-connect }
+  template:
+    metadata:
+      labels: { app: kafka-connect }
+    spec:
+      initContainers:
+        - name: fetch-plugins
+          image: curlimages/curl:8.11.1
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              cd /plugins
+              echo "-> castorm HTTP source"
+              mkdir -p http-source && curl -sSfL \
+                https://github.com/castorm/kafka-connect-http/releases/download/v0.8.11/kafka-connect-http-0.8.11-plugin.tar.gz \
+                | tar -xz -C http-source
+              echo "-> MongoDB sink (uber jar from Maven Central; no unzip needed)"
+              mkdir -p mongodb && curl -sSfL -o mongodb/mongo-kafka-connect-3.0.1-all.jar \
+                https://repo1.maven.org/maven2/org/mongodb/kafka/mongo-kafka-connect/3.0.1/mongo-kafka-connect-3.0.1-all.jar
+              echo "-> Aiven OpenSearch sink"
+              mkdir -p opensearch && curl -sSfL \
+                https://github.com/Aiven-Open/opensearch-connector-for-apache-kafka/releases/download/v3.2.0/opensearch-connector-for-apache-kafka-3.2.0.tar \
+                | tar -x -C opensearch
+              echo "-> plugin tree:"
+              find /plugins -maxdepth 3 -name '*.jar' | head -20
+              find /plugins -name '*.jar' | wc -l
+          volumeMounts:
+            - { name: plugins, mountPath: /plugins }
+      containers:
+        - name: connect
+          # Connect 3.9. The HTTP source connector was last released in 2021 and a 3.x worker is
+          # the least adventurous host for it; a 3.9 client against a 4.3 broker is supported.
+          image: confluentinc/cp-kafka-connect:7.9.7
+          ports:
+            - { containerPort: 8083, name: rest }
+          env:
+            - { name: CONNECT_BOOTSTRAP_SERVERS, value: "market-kafka-bootstrap:9092" }
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - { name: CONNECT_REST_PORT, value: "8083" }
+            - { name: CONNECT_GROUP_ID, value: "market-connect" }
+            - { name: CONNECT_CONFIG_STORAGE_TOPIC, value: "connect-configs" }
+            - { name: CONNECT_OFFSET_STORAGE_TOPIC, value: "connect-offsets" }
+            - { name: CONNECT_STATUS_STORAGE_TOPIC, value: "connect-status" }
+            - { name: CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: CONNECT_STATUS_STORAGE_REPLICATION_FACTOR, value: "1" }
+            # Worker defaults are strings in and strings out; the sinks override the value
+            # converter to JSON per connector.
+            - { name: CONNECT_KEY_CONVERTER, value: "org.apache.kafka.connect.storage.StringConverter" }
+            - { name: CONNECT_VALUE_CONVERTER, value: "org.apache.kafka.connect.storage.StringConverter" }
+            - { name: CONNECT_PLUGIN_PATH, value: "/usr/share/java,/usr/share/confluent-hub-components,/plugins" }
+            - { name: CONNECT_LOG4J_ROOT_LOGLEVEL, value: "INFO" }
+            - { name: KAFKA_HEAP_OPTS, value: "-Xms512m -Xmx1g" }
+          volumeMounts:
+            - { name: plugins, mountPath: /plugins }
+          resources:
+            requests: { cpu: 250m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          readinessProbe:
+            httpGet: { path: /connectors, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /, port: 8083 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+      volumes:
+        - name: plugins
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect
+  namespace: market-demo
+spec:
+  selector: { app: kafka-connect }
+  ports: [{ port: 8083, targetPort: 8083 }]
+---
+# Nodqora's `connect` plugin runs off-cluster and needs a LAN address for the REST API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect-lb
+  namespace: market-demo
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.0.214
+spec:
+  type: LoadBalancer
+  selector: { app: kafka-connect }
+  ports: [{ port: 8083, targetPort: 8083 }]

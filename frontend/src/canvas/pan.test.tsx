@@ -5,6 +5,7 @@ import { ReactFlowProvider, useNodesInitialized, useReactFlow, type ReactFlowIns
 import { useEffect } from 'react'
 import { readFileSync } from 'node:fs'
 import { Canvas } from './Canvas'
+import { PANE, installMeasurement, silenceActEnvironment } from './measurement.testkit'
 import type { Graph } from '../api/types'
 
 /**
@@ -25,78 +26,14 @@ import type { Graph } from '../api/types'
 
 const graph = JSON.parse(readFileSync('../fixtures/golden/graph-production.json', 'utf8')) as Graph
 
-const PANE = { width: 1200, height: 800 }
 /** Column 7 of ADR-0016's layering — the far right of the fixture, so it is what a fit puts at the edge. */
 const FAR_RIGHT = 'trino-analytics'
 /** Column 1, comfortably inside any viewport that fits the whole pipeline. */
 const NEAR_LEFT = 'payments.events.raw.v1'
 
-/**
- * XYFlow reads three things jsdom does not provide: the pane's size, each node's size, and a
- * `ResizeObserver` to be told when either changes.
- *
- * Sizes come from `offsetWidth`/`offsetHeight`, which jsdom pins at 0. Only a **px** inline style is
- * honoured here, and that qualifier is load-bearing rather than tidiness: the `.react-flow` pane
- * carries `width: 100%`, and a `parseFloat` that accepts it makes XYFlow believe the pane is 100
- * pixels wide — which still fits, still pans, and quietly moves every assertion in this file onto a
- * viewport no user has.
- */
-function installMeasurement() {
-  const px = (value: string): number | null => (value.endsWith('px') ? Number.parseFloat(value) : null)
-
-  class ImmediateResizeObserver {
-    constructor(private readonly callback: ResizeObserverCallback) {}
-    observe(element: Element) {
-      const entry = { target: element, contentRect: element.getBoundingClientRect() } as ResizeObserverEntry
-      this.callback([entry], this as unknown as ResizeObserver)
-    }
-    unobserve() {}
-    disconnect() {}
-  }
-
-  globalThis.ResizeObserver = ImmediateResizeObserver as unknown as typeof ResizeObserver
-
-  // XYFlow divides a measured node by the scale in its computed transform, to store sizes in flow
-  // units rather than screen pixels. jsdom computes no transform, so the matrix it would parse is
-  // the identity — which is also the truth here, since the sizes handed back above are already the
-  // declared, unscaled ones.
-  class IdentityMatrix {
-    readonly m22 = 1
-  }
-  globalThis.DOMMatrixReadOnly = IdentityMatrix as unknown as typeof DOMMatrixReadOnly
-  const define = (name: string, get: (element: HTMLElement) => number) =>
-    Object.defineProperty(HTMLElement.prototype, name, {
-      configurable: true,
-      get(this: HTMLElement) {
-        return get(this)
-      },
-    })
-
-  define('offsetWidth', (element) => px(element.style.width) ?? PANE.width)
-  define('offsetHeight', (element) => px(element.style.height) ?? PANE.height)
-  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
-    configurable: true,
-    value(this: HTMLElement) {
-      const width = px(this.style.width) ?? PANE.width
-      const height = px(this.style.height) ?? PANE.height
-      return { x: 0, y: 0, top: 0, left: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }
-    },
-  })
-}
-
 installMeasurement()
 
-// Opting out of React's act environment, for the same reason `settle` below is not wrapped in one:
-// this canvas settles on the frame clock, not on React's queue, so every viewport here is produced
-// after the render that caused it has long finished. Left on, `act` reports each of those frames as
-// an unwrapped update — hundreds of warnings for the file's central behaviour working correctly.
-Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
-  configurable: true,
-  get: () => false,
-  // Testing Library turns the flag back on around every `render`, so pinning it takes a setter that
-  // declines rather than an assignment it would overwrite.
-  set: () => {},
-})
+silenceActEnvironment()
 
 type Flow = ReactFlowInstance
 type Viewport = ReturnType<Flow['getViewport']>

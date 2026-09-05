@@ -1,0 +1,45 @@
+# Not part of the pipeline — a console for topics, consumer groups and connectors, and the thing
+# that makes Nodqora's link templates point somewhere real instead of at a fictional acme.io.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: market-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kafka-ui }
+  template:
+    metadata:
+      labels: { app: kafka-ui }
+    spec:
+      containers:
+        - name: kafka-ui
+          image: ghcr.io/kafbat/kafka-ui:v1.1.0
+          env:
+            - { name: KAFKA_CLUSTERS_0_NAME, value: "market" }
+            - { name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS, value: "market-kafka-bootstrap:9092" }
+            - { name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME, value: "market-connect" }
+            - { name: KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS, value: "http://kafka-connect:8083" }
+            - { name: DYNAMIC_CONFIG_ENABLED, value: "true" }
+          ports: [{ containerPort: 8080, name: http }]
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 768Mi }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+  namespace: market-demo
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.0.215
+spec:
+  type: LoadBalancer
+  selector: { app: kafka-ui }
+  ports: [{ port: 80, targetPort: 8080 }]
