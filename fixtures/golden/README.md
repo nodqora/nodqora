@@ -22,7 +22,7 @@ order-blind by construction.
 | `layout-production.json` | ADR-0016's claim: longest-path layering reproduces §1's shape |
 | `layout-staging.json` | the same, re-flowing to a straight line with no hand-placed positions |
 
-**All five assertion documents now match the fixture in full.** Every earlier slice qualified this
+**All five assertion documents match the fixture in full.** Every earlier slice qualified this
 paragraph — the goldens were stated for the plugin set that existed, and a value §8 derives from
 consumer lag or connector state read `UNKNOWN` because the plugin that reads it had not been built.
 There is nothing left to qualify. §2's inventory, §3's nine edges, §8's normalized column in both
@@ -62,7 +62,7 @@ whether the merge did what ADR-0044 says.
   `payments-enricher` DEGRADED at 3/2, which is ADR-0025's choice of arithmetic over
   `status.conditions` visible as a single word: `Available=True` holds at 2 of 3, so the other
   reading would have rendered the fixture's one interesting workload HEALTHY.
-- **Now (slice 4, `kafka` + `connect`)** — the slice made four predictions and the diff kept all
+- **Slice 4 (`kafka` + `connect`)** — the slice made four predictions and the diff kept all
   four. `connect` closed the edge set with the two `SOURCES_FROM` edges (ADR-0041), taking
   production to 9 and staging to 6, so the graph goldens now match §3 outright and
   `ReferencePipelineCountsTest` compares §4's numbers with no allowance left in it. The node count
@@ -80,6 +80,23 @@ whether the merge did what ADR-0044 says.
   incident both connectors go **DISABLED rather than DEGRADED**, each collapsing three observers
   that disagree — which is the case that defeats plain worst-wins and the reason ADR-0024 is three
   steps instead of a `max()`.
+
+- **Slice 5 (the honesty layer)** — **every one of these documents is byte-identical to slice 4's,
+  and that is the result.** This slice is behaviour under conditions the fixture's happy path never
+  enters, so ADR-0099's five assertions are exactly the wrong instrument for it and were left
+  untouched on purpose: a diff here would have meant the honesty layer had changed what the
+  application says on an ordinary day, which is the one thing ADR-0081 legislated against —
+  *"nothing else renders while every outcome is `COMPLETE`."* What slice 5 added is asserted by
+  named scenarios instead (`BlindObserverTest`, `ColdStoreTest`), because each of them is a
+  statement about a state the fixture cannot be in and be itself.
+
+  The goldens still carry the two fields the whole layer reads, and have since slice 3: every
+  node's `sources[]` entries carry a `confirmedAt`, and each document carries the `plugins[]`
+  roster that explains it — four `DISCOVERY` entries on `/graph`, three `HEALTH` on `/state`,
+  because `yaml` declares no Health capability. Here they all read `COMPLETE`, which is precisely
+  why they could not test anything: ADR-0084's retention is a comparison between two timestamps
+  that a `COMPLETE` poll makes equal, and ADR-0085's `null` never appears in a document produced by
+  polling everything first.
 
 The layout goldens were stated over §3's **complete** edge set from slice 1, because ADR-0016's
 claim is about the fixture's shape and not about how much of it one slice had built; until now the

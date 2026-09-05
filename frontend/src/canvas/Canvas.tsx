@@ -18,7 +18,9 @@ import { edgeIsHighlighted, highlightFrom } from './highlight'
 import { foldKey } from '../api/keys'
 import { crossesTeams, ownersByNodeKey } from './crossTeam'
 import { summarizeMetrics } from './metrics'
-import type { Graph, Health, State } from '../api/types'
+import { marksOf } from '../outcome/marks'
+import type { Rosters } from '../outcome/plugins'
+import type { Graph, Health, PluginRef, State } from '../api/types'
 
 const COLUMN_WIDTH = 300
 const ROW_HEIGHT = 132
@@ -27,7 +29,9 @@ const ROW_HEIGHT = 132
 // whole graph unscaled in a corner on a cold load. Stating the size removes the race entirely.
 const CARD_WIDTH = 236
 const CARD_HEIGHT = 62
-const CARD_HEIGHT_WITH_METRIC = 84
+const METRIC_LINE_HEIGHT = 22
+// ADR-0083's footer token is a line like any other, so it has to be declared for the same reason.
+const BLIND_TOKEN_HEIGHT = 18
 const NODE_TYPES = { card: NodeCard }
 
 /**
@@ -47,12 +51,18 @@ export function Canvas({
   selectedKey,
   onSelect,
   showMetrics,
+  rosters,
+  registry,
+  label,
 }: {
   graph: Graph
   state: State | null
   selectedKey: string | null
   onSelect: (key: string | null) => void
   showMetrics: boolean
+  rosters: Rosters
+  registry: PluginRef[]
+  label: (pluginId: string) => string
 }) {
   const highlight = useMemo(
     () => (selectedKey ? highlightFrom(selectedKey, graph.edges) : null),
@@ -81,6 +91,9 @@ export function Canvas({
     return graph.nodes.map((node) => {
       const folded = foldKey(node.key)
       const placement = placements.get(folded)
+      // ADR-0083's two conditional marks. Both are empty on an ordinary day, because neither can
+      // fire while every plugin's `outcome` is COMPLETE.
+      const marks = marksOf(node, rosters, registry)
       const data: NodeCardData = {
         nodeKey: node.key,
         displayName: node.displayName,
@@ -91,7 +104,11 @@ export function Canvas({
         metricLine: metricLines.get(folded) ?? null,
         showMetrics,
         emphasis: emphasisOf(folded, selectedKey, highlight),
+        retained: marks.retained.map(label),
+        blind: marks.blind.map(label),
       }
+      const metricLine = data.showMetrics && data.metricLine ? METRIC_LINE_HEIGHT : 0
+      const blindToken = data.blind.length > 0 ? BLIND_TOKEN_HEIGHT : 0
       return {
         id: node.key,
         type: 'card',
@@ -99,12 +116,24 @@ export function Canvas({
         // constraint the drawer spends a fifth of the width against (ADR-0016, ADR-0019).
         position: { x: (placement?.column ?? 0) * COLUMN_WIDTH, y: (placement?.row ?? 0) * ROW_HEIGHT },
         width: CARD_WIDTH,
-        height: data.showMetrics && data.metricLine ? CARD_HEIGHT_WITH_METRIC : CARD_HEIGHT,
+        height: CARD_HEIGHT + metricLine + blindToken,
         data,
         draggable: false,
       }
     })
-  }, [graph.nodes, graph.edges, descriptors, health, metricLines, showMetrics, selectedKey, highlight])
+  }, [
+    graph.nodes,
+    graph.edges,
+    descriptors,
+    health,
+    metricLines,
+    showMetrics,
+    selectedKey,
+    highlight,
+    rosters,
+    registry,
+    label,
+  ])
 
   const owners = useMemo(() => ownersByNodeKey(graph.nodes), [graph.nodes])
 
@@ -139,6 +168,7 @@ export function Canvas({
   const flow = useReactFlow()
   const measured = useNodesInitialized()
   const fittedFor = useRef<string | null>(null)
+  const pane = useRef<HTMLDivElement>(null)
 
   useEffect(() => setNodes(laidOut), [laidOut, setNodes])
   useEffect(() => setEdges(drawn), [drawn, setEdges])
@@ -162,22 +192,68 @@ export function Canvas({
     return () => cancelAnimationFrame(frame)
   }, [measured, graph.environment.key, flow])
 
+  // ADR-0069: **pan to bring the node into view. Do not change zoom.**
+  //
+  // Not changing zoom is the load-bearing half. ADR-0016's layout is width-hungry and height-light,
+  // so a user who has zoomed out to see the whole flow has done deliberate work, and zooming them to
+  // one node destroys that to solve a problem panning has already solved. Zoom-to-fit stays where
+  // ADR-0018 put it — an explicit control the user asks for.
+  //
+  // ADR-0097 makes a deep link the ordinary cold load plus a selection: fit, then pan if off-screen,
+  // then select. This effect is declared *after* the fit above, so within one commit its frame
+  // callback runs second and it measures a viewport the fit has already set. On the fixture the pan
+  // is a no-op, because fit-to-screen shows the whole ten-node pipeline; it is kept for the graph
+  // the fixture is not, where the selected node can land off-screen with nothing to correct it.
+  //
+  // A clicked node is by definition on screen, so this costs one branch on the common path rather
+  // than needing to know *how* the selection was made.
+  useEffect(() => {
+    if (!measured || !selectedKey) return
+    const frame = requestAnimationFrame(() => {
+      const rect = pane.current?.getBoundingClientRect()
+      const node = flow.getNode(selectedKey) ?? flow.getNodes().find((n) => foldKey(n.id) === foldKey(selectedKey))
+      if (!rect || !node) return
+
+      const width = node.width ?? CARD_WIDTH
+      const height = node.height ?? CARD_HEIGHT
+      const topLeft = flow.flowToScreenPosition(node.position)
+      const bottomRight = flow.flowToScreenPosition({
+        x: node.position.x + width,
+        y: node.position.y + height,
+      })
+      const onScreen =
+        topLeft.x >= rect.left &&
+        topLeft.y >= rect.top &&
+        bottomRight.x <= rect.right &&
+        bottomRight.y <= rect.bottom
+      if (onScreen) return
+
+      flow.setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+        zoom: flow.getZoom(),
+        duration: 220,
+      })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [measured, selectedKey, flow, nodes])
+
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={NODE_TYPES}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={(_, node) => onSelect(node.id)}
-      onPaneClick={() => onSelect(null)}
-      nodesConnectable={false}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background gap={22} size={1} />
-      {/* Pan, zoom, fit-to-screen. No minimap: near-useless at fixture scale, cheap to restore. */}
-      <Controls showInteractive={false} />
-    </ReactFlow>
+    <div className="canvas-pane" ref={pane}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={NODE_TYPES}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={(_, node) => onSelect(node.id)}
+        onPaneClick={() => onSelect(null)}
+        nodesConnectable={false}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background gap={22} size={1} />
+        {/* Pan, zoom, fit-to-screen. No minimap: near-useless at fixture scale, cheap to restore. */}
+        <Controls showInteractive={false} />
+      </ReactFlow>
+    </div>
   )
 }
 

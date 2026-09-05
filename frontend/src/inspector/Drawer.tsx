@@ -1,6 +1,8 @@
 import { HealthGlyph, healthLabel } from '../canvas/HealthGlyph'
 import { connectionsOf } from './connections'
 import { sameKey } from '../api/keys'
+import { healthCaveat, retained } from '../outcome/marks'
+import { labeller, type Rosters } from '../outcome/plugins'
 import type { Graph, GraphNode, NodeState, PluginRef } from '../api/types'
 
 /**
@@ -24,6 +26,7 @@ export function Drawer({
   node,
   state,
   plugins,
+  rosters,
   onSelect,
   onClose,
 }: {
@@ -31,6 +34,7 @@ export function Drawer({
   node: GraphNode
   state: NodeState | null
   plugins: PluginRef[]
+  rosters: Rosters
   onSelect: (key: string) => void
   onClose: () => void
 }) {
@@ -41,8 +45,9 @@ export function Drawer({
   const descriptor = node.type ? graph.typeDescriptors.find((d) => d.type === node.type) : undefined
   const connections = connectionsOf(node.key, graph.edges, graph.relationDescriptors)
   const health = state?.health ?? 'UNKNOWN'
-  const labelOf = (pluginId: string) =>
-    plugins.find((plugin) => plugin.id === pluginId)?.displayLabel ?? pluginId
+  const labelOf = labeller(plugins)
+  // ADR-0083: the caveat is a statement *about that health value*, so it sits inside section 2.
+  const caveat = healthCaveat(node, rosters, plugins, labelOf, state?.observedAt != null)
 
   return (
     <aside className="drawer" aria-label="Node inspector">
@@ -91,6 +96,12 @@ export function Drawer({
             <Namespaced values={state.metrics} labelOf={labelOf} empty="No metrics recorded." />
           </>
         )}
+        {/* ADR-0083: the caveat names the plugin that could not look and what the displayed value
+            was actually composed from. A separate Observation section was rejected — putting it
+            elsewhere makes the reader correlate two places to find out whether the number above is
+            trustworthy, and ADR-0019's whole argument for a fixed section order is that the reader
+            should not have to hunt. */}
+        {caveat && <p className="caveat">{caveat}</p>}
       </Section>
 
       {/* 3. Connections — each peer a control that reselects. */}
@@ -166,11 +177,20 @@ export function Drawer({
         <Namespaced values={node.metadata} labelOf={labelOf} empty="No plugin metadata recorded." />
       </Section>
 
+      {/* ADR-0083: section 7 carries the freshness, one row per source — plugin, when it was last
+          confirmed, and a `retained` tag where ADR-0084 says so. That is the entirety of
+          `sources[]`'s new width on the wire, rendered where `sources[]` already rendered. */}
       <Section title="Discovered by">
         <ul className="sources">
           {node.sources.map((source) => (
             <li key={source.plugin}>
               {labelOf(source.plugin)}
+              {/* ADR-0084: retention is not a duration, so the UI never claims one. The elapsed
+                  time is information and the tag is the judgement, and the two are computed
+                  differently on purpose — a plugin whose poll interval is long shows a large
+                  elapsed time with no tag, which is correct and was the failure mode of every
+                  threshold considered. */}
+              {retained(source, rosters.discovery) && <span className="tag-retained">retained</span>}
               {/* ADR-0056: when this plugin's snapshot last actually carried this key — which is
                   what tells "confirmed 30 seconds ago" from "retained since Tuesday". */}
               <span className="rel">
