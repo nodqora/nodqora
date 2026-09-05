@@ -85,6 +85,13 @@ body {
 .node-card-metric {
   margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line);
   color: var(--ink-quiet); font-size: 12px; font-variant-numeric: tabular-nums;
+  /* ADR-0018 says *one* metric line and Canvas.tsx declares the height of exactly one, so this
+     has to actually be one. A node observed by three plugins carries five allow-listed metrics —
+     `tasks running 1 · tasks total 1 · max consumer lag 0 · desired replicas 1 · ready replicas 1`
+     — which wraps to three lines in a 236px card and spills out through the bottom border. Same
+     answer as `.node-card-name`: truncation is a canvas problem, and the drawer holds the full
+     namespaced list. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .node-card-selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47, 109, 246, 0.18); }
@@ -232,6 +239,8 @@ body {
 .node-card-blind-token {
   margin-top: 4px;
   color: var(--outcome-ink); font-size: 11px; letter-spacing: 0.03em;
+  /* BLIND_TOKEN_HEIGHT is one line too, and three blind plugins overflow it the same way. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .tag-retained {
