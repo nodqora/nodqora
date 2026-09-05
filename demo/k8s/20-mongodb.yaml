@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-data
+  namespace: market-demo
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: market-demo
+  annotations:
+    # Nodqora's closed annotation vocabulary (ADR-0032). `type` is what stops the card reading
+    # "Unknown type" — `kubernetes` emits no default (ADR-0091).
+    topology.io/type: database
+    topology.io/owner: market-demo
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: mongodb }
+  template:
+    metadata:
+      labels: { app: mongodb }
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:8.0
+          ports: [{ containerPort: 27017, name: mongo }]
+          volumeMounts:
+            - { name: data, mountPath: /data/db }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: mongodb-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: market-demo
+spec:
+  selector: { app: mongodb }
+  ports: [{ port: 27017, targetPort: 27017 }]

@@ -1,0 +1,70 @@
+# Strimzi 1.2.0 speaks only the `v1` CRD API, and only KRaft: one dual-role node, one
+# LoadBalancer listener so Nodqora — which runs on a laptop, not in this cluster — can reach
+# the broker over the LAN through MetalLB.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  namespace: market-demo
+  labels:
+    strimzi.io/cluster: market
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 20Gi
+        # Two StorageClasses on this cluster are both marked default, so naming one is not
+        # belt-and-braces: an unqualified claim is ambiguous.
+        class: local-path
+        deleteClaim: true
+        kraftMetadata: shared
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 2Gi }
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: market
+  namespace: market-demo
+spec:
+  kafka:
+    version: 4.3.1
+    metadataVersion: 4.3-IV0
+    listeners:
+      # In-cluster: the aggregator and Connect.
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      # Off-cluster: Nodqora's `kafka` plugin AdminClient. Strimzi discovers the MetalLB address
+      # and writes it into advertised.listeners itself.
+      - name: external
+        port: 9094
+        type: loadbalancer
+        tls: false
+        configuration:
+          # Pinned so the addresses survive a rebuild: demo/nodqora/local.yaml names them.
+          bootstrap:
+            annotations:
+              metallb.io/loadBalancerIPs: 192.168.0.211
+          brokers:
+            - broker: 0
+              annotations:
+                metallb.io/loadBalancerIPs: 192.168.0.212
+    config:
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      auto.create.topics.enable: false
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
