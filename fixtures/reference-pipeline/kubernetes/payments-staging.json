@@ -17,7 +17,9 @@
         "topology.io/docs": "docs.acme.io/payments-api",
         "topology.io/grafana": "payments-api-overview"
       },
-      "podLabels": { "app": "payments-api" }
+      "podLabels": { "app": "payments-api" },
+      "desiredReplicas": 3,
+      "readyReplicas": 3
     },
     {
       "kind": "Deployment",
@@ -33,7 +35,9 @@
         "topology.io/repository": "github.com/acme/payments-enricher",
         "topology.io/grafana": "payments-enricher-overview"
       },
-      "podLabels": { "app": "payments-enricher" }
+      "podLabels": { "app": "payments-enricher" },
+      "desiredReplicas": 3,
+      "readyReplicas": 3
     },
     {
       "kind": "StatefulSet",
@@ -42,7 +46,9 @@
       "creationTimestamp": "2026-01-20T08:00:00Z",
       "labels": { "app": "kafka-connect" },
       "annotations": {},
-      "podLabels": { "app": "kafka-connect" }
+      "podLabels": { "app": "kafka-connect" },
+      "desiredReplicas": 2,
+      "readyReplicas": 2
     }
   ],
   "services": [

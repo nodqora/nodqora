@@ -1,0 +1,74 @@
+{
+  "environment": "staging",
+  "observedAt": "<timestamp>",
+  "nodes": [
+    {
+      "nodeKey": "payments-api",
+      "health": "HEALTHY",
+      "rawSignal": "3 desired / 3 ready",
+      "metrics": {
+        "kubernetes": {
+          "readyReplicas": 3,
+          "desiredReplicas": 3
+        }
+      },
+      "observedAt": "<timestamp>"
+    },
+    {
+      "nodeKey": "payments-enricher",
+      "health": "HEALTHY",
+      "rawSignal": "3 desired / 3 ready",
+      "metrics": {
+        "kubernetes": {
+          "readyReplicas": 3,
+          "desiredReplicas": 3
+        }
+      },
+      "observedAt": "<timestamp>"
+    },
+    {
+      "nodeKey": "payments-es-sink",
+      "health": "UNKNOWN",
+      "rawSignal": null,
+      "metrics": {},
+      "observedAt": null
+    },
+    {
+      "nodeKey": "payments-events-v1",
+      "health": "UNKNOWN",
+      "rawSignal": null,
+      "metrics": {},
+      "observedAt": null
+    },
+    {
+      "nodeKey": "payments.events.enriched.v1",
+      "health": "UNKNOWN",
+      "rawSignal": null,
+      "metrics": {},
+      "observedAt": null
+    },
+    {
+      "nodeKey": "payments.events.raw.v1",
+      "health": "UNKNOWN",
+      "rawSignal": null,
+      "metrics": {},
+      "observedAt": null
+    },
+    {
+      "nodeKey": "stripe-webhooks",
+      "health": "UNKNOWN",
+      "rawSignal": null,
+      "metrics": {},
+      "observedAt": null
+    }
+  ],
+  "plugins": [
+    {
+      "plugin": "kubernetes",
+      "capability": "HEALTH",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    }
+  ]
+}

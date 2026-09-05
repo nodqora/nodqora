@@ -1,8 +1,13 @@
 # ADR-0034: Kubernetes has declared intent, so it is the plugin that emits `DISABLED`
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0105](0105-a-node-backed-by-several-workloads-names-each-and-sums-their-replicas.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
+
+> **Amendment (ADR-0105).** The `rawSignal` and `metrics` shapes below describe **one** workload.
+> When a node has several, `rawSignal` prefixes each with its `namespace/name` and `metrics` sums
+> the replica counts; a workload with no `spec.replicas` contributes to neither sum. The health
+> collapse, and everything else here, is unchanged.
 
 ## Context
 

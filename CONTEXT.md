@@ -41,9 +41,11 @@ ADR-0051; ADR-0092 through ADR-0097 by
 [Frontend routing and deep-linking](https://github.com/fredskor/nodqora/issues/21);
 ADR-0098 through ADR-0102 by
 [Implementation slice ordering and handoff](https://github.com/fredskor/nodqora/issues/18),
-which also amended ADR-0074; and ADR-0103 by
+which also amended ADR-0074; ADR-0103 by
 [Slice 2 — `kubernetes` discovery](https://github.com/fredskor/nodqora/issues/23), the first
-implementation ADR, which amended ADR-0035. ADR-0018 was amended by tickets #17, #19 and #21.
+implementation ADR, which amended ADR-0035; and ADR-0104 and ADR-0105 by
+[Slice 3 — Health end-to-end](https://github.com/fredskor/nodqora/issues/24), which amended
+ADR-0072 and ADR-0034. ADR-0018 was amended by tickets #17, #19 and #21.
 
 ---
 
@@ -718,6 +720,13 @@ abstentions first.
 
 Keyed by `node_id` rather than node key so a node that leaves and returns reads
 `UNKNOWN` rather than re-inheriting stale contributions (ADR-0050).
+
+**An abstention is an omission** (ADR-0104). A plugin that could not read a node
+omits it, and an `UNKNOWN` contribution never reaches the store — so there is
+exactly one way for a node to be `UNKNOWN`, which is having no row at all, and
+ADR-0028's join produces all four of its values by arithmetic. The alternative
+gave the fast half two `UNKNOWN`s that differed only in `observedAt`, one of
+which reported a freshness for an observation nobody made.
 
 A contribution is not a NodeState. Only the state engine writes NodeState.
 

@@ -3,6 +3,8 @@ package io.nodqora.core.startup;
 import io.nodqora.core.config.BoundConfiguration;
 import io.nodqora.core.discovery.DiscoveryLoop;
 import io.nodqora.core.fold.DiscoveryFoldRunner;
+import io.nodqora.core.fold.StateFoldRunner;
+import io.nodqora.core.health.HealthLoop;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -18,30 +20,46 @@ import org.springframework.stereotype.Component;
  * most of the graph, restoring it minutes later. It is also what repopulates the derived tables after
  * ADR-0080 drops them in a migration: the boot fold is the repopulation step, with no marker and no
  * manual trigger.
+ *
+ * <p>Both halves boot the same way. The contribution store is durable too (ADR-0072), so the state
+ * fold also runs from what is already there rather than from a cold-start path — a restart mid-cadence
+ * republishes the last observations instead of painting the whole graph grey for thirty seconds.
+ * The folds run before either loop starts, so the first health pass is routed by a graph that exists.
  */
 @Component
 public class StartupSequence implements ApplicationRunner {
 
     private final ConfigMirrorReconciler reconciler;
     private final BoundConfiguration configuration;
-    private final DiscoveryFoldRunner folds;
-    private final DiscoveryLoop loop;
+    private final DiscoveryFoldRunner graphFolds;
+    private final StateFoldRunner stateFolds;
+    private final DiscoveryLoop discovery;
+    private final HealthLoop health;
 
     public StartupSequence(
             ConfigMirrorReconciler reconciler,
             BoundConfiguration configuration,
-            DiscoveryFoldRunner folds,
-            DiscoveryLoop loop) {
+            DiscoveryFoldRunner graphFolds,
+            StateFoldRunner stateFolds,
+            DiscoveryLoop discovery,
+            HealthLoop health) {
         this.reconciler = reconciler;
         this.configuration = configuration;
-        this.folds = folds;
-        this.loop = loop;
+        this.graphFolds = graphFolds;
+        this.stateFolds = stateFolds;
+        this.discovery = discovery;
+        this.health = health;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         reconciler.reconcile();
-        configuration.environments().forEach(environment -> folds.run(environment.key()));
-        loop.start();
+        configuration.environments().forEach(environment -> {
+            // Slow half first: the state fold reads `node.id`, so it needs the rows this creates.
+            graphFolds.run(environment.key());
+            stateFolds.run(environment.key());
+        });
+        discovery.start();
+        health.start();
     }
 }

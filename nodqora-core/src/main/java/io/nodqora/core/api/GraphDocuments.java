@@ -17,6 +17,7 @@ import io.nodqora.core.graph.GraphRecords.GraphRecord;
 import io.nodqora.core.graph.Keys;
 import io.nodqora.core.registry.RelationDescriptors;
 import io.nodqora.core.store.GraphStore;
+import io.nodqora.core.store.HealthStore;
 import io.nodqora.core.store.NodeStateStore;
 import io.nodqora.core.store.SnapshotHeader;
 import io.nodqora.core.store.SnapshotStore;
@@ -52,27 +53,25 @@ public class GraphDocuments {
                     : configuration.healthPairs(environmentKey);
         }
 
-        Map<String, SnapshotHeader> reported(SnapshotStore snapshots, String environmentKey) {
-            // The health store arrives with the health loop in slice 3; until then nothing has
-            // reported, which under ADR-0085 is a null outcome rather than a missing entry.
-            return this == DISCOVERY
-                    ? snapshots.headers(environmentKey).stream()
-                            .collect(Collectors.toMap(SnapshotHeader::pluginId, header -> header))
-                    : Map.of();
-        }
     }
 
     private final BoundConfiguration configuration;
     private final GraphStore graph;
     private final NodeStateStore states;
     private final SnapshotStore snapshots;
+    private final HealthStore contributions;
 
     public GraphDocuments(
-            BoundConfiguration configuration, GraphStore graph, NodeStateStore states, SnapshotStore snapshots) {
+            BoundConfiguration configuration,
+            GraphStore graph,
+            NodeStateStore states,
+            SnapshotStore snapshots,
+            HealthStore contributions) {
         this.configuration = configuration;
         this.graph = graph;
         this.states = states;
         this.snapshots = snapshots;
+        this.contributions = contributions;
     }
 
     public MetaDocument meta() {
@@ -181,7 +180,7 @@ public class GraphDocuments {
      * reported — which is what makes a cold environment distinguishable from an empty one.
      */
     private List<PluginOutcome> outcomes(String environmentKey, Capability capability) {
-        Map<String, SnapshotHeader> reported = capability.reported(snapshots, environmentKey);
+        Map<String, SnapshotHeader> reported = reported(capability, environmentKey);
 
         return capability.configured(configuration, environmentKey).stream()
                 .map(pair -> {
@@ -194,6 +193,19 @@ public class GraphDocuments {
                             header == null ? null : header.recordedAt());
                 })
                 .toList();
+    }
+
+    /**
+     * Two headers, not one table with a {@code capability} discriminator (ADR-0072): they are
+     * written by different loops on different cadences and read by different endpoints, and share
+     * only a column list. The choice lives here rather than on the enum so that the enum stays a
+     * description of the two capabilities instead of a thing that reaches back into this class.
+     */
+    private Map<String, SnapshotHeader> reported(Capability capability, String environmentKey) {
+        List<SnapshotHeader> headers = capability == Capability.DISCOVERY
+                ? snapshots.headers(environmentKey)
+                : contributions.headers(environmentKey);
+        return headers.stream().collect(Collectors.toMap(SnapshotHeader::pluginId, header -> header));
     }
 
     private EnvironmentRef environmentRef(String environmentKey) {

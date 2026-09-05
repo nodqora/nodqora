@@ -14,6 +14,25 @@ import java.util.Objects;
  * <p>{@code creationTimestamp} is load-bearing: it is ADR-0021's tiebreak when two objects resolve
  * to one node key, and it is what makes the winner stable across polls during a rollout.
  * {@code podLabels} is the pod template's labels — what a Service selector matches (ADR-0030).
+ *
+ * <p>The last three fields are health inputs and every one of them is <b>nullable on purpose</b>
+ * (ADR-0034):
+ *
+ * <ul>
+ *   <li>{@code desiredReplicas} is {@code spec.replicas} — <em>declared intent</em>, which is why
+ *       {@code kubernetes} is the plugin allowed to emit {@code DISABLED} at all under ADR-0029.
+ *       A CronJob has none, so it is {@code null} there and the workload abstains.
+ *   <li>{@code readyReplicas} is {@code status.readyReplicas} — what is actually up. The pair is
+ *       read as arithmetic rather than through {@code status.conditions}, because
+ *       {@code Available=True} holds at 2 of 3 and would erase the fixture's one Kubernetes signal
+ *       (ADR-0025). {@code null} means the status has not been populated yet; zero is a reading.
+ *   <li>{@code suspend} is a CronJob's {@code spec.suspend}, the other declarative intent.
+ * </ul>
+ *
+ * <p>They are nullable rather than defaulted to zero because the difference matters in the one
+ * direction that is destructive: {@code desiredReplicas: 0} is a human turning something off and
+ * reads {@code DISABLED}, while "we do not know" must abstain. Defaulting would turn every
+ * unreadable object into a deliberate shutdown.
  */
 public record ObservedWorkload(
         WorkloadKind kind,
@@ -22,7 +41,10 @@ public record ObservedWorkload(
         Instant creationTimestamp,
         Map<String, String> labels,
         Map<String, String> annotations,
-        Map<String, String> podLabels) {
+        Map<String, String> podLabels,
+        Integer desiredReplicas,
+        Integer readyReplicas,
+        Boolean suspend) {
 
     public ObservedWorkload {
         Objects.requireNonNull(kind, "kind");

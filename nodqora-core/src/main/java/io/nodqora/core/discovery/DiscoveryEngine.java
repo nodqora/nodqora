@@ -7,15 +7,10 @@ import io.nodqora.core.store.SnapshotStore;
 import io.nodqora.plugin.api.DiscoveryCapability;
 import io.nodqora.plugin.api.DiscoveryRequest;
 import io.nodqora.plugin.api.DiscoveryResult;
+import io.nodqora.core.plugin.PluginCalls;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -66,11 +61,9 @@ public class DiscoveryEngine {
 
         // Strictly below the interval, so a hung plugin cannot overlap its own next run.
         Duration timeout = configuration.refresh().discovery().dividedBy(2);
-        try (ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<?>> running = new ArrayList<>();
-            pairs.forEach(pair -> running.add(workers.submit(() -> recordOnePair(pair, timeout))));
-            running.forEach(DiscoveryEngine::awaitQuietly);
-        }
+        PluginCalls.inParallel(pairs.stream()
+                .map(pair -> (Runnable) () -> recordOnePair(pair, timeout))
+                .toList());
 
         folds.run(environmentKey);
     }
@@ -91,35 +84,15 @@ public class DiscoveryEngine {
     @SuppressWarnings("unchecked")
     private DiscoveryResult invoke(ConfiguredCapability pair, Duration timeout) {
         DiscoveryCapability<Object> capability = (DiscoveryCapability<Object>) pair.plugin();
-        try (ExecutorService worker = Executors.newVirtualThreadPerTaskExecutor()) {
-            Future<DiscoveryResult> call = worker.submit(() ->
-                    capability.discover(new DiscoveryRequest<>(pair.environmentKey(), pair.config())));
-            try {
-                return call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-                call.cancel(true);
-                return failed(pair, "discovery timed out after " + timeout);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return failed(pair, "discovery was interrupted");
-            } catch (Exception e) {
-                return failed(pair, "discovery threw " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            }
-        }
+        return PluginCalls.within(
+                timeout,
+                "discovery",
+                () -> capability.discover(new DiscoveryRequest<>(pair.environmentKey(), pair.config())),
+                cause -> failed(pair, cause));
     }
 
     private DiscoveryResult failed(ConfiguredCapability pair, String cause) {
         log.warn("discovery {}/{} failed: {}", pair.environmentKey(), pair.plugin().id(), cause);
         return DiscoveryResult.failed(cause);
-    }
-
-    private static void awaitQuietly(Future<?> task) {
-        try {
-            task.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            log.error("a discovery pair failed outside the plugin call", e);
-        }
     }
 }

@@ -35,7 +35,11 @@ public record NodqoraProperties(Plugins plugins, Refresh refresh, Map<String, En
      */
     public record Plugins(List<String> registryOrder, List<String> precedence) {}
 
-    /** ADR-0035, ADR-0042: 5 minute discovery, 30 second health, both file-declared. */
+    /**
+     * ADR-0035, ADR-0042: 5 minute discovery, 30 second health, both file-declared and both global
+     * (ADR-0103). The timeout is derived as half the interval rather than configured, so it cannot
+     * be misconfigured above it.
+     */
     public record Refresh(Duration discovery, Duration health) {
 
         public Refresh {

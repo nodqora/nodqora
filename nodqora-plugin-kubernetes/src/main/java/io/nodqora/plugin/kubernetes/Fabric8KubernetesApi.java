@@ -57,11 +57,31 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 .build()) {
             List<ObservedWorkload> workloads = new ArrayList<>();
             client.apps().deployments().inNamespace(namespace).list().getItems().forEach(deployment -> workloads.add(
-                    workload(WorkloadKind.DEPLOYMENT, deployment.getMetadata(), template(deployment.getSpec()))));
+                    workload(
+                            WorkloadKind.DEPLOYMENT,
+                            deployment.getMetadata(),
+                            template(deployment.getSpec()),
+                            deployment.getSpec() == null ? null : deployment.getSpec().getReplicas(),
+                            deployment.getStatus() == null ? null : deployment.getStatus().getReadyReplicas(),
+                            null)));
             client.apps().statefulSets().inNamespace(namespace).list().getItems().forEach(statefulSet -> workloads.add(
-                    workload(WorkloadKind.STATEFULSET, statefulSet.getMetadata(), template(statefulSet.getSpec()))));
+                    workload(
+                            WorkloadKind.STATEFULSET,
+                            statefulSet.getMetadata(),
+                            template(statefulSet.getSpec()),
+                            statefulSet.getSpec() == null ? null : statefulSet.getSpec().getReplicas(),
+                            statefulSet.getStatus() == null ? null : statefulSet.getStatus().getReadyReplicas(),
+                            null)));
             client.batch().v1().cronjobs().inNamespace(namespace).list().getItems().forEach(cronJob -> workloads.add(
-                    workload(WorkloadKind.CRONJOB, cronJob.getMetadata(), jobTemplate(cronJob))));
+                    workload(
+                            WorkloadKind.CRONJOB,
+                            cronJob.getMetadata(),
+                            jobTemplate(cronJob),
+                            // A CronJob has no replica concept at all (ADR-0034); `suspend` is the
+                            // only declared intent it carries, and a running one abstains.
+                            null,
+                            null,
+                            cronJob.getSpec() == null ? null : cronJob.getSpec().getSuspend())));
 
             List<ObservedService> services = client.services().inNamespace(namespace).list().getItems().stream()
                     .map(Fabric8KubernetesApi::service)
@@ -88,7 +108,19 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 : Config.fromKubeconfig(config.context(), config.kubeconfig(), null);
     }
 
-    private static ObservedWorkload workload(WorkloadKind kind, ObjectMeta metadata, Map<String, String> podLabels) {
+    /**
+     * {@code readyReplicas} is read from {@code status} and {@code replicas} from {@code spec}, which
+     * is ADR-0025's whole point: the desired count is what a human declared, the ready count is what
+     * is actually up, and the gap between them is the signal. Both are left {@code null} when their
+     * section is absent rather than defaulted to zero — a missing spec is not a scale-down.
+     */
+    private static ObservedWorkload workload(
+            WorkloadKind kind,
+            ObjectMeta metadata,
+            Map<String, String> podLabels,
+            Integer desiredReplicas,
+            Integer readyReplicas,
+            Boolean suspend) {
         return new ObservedWorkload(
                 kind,
                 metadata.getNamespace(),
@@ -96,7 +128,10 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 creationTimestamp(metadata),
                 metadata.getLabels(),
                 metadata.getAnnotations(),
-                podLabels);
+                podLabels,
+                desiredReplicas,
+                readyReplicas,
+                suspend);
     }
 
     private static ObservedService service(Service service) {

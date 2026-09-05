@@ -103,7 +103,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         JsonNode api = node(graph("production"), "payments-api");
 
         // ADR-0058: the API never fabricates a value no plugin supplied. The topics wait for
-        // `kafka` in slice 3 and carry nothing but the owner YAML declares.
+        // `kafka` in slice 4 and carry nothing but the owner YAML declares.
         assertThat(topic.get("type").isNull()).isTrue();
         assertThat(topic.get("displayName").isNull()).isTrue();
         // ADR-0034: `kubernetes` emits no displayName on purpose — not to resolve a merge conflict
@@ -165,8 +165,9 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     void the_outcome_block_explains_the_payload_it_rides_on() {
         JsonNode plugins = graph("production").get("plugins");
 
-        // One row per (plugin, capability) pair that reported. Neither declares Health, so both
-        // rows are DISCOVERY and every node is still UNKNOWN — arithmetic, not a placeholder.
+        // One row per (plugin, capability) pair configured for *discovery*. `kubernetes` now also
+        // declares Health, and its row for that is on /state rather than here: ADR-0072 keeps two
+        // headers written by two loops, so the two blocks cannot disagree about a shared row.
         assertThat(plugins).hasSize(2);
         assertThat(plugins.findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
         plugins.forEach(plugin -> {

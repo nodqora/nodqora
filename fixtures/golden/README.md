@@ -15,8 +15,17 @@ order-blind by construction.
 |---|---|
 | `graph-production.json` | `/api/environments/production/graph`, for the plugin set that exists |
 | `graph-staging.json` | the same for `staging` — §2's inventory minus the Iceberg branch |
+| `state-production-baseline.json` | `/api/environments/production/state`, §8 baseline |
+| `state-staging-baseline.json` | the same for `staging` — §8's "all seven HEALTHY or UNKNOWN" |
+| `state-production-incident.json` | §8 incident: the enricher 3 desired / 0 ready |
 | `layout-production.json` | ADR-0016's claim: longest-path layering reproduces §1's shape |
 | `layout-staging.json` | the same, re-flowing to a straight line with no hand-placed positions |
+
+ADR-0099's five assertion documents are now all present. The state goldens are **stated for the
+observer set that exists**, not for §8's full column: `kubernetes` is the only plugin declaring
+Health, so a value §8 derives from consumer lag or connector state is `UNKNOWN` here. That is not a
+weakened assertion — it is the honest rendering of a plugin that has not been built, and it is the
+same `UNKNOWN` the four permanently-unobserved nodes carry.
 
 ## Timestamps
 
@@ -32,7 +41,7 @@ whether the merge did what ADR-0044 says.
 - **Slice 1 (`yaml` only)** — production 10 nodes / 7 edges, staging 7 / 5. Six of the ten
   production nodes carried no `type` and no `displayName`; four declared nodes carried both,
   because for those `yaml` is the only source. Every `sources[]` was `["yaml"]`.
-- **Now (slice 2, `yaml` + `kubernetes`)** — the counts are unchanged, which is the first thing to
+- **Slice 2 (`yaml` + `kubernetes`)** — the counts are unchanged, which was the first thing to
   read off the diff: `kubernetes` emits no edges at all (ADR-0033), its two workloads merge onto
   keys `yaml` already carried (ADR-0021), and the third is suppressed by exact name (ADR-0031), so
   nothing was added and nothing was split. What did change is inside the two service nodes —
@@ -41,10 +50,22 @@ whether the merge did what ADR-0044 says.
   `typeDescriptors` gains `service`, declared in YAML — `kubernetes` sets the `type` from an
   annotation and guesses no descriptor for it (ADR-0091), so ADR-0001's "registered by plugins and
   by the YAML topology alike" is what keeps the two services off the fallback descriptor.
-- **Slice 3** — `kafka` adds the topics' `type` and the first `NodeState` rows.
-- **Slice 4** — `connect` closes the edge set with the two `SOURCES_FROM` edges (ADR-0041), taking
-  production to 9 edges and staging to 6, at which point the graph goldens match §3 exactly and
-  `layout-production.json` matches what the app actually renders.
+- **Now (slice 3, health end to end)** — the two graph goldens are **unchanged**, and that is the
+  first thing to read off the diff: health is runtime state, so a replica count moving cannot touch
+  a Node (ADR-0003). What is new is the three state documents. Two of ten production nodes carry a
+  health, a `rawSignal` and a `metrics` block — the two with a workload backing — and eight read
+  `UNKNOWN` with `rawSignal: null`, `metrics: {}` and `observedAt: null`, which is not a placeholder
+  but the outer join finding no row (ADR-0028). `payments-api` is HEALTHY at 3/3 and
+  `payments-enricher` DEGRADED at 3/2, which is ADR-0025's choice of arithmetic over
+  `status.conditions` visible as a single word: `Available=True` holds at 2 of 3, so the other
+  reading would have rendered the fixture's one interesting workload HEALTHY.
+- **Slice 4** — `kafka` and `connect` arrive together. `connect` closes the edge set with the two
+  `SOURCES_FROM` edges (ADR-0041), taking production to 9 edges and staging to 6, at which point the
+  graph goldens match §3 exactly and `layout-production.json` matches what the app actually renders;
+  `kafka` adds the topics' `type`. The state diff is the review surface for ADR-0024's collapse:
+  `payments-enricher` must stay DEGRADED while gaining a second observer and a second `rawSignal`
+  segment, both topics and both connectors must leave `UNKNOWN`, and the incident's two connectors
+  must go DISABLED rather than DEGRADED — which is the case that defeats plain worst-wins.
 
 The layout goldens are already stated over §3's **complete** edge set, because ADR-0016's claim is
 about the fixture's shape and not about how much of it one slice has built. The tests supply the

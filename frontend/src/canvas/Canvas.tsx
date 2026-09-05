@@ -17,6 +17,7 @@ import { layout } from './layout'
 import { edgeIsHighlighted, highlightFrom } from './highlight'
 import { foldKey } from '../api/keys'
 import { crossesTeams, ownersByNodeKey } from './crossTeam'
+import { summarizeMetrics } from './metrics'
 import type { Graph, Health, State } from '../api/types'
 
 const COLUMN_WIDTH = 300
@@ -190,27 +191,4 @@ function emphasisOf(
   if (highlight.upstream.has(foldedKey)) return 'upstream'
   if (highlight.downstream.has(foldedKey)) return 'downstream'
   return 'dimmed'
-}
-
-/**
- * One line, from ADR-0006's plugin-namespaced map. The core never looks inside `metrics`, and neither
- * does this — it renders whatever keys a plugin allow-listed, in a stable order.
- *
- * Empty in this slice: nothing observes anything yet, so the toggle is on and there is nothing to
- * show, which is the correct rendering of "nothing is watching this" rather than a blank waiting to
- * be filled.
- */
-function summarizeMetrics(metrics: Record<string, Record<string, unknown>>): string | null {
-  const parts = Object.entries(metrics)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .flatMap(([, values]) =>
-      Object.entries(values)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, value]) => `${humanize(name)} ${value}`),
-    )
-  return parts.length === 0 ? null : parts.join(' · ')
-}
-
-function humanize(name: string) {
-  return name.replace(/([A-Z])/g, ' $1').toLowerCase().trim()
 }
