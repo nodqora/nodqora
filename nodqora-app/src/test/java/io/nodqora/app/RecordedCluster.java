@@ -1,11 +1,15 @@
 package io.nodqora.app;
 
 import io.nodqora.plugin.connect.ConnectApi;
+import io.nodqora.plugin.connect.ConnectConfig;
+import io.nodqora.plugin.connect.ConnectorInfo;
+import io.nodqora.plugin.connect.ConnectorStatus;
 import io.nodqora.plugin.connect.RecordedConnectApi;
 import io.nodqora.plugin.kafka.KafkaApi;
 import io.nodqora.plugin.kafka.RecordedKafkaApi;
 import io.nodqora.plugin.kubernetes.KubernetesApi;
 import io.nodqora.plugin.kubernetes.RecordedKubernetesApi;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -49,9 +53,40 @@ public class RecordedCluster {
     }
 
     @Bean
+    ClusterReachability clusterReachability() {
+        return new ClusterReachability();
+    }
+
+    /**
+     * ADR-0026's second fact, given a seam: the recording says what the cluster holds, and
+     * {@link ClusterReachability} says whether we can ask it. Both delegates are real
+     * {@code RecordedConnectApi} instances — the dark one simply has no recording directory, so it
+     * takes the same {@code orElseThrow} branch a missing recording already took, which is what an
+     * unreachable cluster does. Nothing below the seam is stubbed, so ADR-0042's {@code FAILED}
+     * branch, ADR-0046's no-op transition and ADR-0086's header write all run for real.
+     */
+    @Bean
     @Primary
-    ConnectApi recordedConnectApi(@Value("${nodqora.test.scenario:baseline}") String scenario) {
-        return RecordedConnectApi.scenario(scenario);
+    ConnectApi recordedConnectApi(
+            @Value("${nodqora.test.scenario:baseline}") String scenario, ClusterReachability reachability) {
+        ConnectApi answering = RecordedConnectApi.scenario(scenario);
+        ConnectApi dark = RecordedConnectApi.unreachable();
+        return new ConnectApi() {
+
+            @Override
+            public List<ConnectorInfo> connectors(ConnectConfig config) {
+                return cluster().connectors(config);
+            }
+
+            @Override
+            public List<ConnectorStatus> statuses(ConnectConfig config) {
+                return cluster().statuses(config);
+            }
+
+            private ConnectApi cluster() {
+                return reachability.canReach("connect") ? answering : dark;
+            }
+        };
     }
 
     @Bean

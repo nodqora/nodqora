@@ -54,6 +54,27 @@ public final class RecordedConnectApi implements ConnectApi {
                 : new RecordedConnectApi(DEFAULT_DIRECTORY.resolve(name), DEFAULT_DIRECTORY);
     }
 
+    /**
+     * A cluster nothing can reach: no recording directory at all, so every lookup throws.
+     *
+     * <p>This is not a stub of the failure — it <em>is</em> the failure, taking the same
+     * {@code orElseThrow} branch a missing recording already took, which the class documentation
+     * already calls "what an unreachable cluster does". Nothing below the seam is mocked, so
+     * ADR-0042's {@code FAILED} branch, ADR-0046's no-op transition and ADR-0086's header write all
+     * run for real.
+     *
+     * <p><b>Reachability is a second axis, beside the §8 scenario, and deliberately so.</b> A
+     * scenario is a statement about the <em>pipeline</em> — a crash-looping workload, the lag behind
+     * it, the sinks somebody paused — and it is shared by all three recordings for that reason. A
+     * plugin outage is not a pipeline state at all; it is a statement about how well we could look.
+     * That is ADR-0026's split — <em>health says what we found; outcome says how well we looked</em>
+     * — surfacing in the test harness, so the two are expressed by two properties rather than by a
+     * scenario name that would have to enumerate their product.
+     */
+    public static RecordedConnectApi unreachable() {
+        return new RecordedConnectApi(new Path[0]);
+    }
+
     @Override
     public List<ConnectorInfo> connectors(ConnectConfig config) {
         return cluster(config).connectors().stream()

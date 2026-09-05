@@ -61,6 +61,9 @@ public abstract class NodqoraIntegrationTest {
     protected JdbcTemplate jdbc;
 
     @Autowired
+    protected ClusterReachability reachability;
+
+    @Autowired
     private DiscoveryLoop discoveryLoop;
 
     @Autowired
@@ -84,6 +87,11 @@ public abstract class NodqoraIntegrationTest {
         // configuration key keeps the shipped config surface to the two intervals ADR-0103 fixed.
         discoveryLoop.close();
         healthLoop.close();
+
+        // Every cluster answers again. Reachability is mutable at runtime (see ClusterReachability),
+        // so restoring it here is what stops one test's outage becoming the next test's premise —
+        // Spring caches one context per scenario and the bean outlives any single test.
+        reachability.restoreAll();
 
         jdbc.execute("truncate table environment, plugin cascade");
         reconciler.reconcile();
