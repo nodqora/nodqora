@@ -129,6 +129,41 @@ That command is also the answer to *what will become a node*:
 - **Services and Ingresses are not nodes.** They attach to a node as *backings*, which is why a
   workload with a Service and an Ingress shows three backings and one node.
 
+### If you run Kafka through Strimzi, `kubernetes` sees none of it
+
+Strimzi has not used StatefulSets since 0.35. Brokers and Connect workers are both `StrimziPodSet`,
+a CRD of its own, and that is not one of the three kinds above — so `kubernetes` contributes
+nothing about either: no node, no backing, no readiness.
+
+```bash
+$ kubectl -n <namespace> get sts,strimzipodsets
+No resources found of kind StatefulSet.
+NAME                                      PODS  READY PODS  CURRENT PODS
+strimzipodset.core.strimzi.io/my-cluster  3     3           3
+```
+
+For the **broker** that is harmless — a broker is not a node in this model, topics are (ADR-0036).
+For the **Connect worker** it costs you something real. `connect.workload` stamps a Kubernetes
+object onto every connector as a backing (ADR-0022), and there is no object to name:
+
+```yaml
+connect:
+  workload: { plugin: kubernetes, kind: statefulset, reference: payments-prod/kafka-connect }
+```
+
+So on Strimzi, **omit the `workload` block**. It is optional for exactly this reason — a Connect
+cluster on MSK, on bare metal or in Docker has the same problem — and connectors then carry two
+backings instead of three and no readiness contribution. What you lose is the `2 desired / 2 ready`
+half of a connector's raw signal; `RUNNING, 3/3 tasks RUNNING` still arrives from `connect` itself.
+
+Naming it anyway is not *dangerous* — a backing whose object cannot be found abstains rather than
+alarming, and an abstention is an omission (ADR-0104), so you land on the same two backings either
+way. It is simply a line of configuration asserting something untrue, with nothing to show for it.
+
+Running Connect as a plain Deployment instead gets the third backing back —
+[`demo/k8s/30-kafka-connect.yaml`](../demo/k8s/30-kafka-connect.yaml) does that, and says so.
+Tracked as [#36](https://github.com/fredskor/nodqora/issues/36).
+
 ## Annotations: the same thing, without file 2
 
 Everything the topology file declares about a *node* can instead live on the workload, which is the
