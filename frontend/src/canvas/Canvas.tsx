@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
@@ -169,6 +169,9 @@ export function Canvas({
   const measured = useNodesInitialized()
   const fittedFor = useRef<string | null>(null)
   const pane = useRef<HTMLDivElement>(null)
+  // Whether the initial fit has *landed*, which is a different fact from having been asked for — see
+  // the pan effect below, which is wrong by exactly that gap if it reads the viewport any earlier.
+  const [fitLanded, setFitLanded] = useState(false)
 
   useEffect(() => setNodes(laidOut), [laidOut, setNodes])
   useEffect(() => setEdges(drawn), [drawn, setEdges])
@@ -188,8 +191,20 @@ export function Canvas({
     // Instant, not animated. The first `/state` response lands within a few milliseconds of mount
     // and replaces every node object; an in-flight fit animation interrupted by that re-render
     // settles wherever it had got to.
-    const frame = requestAnimationFrame(() => void flow.fitView({ padding: 0.16 }))
-    return () => cancelAnimationFrame(frame)
+    //
+    // `fitView` resolves once its transform is on the viewport rather than when it is asked for, and
+    // that resolution is what releases the pan below. It resolves either way — a fit that declines
+    // to move must still not leave the pan waiting for a viewport that is never coming.
+    let live = true
+    const frame = requestAnimationFrame(() =>
+      void flow.fitView({ padding: 0.16 }).then(() => {
+        if (live) setFitLanded(true)
+      }),
+    )
+    return () => {
+      live = false
+      cancelAnimationFrame(frame)
+    }
   }, [measured, graph.environment.key, flow])
 
   // ADR-0069: **pan to bring the node into view. Do not change zoom.**
@@ -200,15 +215,21 @@ export function Canvas({
   // ADR-0018 put it — an explicit control the user asks for.
   //
   // ADR-0097 makes a deep link the ordinary cold load plus a selection: fit, then pan if off-screen,
-  // then select. This effect is declared *after* the fit above, so within one commit its frame
-  // callback runs second and it measures a viewport the fit has already set. On the fixture the pan
-  // is a no-op, because fit-to-screen shows the whole ten-node pipeline; it is kept for the graph
-  // the fixture is not, where the selected node can land off-screen with nothing to correct it.
+  // then select. **That ordering is a wait, not a declaration order.** Being declared after the fit
+  // does put this effect's frame callback second, and for a while that looked like enough — but
+  // `fitView` hands its transform to XYFlow rather than writing it, so a callback one line later
+  // still measures the pre-fit viewport, decides against a viewport that no longer exists, and is
+  // then overwritten by the fit landing behind it. Waiting on `fitLanded` is the whole of step 1.
+  //
+  // On the fixture the pan is a no-op either way, because fit-to-screen shows the whole ten-node
+  // pipeline; it is kept for the graph the fixture is not, where the selected node can land
+  // off-screen with nothing to correct it. That is also why the bug survived: the one shape that
+  // reveals it is the one the fixture does not have.
   //
   // A clicked node is by definition on screen, so this costs one branch on the common path rather
   // than needing to know *how* the selection was made.
   useEffect(() => {
-    if (!measured || !selectedKey) return
+    if (!fitLanded || !selectedKey) return
     const frame = requestAnimationFrame(() => {
       const rect = pane.current?.getBoundingClientRect()
       const node = flow.getNode(selectedKey) ?? flow.getNodes().find((n) => foldKey(n.id) === foldKey(selectedKey))
@@ -234,7 +255,7 @@ export function Canvas({
       })
     })
     return () => cancelAnimationFrame(frame)
-  }, [measured, selectedKey, flow, nodes])
+  }, [fitLanded, selectedKey, flow, nodes])
 
   return (
     <div className="canvas-pane" ref={pane}>
