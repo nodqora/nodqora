@@ -47,7 +47,11 @@ implementation ADR, which amended ADR-0035; ADR-0104 and ADR-0105 by
 [Slice 3 — Health end-to-end](https://github.com/fredskor/nodqora/issues/24), which amended
 ADR-0072 and ADR-0034; and ADR-0106 by
 [Slice 5 — The honesty layer](https://github.com/fredskor/nodqora/issues/26), which amended
-ADR-0083 and ADR-0088. ADR-0018 was amended by tickets #17, #19 and #21.
+ADR-0083 and ADR-0088. ADR-0018 was amended by tickets #17, #19 and #21. ADR-0107 through
+ADR-0113 were fixed by
+[The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42);
+they place capabilities in the Community or Enterprise edition
+([`docs/editions.md`](docs/editions.md)) and touch no part of the graph model.
 
 ---
 
