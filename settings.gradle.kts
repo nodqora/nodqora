@@ -9,5 +9,6 @@ include(
     "nodqora-plugin-api",
     "nodqora-core",
     "nodqora-plugin-yaml",
+    "nodqora-plugin-kubernetes",
     "nodqora-app",
 )

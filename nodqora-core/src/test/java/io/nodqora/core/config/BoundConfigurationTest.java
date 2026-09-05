@@ -27,7 +27,12 @@ import org.junit.jupiter.api.Test;
 class BoundConfigurationTest {
 
     /** A stand-in plugin. The core knows no plugin, so what it binds must work for any of them. */
-    private record ProbeConfig(@NotBlank String endpoint) {}
+    private record ProbeConfig(@NotBlank String endpoint, List<String> scopes) {
+
+        private ProbeConfig {
+            scopes = scopes == null ? List.of() : List.copyOf(scopes);
+        }
+    }
 
     private static final class ProbePlugin implements DiscoveryCapability<ProbeConfig> {
 
@@ -79,7 +84,7 @@ class BoundConfigurationTest {
 
         assertThat(configuration.discoveryPairs("production"))
                 .singleElement()
-                .satisfies(pair -> assertThat(pair.config()).isEqualTo(new ProbeConfig("https://probe.internal")));
+                .satisfies(pair -> assertThat(pair.config()).isEqualTo(new ProbeConfig("https://probe.internal", List.of())));
     }
 
     @Test
@@ -100,13 +105,27 @@ class BoundConfigurationTest {
                 new SecretReferences(name -> "PROBE_ENDPOINT".equals(name) ? "https://resolved" : null));
 
         assertThat(configuration.discoveryPairs("production").getFirst().config())
-                .isEqualTo(new ProbeConfig("https://resolved"));
+                .isEqualTo(new ProbeConfig("https://resolved", List.of()));
     }
 
     @Test
     void an_unset_secret_reference_is_named_rather_than_silently_empty() {
         assertThatThrownBy(() -> bind(Map.of("endpoint", "${env:PROBE_ENDPOINT}"), noSecrets()))
                 .hasMessageContaining("PROBE_ENDPOINT");
+    }
+
+    @Test
+    void a_list_valued_key_survives_the_relaxed_binder() {
+        // Spring binds a plugin's slice as `Map<String, Object>` — the core cannot bind into a shape
+        // it does not know (ADR-0014) — and a YAML list nested in that arrives keyed by index.
+        // Left alone, every list-valued key any plugin declares fails at startup with a Jackson
+        // message about `ArrayList` that says nothing about the file the operator wrote.
+        Map<String, Object> slice = new LinkedHashMap<>();
+        slice.put("endpoint", "https://probe.internal");
+        slice.put("scopes", Map.of("1", "second", "0", "first"));
+
+        assertThat(bind(slice, noSecrets()).discoveryPairs("production").getFirst().config())
+                .isEqualTo(new ProbeConfig("https://probe.internal", List.of("first", "second")));
     }
 
     @Test

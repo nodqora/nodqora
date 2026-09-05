@@ -5,6 +5,7 @@ import io.nodqora.core.startup.ConfigMirrorReconciler;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -18,14 +19,16 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * serialization point. Testing it against anything else would test a different system.
  *
  * <p>ADR-0099's "no testcontainers in the MVP" rules on how <em>plugin</em> inputs are obtained —
- * Kubernetes, Kafka and Connect are recorded at each plugin's own outbound-client interface. Our own
- * database is not a plugin input, and slice 1 records nothing because {@code yaml} reads a directory
- * that is itself the product's format and doubles as the demo topology.
+ * Kubernetes, Kafka and Connect are recorded at each plugin's own outbound-client interface, which
+ * {@link RecordedCluster} substitutes. Our own database is not a plugin input, and the {@code yaml}
+ * half records nothing because it reads a directory that is itself the product's format and doubles
+ * as the demo topology.
  *
  * <p>The discovery loop is never started here; tests drive {@link DiscoveryEngine} directly, so a
  * poll happens when a test says so rather than on a five-minute timer.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(RecordedCluster.class)
 public abstract class NodqoraIntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");

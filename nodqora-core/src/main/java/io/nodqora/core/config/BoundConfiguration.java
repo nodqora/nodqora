@@ -81,7 +81,8 @@ public class BoundConfiguration {
      * has been looked up and a constraint on the value would otherwise see {@code "${env:...}"}.
      */
     private Object validated(String environmentKey, Plugin<?> plugin, Map<String, Object> slice) {
-        Object config = mapper.convertValue(secrets.resolveConfig(slice), plugin.configType());
+        Object config = mapper.convertValue(
+                ConfigLists.restore(secrets.resolveConfig(slice)), plugin.configType());
         Set<ConstraintViolation<Object>> violations = validator.validate(config);
         if (!violations.isEmpty()) {
             throw new IllegalStateException("environment %s, plugin %s: %s".formatted(

@@ -6,16 +6,77 @@
   "nodes": [
     {
       "key": "payments-api",
-      "type": null,
+      "type": "service",
       "displayName": null,
       "description": null,
-      "ownerKey": null,
-      "links": [],
-      "backings": [],
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/payments-api"
+        },
+        {
+          "rel": "runbook",
+          "label": "Runbook",
+          "url": "https://wiki/runbooks/payments-api"
+        },
+        {
+          "rel": "docs",
+          "label": "Docs",
+          "url": "https://docs.acme.io/payments-api"
+        },
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana-staging.acme.io/d/payments-api-overview"
+        },
+        {
+          "rel": "gitops",
+          "label": "Argo CD",
+          "url": "https://argocd-staging.acme.io/applications/payments-api"
+        },
+        {
+          "rel": "workload",
+          "label": "Workload",
+          "url": "https://k8s-staging.acme.io/payments-staging/deployment/payments-api"
+        },
+        {
+          "rel": "pods",
+          "label": "Pods",
+          "url": "https://k8s-staging.acme.io/payments-staging/deployment/payments-api/pods"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana-staging.acme.io/explore?ns=payments-staging&app=payments-api"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kubernetes",
+          "kind": "deployment",
+          "reference": "payments-staging/payments-api"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "ingress",
+          "reference": "payments-staging/payments-api"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "service",
+          "reference": "payments-staging/payments-api"
+        }
+      ],
       "metadata": {},
       "sources": [
         {
           "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kubernetes",
           "confirmedAt": "<timestamp>"
         }
       ],
@@ -24,22 +85,57 @@
     },
     {
       "key": "payments-enricher",
-      "type": null,
+      "type": "service",
       "displayName": null,
       "description": null,
-      "ownerKey": null,
-      "links": [],
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/payments-enricher"
+        },
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana-staging.acme.io/d/payments-enricher-overview"
+        },
+        {
+          "rel": "workload",
+          "label": "Workload",
+          "url": "https://k8s-staging.acme.io/payments-staging/deployment/enricher-v2"
+        },
+        {
+          "rel": "pods",
+          "label": "Pods",
+          "url": "https://k8s-staging.acme.io/payments-staging/deployment/enricher-v2/pods"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana-staging.acme.io/explore?ns=payments-staging&app=enricher-v2"
+        }
+      ],
       "backings": [
         {
           "plugin": "kafka",
           "kind": "consumer-group",
           "reference": "enrich-consumer-staging"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "deployment",
+          "reference": "payments-staging/enricher-v2"
         }
       ],
       "metadata": {},
       "sources": [
         {
           "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kubernetes",
           "confirmedAt": "<timestamp>"
         }
       ],
@@ -242,6 +338,13 @@
       "category": "compute",
       "icon": "terminal",
       "source": "yaml"
+    },
+    {
+      "type": "service",
+      "label": "Service",
+      "category": "compute",
+      "icon": "service",
+      "source": "yaml"
     }
   ],
   "relationDescriptors": [
@@ -285,6 +388,13 @@
   "plugins": [
     {
       "plugin": "yaml",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "kubernetes",
       "capability": "DISCOVERY",
       "outcome": "COMPLETE",
       "reasons": [],

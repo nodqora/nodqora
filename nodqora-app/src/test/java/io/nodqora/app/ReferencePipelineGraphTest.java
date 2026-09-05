@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,9 +46,12 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     void production_is_ten_nodes_and_yamls_seven_edges() {
         JsonNode graph = graph("production");
 
+        // Ten nodes with two discovery plugins running: `kubernetes` finds three workloads, two of
+        // them merge onto keys `yaml` already carries, and ADR-0031 suppresses the third by exact
+        // name. An eleventh node would mean the `kafka-connect` StatefulSet had become one.
         assertThat(graph.get("nodes")).hasSize(10);
-        // Seven of §3's nine. The two SOURCES_FROM edges are `connect`'s (ADR-0041) and arrive in
-        // slice 4; `kubernetes` emits no edges at all (ADR-0033), so the split is exactly 7 + 2.
+        // Seven of §3's nine, unchanged by this slice. The two SOURCES_FROM edges are `connect`'s
+        // (ADR-0041) and arrive in slice 4; `kubernetes` emits no edges at all (ADR-0033).
         assertThat(graph.get("edges")).hasSize(7);
     }
 
@@ -64,8 +68,21 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     }
 
     @Test
+    void the_two_workloads_carry_an_annotated_type_and_no_display_name() {
+        JsonNode graph = graph("production");
+
+        // ADR-0091: `kubernetes` derives no type from the workload kind, so §2's `type` column is
+        // true only because `topology.io/type: service` is on both Deployments. Without it both
+        // would arrive typeless and render on ADR-0001's fallback descriptor — the accepted cost,
+        // and the reason the annotation is not optional decoration.
+        assertThat(node(graph, "payments-api").get("type").asText()).isEqualTo("service");
+        assertThat(node(graph, "payments-enricher").get("type").asText()).isEqualTo("service");
+        assertThat(node(graph, "payments-enricher").get("displayName").isNull()).isTrue();
+    }
+
+    @Test
     void exactly_the_four_declared_nodes_carry_a_type_and_a_display_name() {
-        List<String> named = new java.util.ArrayList<>();
+        List<String> named = new ArrayList<>();
         graph("production").get("nodes").forEach(node -> {
             if (!node.get("type").isNull() && !node.get("displayName").isNull()) {
                 named.add(node.get("key").asText());
@@ -81,15 +98,19 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     }
 
     @Test
-    void a_discovered_node_arrives_with_nulls_and_renders_on_the_fallback_descriptor() {
+    void a_node_no_plugin_has_named_still_arrives_with_nulls() {
+        JsonNode topic = node(graph("production"), "payments.events.raw.v1");
         JsonNode api = node(graph("production"), "payments-api");
 
-        // ADR-0058: the API never fabricates a value no plugin supplied. `payments-api`'s real
-        // YAML-supplied displayName *is* the string "payments-api" on the day someone writes it, so
-        // a server-side fallback would make that indistinguishable from a node nobody has named.
-        assertThat(api.get("type").isNull()).isTrue();
+        // ADR-0058: the API never fabricates a value no plugin supplied. The topics wait for
+        // `kafka` in slice 3 and carry nothing but the owner YAML declares.
+        assertThat(topic.get("type").isNull()).isTrue();
+        assertThat(topic.get("displayName").isNull()).isTrue();
+        // ADR-0034: `kubernetes` emits no displayName on purpose — not to resolve a merge conflict
+        // with YAML but to avoid manufacturing one. `payments-api`'s real YAML-supplied displayName
+        // *is* the string "payments-api" on the day someone writes it, so a fallback anywhere would
+        // make that indistinguishable from a node nobody has named.
         assertThat(api.get("displayName").isNull()).isTrue();
-        assertThat(api.get("ownerKey").isNull()).isTrue();
     }
 
     @Test
@@ -124,7 +145,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         // node always arrives with it, and global, so what staging receives is a superset of the
         // types staging uses. That is harmless and deliberate, not environment-scoped leakage.
         assertThat(staging.get("typeDescriptors").findValuesAsText("type"))
-                .contains("external-api", "elasticsearch-index", "iceberg-table");
+                .contains("external-api", "elasticsearch-index", "iceberg-table", "service");
         assertThat(staging.get("relationDescriptors")).hasSize(6);
     }
 
@@ -144,10 +165,14 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     void the_outcome_block_explains_the_payload_it_rides_on() {
         JsonNode plugins = graph("production").get("plugins");
 
-        assertThat(plugins).hasSize(1);
-        assertThat(plugins.get(0).get("plugin").asText()).isEqualTo("yaml");
-        assertThat(plugins.get(0).get("capability").asText()).isEqualTo("DISCOVERY");
-        assertThat(plugins.get(0).get("outcome").asText()).isEqualTo("COMPLETE");
+        // One row per (plugin, capability) pair that reported. Neither declares Health, so both
+        // rows are DISCOVERY and every node is still UNKNOWN — arithmetic, not a placeholder.
+        assertThat(plugins).hasSize(2);
+        assertThat(plugins.findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
+        plugins.forEach(plugin -> {
+            assertThat(plugin.get("capability").asText()).isEqualTo("DISCOVERY");
+            assertThat(plugin.get("outcome").asText()).isEqualTo("COMPLETE");
+        });
     }
 
     @Test
@@ -178,6 +203,133 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         // the same matcher and the keys ride inside the document either way.
         assertThat(node(graph("production"), "payments.events.enriched.v1")).isNotNull();
         assertThat(node(graph("production"), "analytics.payments_events")).isNotNull();
+    }
+
+    // ---------------------------------------------------------------- the merge (slice 2)
+
+    @Test
+    void three_strings_for_one_service_resolve_to_one_node_carrying_all_three() {
+        JsonNode enricher = node(graph("production"), "payments-enricher");
+
+        // The fixture's most important feature. `enricher-v2` (the Deployment) ≠ `payments-enricher`
+        // (the node key) ≠ `enrich-consumer-prod` (the consumer group), and identity resolution that
+        // only works on the `payments-api` case is not identity resolution. ADR-0021's annotation
+        // tier does it inside the plugin; ADR-0020's flat case-folded key is what lets two plugins
+        // mint it independently and land on one row.
+        assertThat(enricher.get("sources").findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
+        assertThat(backings(enricher))
+                .containsExactly(
+                        "kafka consumer-group enrich-consumer-prod",
+                        "kubernetes deployment payments-prod/enricher-v2");
+        // ADR-0023: there is no alias field, because all three strings are already on the node once
+        // resolution and attribution have run — which is exactly the searchable set #15 needs.
+        assertThat(enricher.get("key").asText()).isEqualTo("payments-enricher");
+    }
+
+    @Test
+    void the_consumer_group_both_plugins_know_is_unioned_rather_than_duplicated() {
+        // ADR-0022's two declaration routes — the annotation on the workload and the YAML stanza —
+        // emit the same backing shape, and ADR-0044 gives `backings[]` the element identity
+        // `(plugin, kind, reference)`. Both writing it is a union, not a conflict.
+        assertThat(backings(node(graph("production"), "payments-enricher")))
+                .filteredOn(backing -> backing.startsWith("kafka "))
+                .hasSize(1);
+    }
+
+    @Test
+    void payments_api_is_backed_by_its_deployment_service_and_ingress() {
+        // ADR-0030: Ingress -> Service -> workload by selector, and all three are backings of the
+        // *same* node. That selector match is the one Kubernetes inference that survives ADR-0033,
+        // and it produces attachment rather than an edge.
+        assertThat(backings(node(graph("production"), "payments-api")))
+                .containsExactly(
+                        "kubernetes deployment payments-prod/payments-api",
+                        "kubernetes ingress payments-prod/payments-api",
+                        "kubernetes service payments-prod/payments-api");
+    }
+
+    @Test
+    void the_workload_hosting_both_connectors_is_not_a_node() {
+        // ADR-0031, and the reason the ten-node inventory holds: `kafka-connect` is suppressed by
+        // exact `kind/name`. Suppression removes node emission only — `connect` will still stamp it
+        // onto both connector nodes in slice 4, which is what keeps ADR-0013's routing intact.
+        assertThat(graph("production").get("nodes").findValuesAsText("key")).doesNotContain("kafka-connect");
+    }
+
+    @Test
+    void a_link_is_composed_per_environment_and_never_read_from_an_annotation() {
+        // `topology.io/grafana: payments-enricher-overview` is a dashboard id, not a URL, and the
+        // same manifest is deployed to both environments. A hardcoded URL in the annotation would
+        // point staging's node at production's dashboard; the id-plus-template split is what makes
+        // one annotation render correctly in both. This is ADR-0032's load-bearing claim.
+        assertThat(links(node(graph("production"), "payments-enricher")))
+                .contains("dashboard https://grafana.acme.io/d/payments-enricher-overview");
+        assertThat(links(node(graph("staging"), "payments-enricher")))
+                .contains("dashboard https://grafana-staging.acme.io/d/payments-enricher-overview");
+    }
+
+    @Test
+    void argo_manages_one_of_the_two_services_and_the_links_say_so() {
+        JsonNode graph = graph("production");
+
+        // ADR-0032 reads Argo CD's own `argocd.argoproj.io/instance` label, so the fixture's
+        // deliberate unevenness is explained honestly and at zero annotation cost.
+        assertThat(links(node(graph, "payments-api")))
+                .contains("gitops https://argocd.acme.io/applications/payments-api");
+        assertThat(links(node(graph, "payments-enricher"))).noneMatch(link -> link.startsWith("gitops "));
+    }
+
+    @Test
+    void the_type_the_annotation_sets_draws_with_a_descriptor_nobody_guessed() {
+        JsonNode graph = graph("production");
+        JsonNode service = descriptor(graph, "service");
+
+        // The two halves of ADR-0001 meeting. `kubernetes` sets `type` from `topology.io/type` and
+        // guesses no label, category or icon for it (ADR-0091: a guessed default would put a type
+        // nobody chose into the global set served inside /graph), so `service`'s descriptor comes
+        // from the YAML `types:` block — "registered by plugins and by the YAML topology alike"
+        // doing exactly the work it was designed for. Without it the fixture's two most important
+        // nodes would render on the fallback descriptor.
+        assertThat(node(graph, "payments-api").get("type").asText()).isEqualTo("service");
+        assertThat(service.get("source").asText()).isEqualTo("yaml");
+        assertThat(service.get("label").asText()).isEqualTo("Service");
+        assertThat(service.get("icon").asText()).isEqualTo("service");
+    }
+
+    @Test
+    void a_verb_only_stanza_becomes_indistinguishable_from_a_described_node() {
+        JsonNode api = node(graph("production"), "payments-api");
+
+        // ADR-0063's accepted cost, felt rather than fixed (ADR-0101). `payments-api`'s YAML stanza
+        // is one verb key and declares no owner, yet the node reads `sources: [yaml, kubernetes]`
+        // with an ownerKey — provenance is per node, not per field, and ADR-0008 says so.
+        assertThat(api.get("sources").findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
+        assertThat(api.get("ownerKey").asText()).isEqualTo("payments-platform");
+    }
+
+    private static JsonNode descriptor(JsonNode graph, String type) {
+        for (JsonNode descriptor : graph.get("typeDescriptors")) {
+            if (descriptor.get("type").asText().equals(type)) {
+                return descriptor;
+            }
+        }
+        throw new AssertionError("no descriptor for type " + type);
+    }
+
+    private static List<String> backings(JsonNode node) {
+        List<String> backings = new ArrayList<>();
+        node.get("backings").forEach(backing -> backings.add("%s %s %s".formatted(
+                backing.get("plugin").asText(),
+                backing.get("kind").asText(),
+                backing.get("reference").asText())));
+        return backings;
+    }
+
+    private static List<String> links(JsonNode node) {
+        List<String> links = new ArrayList<>();
+        node.get("links").forEach(link ->
+                links.add(link.get("rel").asText() + " " + link.get("url").asText()));
+        return links;
     }
 
     static JsonNode node(JsonNode graph, String key) {

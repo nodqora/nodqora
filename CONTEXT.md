@@ -39,9 +39,11 @@ which also amended ADR-0071, ADR-0081 and ADR-0083; ADR-0090 and ADR-0091 by
 which also amended ADR-0031, ADR-0032, ADR-0037, ADR-0042, ADR-0044 and
 ADR-0051; ADR-0092 through ADR-0097 by
 [Frontend routing and deep-linking](https://github.com/fredskor/nodqora/issues/21);
-and ADR-0098 through ADR-0102 by
+ADR-0098 through ADR-0102 by
 [Implementation slice ordering and handoff](https://github.com/fredskor/nodqora/issues/18),
-which also amended ADR-0074. ADR-0018 was amended by tickets #17, #19 and #21.
+which also amended ADR-0074; and ADR-0103 by
+[Slice 2 — `kubernetes` discovery](https://github.com/fredskor/nodqora/issues/23), the first
+implementation ADR, which amended ADR-0035. ADR-0018 was amended by tickets #17, #19 and #21.
 
 ---
 
