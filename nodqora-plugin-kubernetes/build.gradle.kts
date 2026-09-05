@@ -18,6 +18,13 @@ dependencies {
     // outbound seam is `KubernetesApi`, and everything above it is exercised against a recording.
     implementation("io.fabric8:kubernetes-client:6.13.4")
 
+    // k3s — and any cluster whose CA issues EC rather than RSA client certificates — hands back a
+    // kubeconfig the Fabric8 client cannot read on its own: it defers EC key parsing to
+    // BouncyCastle and fails the *listing*, not the connection, with "JcaPEMKeyConverter is
+    // provided by BouncyCastle, an optional dependency". Runtime-only because nothing compiles
+    // against it; it is reached reflectively by the client's key loader.
+    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.80")
+
     // ADR-0099's recording, published as test fixtures so `nodqora-app`'s integration tests replay
     // the same objects through the same seam rather than keeping a second copy of them.
     testFixturesApi(project(":nodqora-plugin-api"))
