@@ -7,6 +7,7 @@ import io.nodqora.plugin.api.HealthCapability.ObservableNode;
 import io.nodqora.plugin.api.Outcome;
 import io.nodqora.plugin.api.StateContribution;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,11 +57,14 @@ class KubernetesHealth {
 
     private static final String READY_REPLICAS = "readyReplicas";
 
-    /** ADR-0034: only workload backings contribute. A Service has no readiness to report. */
-    private static final Set<String> WORKLOAD_KINDS = Set.of(
-            WorkloadKind.DEPLOYMENT.lowercased(),
-            WorkloadKind.STATEFULSET.lowercased(),
-            WorkloadKind.CRONJOB.lowercased());
+    /**
+     * ADR-0034: only workload backings contribute — a Service and an Ingress have no readiness to
+     * report and are inert for health. Derived from the enum rather than listed, so a kind added to
+     * ADR-0030 cannot be silently left out of health while being discovered.
+     */
+    private static final Set<String> WORKLOAD_KINDS = Arrays.stream(WorkloadKind.values())
+            .map(WorkloadKind::lowercased)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     private final KubernetesApi api;
 
@@ -178,6 +182,11 @@ class KubernetesHealth {
         if (desired == 0) {
             return Health.DISABLED;
         }
+        // A missing `readyReplicas` is a zero, while a missing `desiredReplicas` above was an
+        // abstention — and the asymmetry is the API's rather than ours. Kubernetes omits
+        // `status.readyReplicas` when it is zero, so absent there genuinely means none are up;
+        // `spec.replicas` is always populated on a Deployment or StatefulSet, so absent there means
+        // we could not read the spec, and guessing would turn that into a deliberate shutdown.
         int ready = workload.readyReplicas() == null ? 0 : workload.readyReplicas();
         if (ready >= desired) {
             return Health.HEALTHY;
@@ -191,9 +200,10 @@ class KubernetesHealth {
      * signal, so a node observed by three plugins reads
      * {@code "2/2 ready; lag 120; RUNNING, 3/3 tasks RUNNING"}.
      *
-     * <p>A node backed by several workloads names each one. With one workload the reference would be
-     * noise repeating what {@code backings[]} already says; with two, an unlabelled
-     * {@code "3 desired / 3 ready, 0 desired / 0 ready"} makes the reader guess which is which.
+     * <p>ADR-0105: a node backed by several workloads names each one. With one workload the
+     * reference would be noise repeating what {@code backings[]} already says; with two, an
+     * unlabelled {@code "3 desired / 3 ready, 0 desired / 0 ready"} makes the reader guess which is
+     * which. Ordered by reference, because the cluster's list order is not stable.
      */
     private static String rawSignal(List<ObservedWorkload> observed) {
         if (observed.isEmpty()) {
@@ -219,13 +229,23 @@ class KubernetesHealth {
 
     /**
      * ADR-0028's allow-list: {@code desiredReplicas} and {@code readyReplicas}, enumerated by name.
-     * Summed across the node's workloads, because the overlay answers "how much of this node is up"
-     * and a node backed by two workloads is up in proportion to both. A CronJob contributes neither
-     * — it has no replicas to report, and a zero would read as a scaled-down one.
+     *
+     * <p>ADR-0105: summed across the node's workloads, because the overlay answers "how much of this
+     * node is running" and a node backed by two workloads runs in proportion to both. A workload
+     * with no {@code spec.replicas} contributes to neither sum — a zero there would render as a
+     * scaled-down workload, which is the one reading it must not have.
+     *
+     * <p>The sums and the glyph can look like they disagree, and ADR-0105 accepts it: a node backed
+     * by a StatefulSet scaled to zero and a Deployment at 1 desired / 0 ready reads {@code DISABLED}
+     * beside {@code desiredReplicas: 1}. The glyph answers "does anyone need to act on this?" and
+     * the overlay answers "how much is up?"; both are true, and reconciling them would mean
+     * discarding one of them.
      */
     private static Map<String, Object> metrics(List<ObservedWorkload> observed) {
+        // One filter, not two: a CronJob has no `spec.replicas` at all, so the null check already
+        // excludes it. Naming the kind as well would be a second rule saying the same thing, and the
+        // day they disagreed the wrong one would be the one someone had remembered to update.
         List<ObservedWorkload> replicated = observed.stream()
-                .filter(workload -> workload.kind() != WorkloadKind.CRONJOB)
                 .filter(workload -> workload.desiredReplicas() != null)
                 .toList();
         if (replicated.isEmpty()) {

@@ -158,23 +158,26 @@ public class HealthStore {
      * seconds, while retention would leave a stale verdict standing with no way to tell.
      */
     private void deleteAbsent(String environmentKey, String pluginId, List<String> present) {
-        List<Long> doomed = jdbc.query(
-                """
-                select c.node_id, lower(btrim(n.key)) as folded_key
-                from health_contribution c
-                join node n on n.id = c.node_id
-                where n.environment_key = ? and c.plugin_id = ?
-                """,
-                (rs, row) -> present.contains(rs.getString("folded_key")) ? null : rs.getLong("node_id"),
-                environmentKey,
-                pluginId);
+        record Carried(long nodeId, String foldedKey) {}
 
-        List<Object[]> batch = doomed.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(nodeId -> new Object[] {nodeId, pluginId})
+        List<Object[]> doomed = jdbc
+                .query(
+                        """
+                        select c.node_id, lower(btrim(n.key)) as folded_key
+                        from health_contribution c
+                        join node n on n.id = c.node_id
+                        where n.environment_key = ? and c.plugin_id = ?
+                        """,
+                        (rs, row) -> new Carried(rs.getLong("node_id"), rs.getString("folded_key")),
+                        environmentKey,
+                        pluginId)
+                .stream()
+                .filter(carried -> !present.contains(carried.foldedKey()))
+                .map(carried -> new Object[] {carried.nodeId(), pluginId})
                 .toList();
-        if (!batch.isEmpty()) {
-            jdbc.batchUpdate("delete from health_contribution where node_id = ? and plugin_id = ?", batch);
+
+        if (!doomed.isEmpty()) {
+            jdbc.batchUpdate("delete from health_contribution where node_id = ? and plugin_id = ?", doomed);
         }
     }
 

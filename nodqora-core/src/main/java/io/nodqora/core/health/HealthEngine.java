@@ -9,17 +9,12 @@ import io.nodqora.plugin.api.HealthCapability;
 import io.nodqora.plugin.api.HealthCapability.HealthRequest;
 import io.nodqora.plugin.api.HealthCapability.HealthResult;
 import io.nodqora.plugin.api.HealthCapability.ObservableNode;
+import io.nodqora.core.plugin.PluginCalls;
 import io.nodqora.plugin.api.Outcome;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,11 +31,11 @@ import org.springframework.stereotype.Component;
  * is. One discovers the association and stamps it; the other is handed the node and reads it.
  *
  * <p>Structurally this is {@code DiscoveryEngine} on a thirty-second cadence, and the parallels are
- * load-bearing rather than cosmetic: pairs run in parallel on virtual threads under an engine-imposed
- * timeout, one failing pair does not touch the others, and a plugin that throws is recorded
- * {@code FAILED} rather than propagating — because ADR-0026 made the value explicit precisely so a
- * failed observation is never mistaken for a healthy one, and ADR-0046 makes {@code FAILED} leave the
- * store untouched so the last good reading stands and goes visibly stale instead.
+ * load-bearing rather than cosmetic — which is why the shared part is shared code: {@link PluginCalls}
+ * owns the fan-out and the timeout, and a plugin that throws is recorded {@code FAILED} rather than
+ * propagating. ADR-0026 made the value explicit precisely so a failed observation is never mistaken
+ * for a healthy one, and ADR-0046 makes {@code FAILED} leave the store untouched, so the last good
+ * reading stands and goes visibly stale instead of the node flipping grey because one poll blinked.
  */
 @Component
 public class HealthEngine {
@@ -81,11 +76,9 @@ public class HealthEngine {
         // Strictly below the interval, so a hung plugin cannot overlap its own next run (ADR-0103).
         Duration timeout = configuration.refresh().health().dividedBy(2);
 
-        try (ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<?>> running = new ArrayList<>();
-            pairs.forEach(pair -> running.add(workers.submit(() -> recordOnePair(pair, observable, timeout))));
-            running.forEach(HealthEngine::awaitQuietly);
-        }
+        PluginCalls.inParallel(pairs.stream()
+                .map(pair -> (Runnable) () -> recordOnePair(pair, observable, timeout))
+                .toList());
 
         folds.run(environmentKey);
     }
@@ -112,36 +105,15 @@ public class HealthEngine {
     @SuppressWarnings("unchecked")
     private HealthResult invoke(ConfiguredCapability pair, List<ObservableNode> routed, Duration timeout) {
         HealthCapability<Object> capability = (HealthCapability<Object>) pair.plugin();
-        try (ExecutorService worker = Executors.newVirtualThreadPerTaskExecutor()) {
-            Future<HealthResult> call = worker.submit(() ->
-                    capability.observe(new HealthRequest<>(pair.environmentKey(), routed, pair.config())));
-            try {
-                return call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-                call.cancel(true);
-                return failed(pair, "health observation timed out after " + timeout);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return failed(pair, "health observation was interrupted");
-            } catch (Exception e) {
-                return failed(
-                        pair, "health observation threw " + e.getClass().getSimpleName() + ": " + e.getMessage());
-            }
-        }
+        return PluginCalls.within(
+                timeout,
+                "health observation",
+                () -> capability.observe(new HealthRequest<>(pair.environmentKey(), routed, pair.config())),
+                cause -> failed(pair, cause));
     }
 
     private HealthResult failed(ConfiguredCapability pair, String cause) {
         log.warn("health {}/{} failed: {}", pair.environmentKey(), pair.plugin().id(), cause);
         return new HealthResult(Map.of(), Outcome.failed(cause));
-    }
-
-    private static void awaitQuietly(Future<?> task) {
-        try {
-            task.get();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            log.error("a health pair failed outside the plugin call", e);
-        }
     }
 }

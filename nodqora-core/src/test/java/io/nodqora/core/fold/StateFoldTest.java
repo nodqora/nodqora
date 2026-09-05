@@ -89,6 +89,32 @@ class StateFoldTest {
     }
 
     @Test
+    void a_node_every_observer_abstained_on_gets_no_row_rather_than_an_unknown_one() {
+        // ADR-0104, asserted on the fold rather than on the store. The store drops UNKNOWN before it
+        // is written, so this input cannot occur today — which is exactly why it is worth pinning:
+        // the fold is a pure function and must be right about its own inputs, not about what
+        // happened to be written upstream. A row here would read UNKNOWN *and* report an
+        // `observedAt` for an observation nobody made, which is the second UNKNOWN ADR-0104 forbids.
+        assertThat(fold.fold(List.of(from("kubernetes", Health.UNKNOWN, "object has gone", Map.of(), EARLY))))
+                .isEmpty();
+    }
+
+    @Test
+    void an_abstention_alongside_a_real_reading_is_discarded_and_does_not_drag_the_freshness() {
+        // ADR-0024 step 1 removes the abstention, so it cannot win, lose, or contribute a segment to
+        // `rawSignal`. It must not reach `observedAt` either: EARLY belongs to an observation that
+        // did not happen, and `min` would have published it as the row's age.
+        List<FoldedNodeState> folded = fold.fold(List.of(
+                from("kubernetes", Health.UNKNOWN, "object has gone", Map.of(), EARLY),
+                from("kafka", Health.DEGRADED, "lag 40000", Map.of("maxConsumerLag", 40000), LATE)));
+
+        assertThat(folded).hasSize(1);
+        assertThat(folded.getFirst().health()).isEqualTo(Health.DEGRADED);
+        assertThat(folded.getFirst().rawSignal()).isEqualTo("lag 40000");
+        assertThat(folded.getFirst().observedAt()).isEqualTo(LATE);
+    }
+
+    @Test
     void an_environment_with_no_contributions_folds_to_no_rows_at_all() {
         // Not "folds to a page of UNKNOWN rows". A node nobody observes has no row, and ADR-0028's
         // outer join synthesizes the four values on the way out — which is why /state needs no

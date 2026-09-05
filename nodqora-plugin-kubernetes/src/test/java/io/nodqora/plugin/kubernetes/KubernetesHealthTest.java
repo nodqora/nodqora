@@ -173,11 +173,14 @@ class KubernetesHealthTest {
                 .get("payments-es-sink");
 
         assertThat(contribution.health()).isEqualTo(Health.DISABLED);
-        // Each workload is named when there is more than one, because an unlabelled
+        // ADR-0105: each workload is named when there is more than one, because an unlabelled
         // "scaled to 0, 1 desired / 0 ready" makes the reader guess which is which.
         assertThat(contribution.rawSignal())
                 .isEqualTo("payments-prod/kafka-connect scaled to 0, payments-prod/sidecar 1 desired / 0 ready");
-        // Summed, because the overlay answers "how much of this node is up".
+        // Summed, and this is ADR-0105's accepted consequence in one assertion: the card reads
+        // DISABLED beside `desiredReplicas: 1`. The glyph answers "does anyone need to act on
+        // this?" and the overlay answers "how much is up?" — both true, and reconciling them would
+        // mean throwing one of them away.
         assertThat(contribution.metrics()).isEqualTo(Map.of("desiredReplicas", 1, "readyReplicas", 0));
     }
 

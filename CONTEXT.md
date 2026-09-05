@@ -43,9 +43,9 @@ ADR-0098 through ADR-0102 by
 [Implementation slice ordering and handoff](https://github.com/fredskor/nodqora/issues/18),
 which also amended ADR-0074; ADR-0103 by
 [Slice 2 — `kubernetes` discovery](https://github.com/fredskor/nodqora/issues/23), the first
-implementation ADR, which amended ADR-0035; and ADR-0104 by
+implementation ADR, which amended ADR-0035; and ADR-0104 and ADR-0105 by
 [Slice 3 — Health end-to-end](https://github.com/fredskor/nodqora/issues/24), which amended
-ADR-0072. ADR-0018 was amended by tickets #17, #19 and #21.
+ADR-0072 and ADR-0034. ADR-0018 was amended by tickets #17, #19 and #21.
 
 ---
 

@@ -59,9 +59,7 @@ public class StartupSequence implements ApplicationRunner {
             graphFolds.run(environment.key());
             stateFolds.run(environment.key());
         });
-        if (configuration.refresh().autostart()) {
-            discovery.start();
-            health.start();
-        }
+        discovery.start();
+        health.start();
     }
 }

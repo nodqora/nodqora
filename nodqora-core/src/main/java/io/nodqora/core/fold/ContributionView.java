@@ -13,8 +13,10 @@ import java.util.Objects;
  * while a contribution is already per node. The fold groups these by {@code nodeId}; nothing here
  * needs to know which snapshot it arrived in.
  *
- * <p>{@code health} is never {@code UNKNOWN} — an abstention is an omission and never reaches the
- * store (ADR-0104).
+ * <p>{@code health} is never {@code UNKNOWN} in practice: an abstention is an omission and is
+ * dropped before it reaches the store (ADR-0104). It is not forbidden by this type, because the fold
+ * enforces the same rule itself rather than relying on its caller — a pure function that is only
+ * correct given a well-formed input is a trap for the next reader.
  */
 public record ContributionView(
         long nodeId,

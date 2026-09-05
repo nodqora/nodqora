@@ -53,17 +53,6 @@ public class GraphDocuments {
                     : configuration.healthPairs(environmentKey);
         }
 
-        /**
-         * Two headers, not one table with a {@code capability} discriminator (ADR-0072): they are
-         * written by different loops on different cadences and read by different endpoints, and
-         * share only a column list.
-         */
-        Map<String, SnapshotHeader> reported(GraphDocuments documents, String environmentKey) {
-            List<SnapshotHeader> headers = this == DISCOVERY
-                    ? documents.snapshots.headers(environmentKey)
-                    : documents.contributions.headers(environmentKey);
-            return headers.stream().collect(Collectors.toMap(SnapshotHeader::pluginId, header -> header));
-        }
     }
 
     private final BoundConfiguration configuration;
@@ -191,7 +180,7 @@ public class GraphDocuments {
      * reported — which is what makes a cold environment distinguishable from an empty one.
      */
     private List<PluginOutcome> outcomes(String environmentKey, Capability capability) {
-        Map<String, SnapshotHeader> reported = capability.reported(this, environmentKey);
+        Map<String, SnapshotHeader> reported = reported(capability, environmentKey);
 
         return capability.configured(configuration, environmentKey).stream()
                 .map(pair -> {
@@ -204,6 +193,19 @@ public class GraphDocuments {
                             header == null ? null : header.recordedAt());
                 })
                 .toList();
+    }
+
+    /**
+     * Two headers, not one table with a {@code capability} discriminator (ADR-0072): they are
+     * written by different loops on different cadences and read by different endpoints, and share
+     * only a column list. The choice lives here rather than on the enum so that the enum stays a
+     * description of the two capabilities instead of a thing that reaches back into this class.
+     */
+    private Map<String, SnapshotHeader> reported(Capability capability, String environmentKey) {
+        List<SnapshotHeader> headers = capability == Capability.DISCOVERY
+                ? snapshots.headers(environmentKey)
+                : contributions.headers(environmentKey);
+        return headers.stream().collect(Collectors.toMap(SnapshotHeader::pluginId, header -> header));
     }
 
     private EnvironmentRef environmentRef(String environmentKey) {

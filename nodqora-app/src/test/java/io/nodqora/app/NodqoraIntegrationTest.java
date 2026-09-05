@@ -1,7 +1,9 @@
 package io.nodqora.app;
 
 import io.nodqora.core.discovery.DiscoveryEngine;
+import io.nodqora.core.discovery.DiscoveryLoop;
 import io.nodqora.core.health.HealthEngine;
+import io.nodqora.core.health.HealthLoop;
 import io.nodqora.core.startup.ConfigMirrorReconciler;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,11 +46,6 @@ public abstract class NodqoraIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        // The loops stay stopped. Spring caches one context per scenario and they all share this
-        // database, so a live thirty-second health loop would have one scenario's contexts writing
-        // contributions another scenario's test is asserting against — a flake that reproduces only
-        // when the suite is slow. The published intervals are untouched; only the timer is.
-        registry.add("nodqora.refresh.autostart", () -> false);
     }
 
     @Autowired
@@ -63,6 +60,12 @@ public abstract class NodqoraIntegrationTest {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @Autowired
+    private DiscoveryLoop discoveryLoop;
+
+    @Autowired
+    private HealthLoop healthLoop;
+
     /**
      * Every test starts from an empty store and an empty graph, then polls both halves. Truncating
      * the config mirrors and re-reconciling is the honest reset: it is exactly what a fresh
@@ -74,6 +77,14 @@ public abstract class NodqoraIntegrationTest {
      */
     @BeforeEach
     void resetAndPoll() {
+        // Stop the timers the startup sequence began. Spring caches one context per scenario and
+        // they all share this database, so a live thirty-second health loop would have one
+        // scenario's context writing contributions another scenario's test is asserting against — a
+        // flake that reproduces only when the suite is slow. Closing them here rather than adding a
+        // configuration key keeps the shipped config surface to the two intervals ADR-0103 fixed.
+        discoveryLoop.close();
+        healthLoop.close();
+
         jdbc.execute("truncate table environment, plugin cascade");
         reconciler.reconcile();
         discovery.pollEveryEnvironment();

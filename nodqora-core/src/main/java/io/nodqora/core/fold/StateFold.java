@@ -26,6 +26,12 @@ import java.util.stream.Collectors;
  * {@code DISABLED} — ADR-0034 emits it from {@code spec.replicas: 0}, and scaling back up would need
  * the old contribution found and cleared by hand rather than simply replaced.
  *
+ * <p>Abstentions are discarded before anything else happens, and a node with nothing left has
+ * <b>no row</b> (ADR-0104). That is ADR-0024's step 1 with its consequence carried all the way out:
+ * there is exactly one way for a node to be {@code UNKNOWN}, which is having no row, so the value
+ * always arrives by ADR-0028's outer join and never by a stored one carrying a freshness for an
+ * observation nobody made.
+ *
  * <p>Composition splits three ways and only one of them was ever hard:
  *
  * <ul>
@@ -54,10 +60,21 @@ public class StateFold {
         List<FoldedNodeState> states = new ArrayList<>(byNode.size());
         byNode.forEach((nodeId, carried) -> {
             List<ContributionView> byRegistry = carried.stream()
+                    // An abstention is an omission (ADR-0104), so it is dropped here as well as at
+                    // the store. Both points, deliberately: the store is where it is enforced for
+                    // every plugin, and this is where the fold stays correct as a function of its
+                    // own inputs rather than of what happened to be written upstream.
+                    .filter(contribution -> contribution.health() != Health.UNKNOWN)
                     .sorted(Comparator.comparingInt(
                                     (ContributionView contribution) -> order.registryRank(contribution.pluginId()))
                             .thenComparing(ContributionView::pluginId))
                     .toList();
+            if (byRegistry.isEmpty()) {
+                // No row at all, rather than a row reading UNKNOWN. ADR-0028's outer join
+                // synthesizes UNKNOWN / null / {} / null on the way out, and a row here would carry
+                // an `observedAt` for an observation nobody made.
+                return;
+            }
             states.add(new FoldedNodeState(
                     nodeId,
                     Health.collapse(byRegistry.stream().map(ContributionView::health).toList()),
