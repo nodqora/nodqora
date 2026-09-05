@@ -65,7 +65,7 @@ class BoundConfigurationTest {
         plugins.put("probe", pluginSlice);
         NodqoraProperties properties = new NodqoraProperties(
                 new NodqoraProperties.Plugins(List.of("probe"), List.of("probe")),
-                new NodqoraProperties.Refresh(Duration.ofMinutes(5), Duration.ofSeconds(30)),
+                new NodqoraProperties.Refresh(Duration.ofMinutes(5), Duration.ofSeconds(30), null),
                 Map.of("production", new NodqoraProperties.Environment("Production", plugins)));
 
         BoundConfiguration configuration = new BoundConfiguration(

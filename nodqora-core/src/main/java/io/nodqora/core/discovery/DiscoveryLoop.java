@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
  * ADR-0012: two cadence loops, not per-plugin schedulers. ADR-0003's boundary is a cadence boundary,
  * so it becomes a slow topology loop calling Discovery and a fast state loop calling Health.
  *
- * <p>Only the slow loop exists in this slice: {@code yaml} declares no Health capability, so there is
- * nothing for a fast loop to call.
+ * <p>This is the slow one. Its twin is {@code HealthLoop}, and they are two schedulers rather than
+ * two branches in one because the boundary between them is a cadence boundary and nothing else.
  *
  * <p>The interval is file-declared (ADR-0014) so it can change without a rebuild, and it is deliberate
  * that there is no refresh endpoint to shortcut it — ADR-0035 accepted five-minute discovery latency

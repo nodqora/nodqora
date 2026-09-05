@@ -133,7 +133,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Map.of(),
                 Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.TYPE, "worker"),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null);
         ObservedWorkload current = new ObservedWorkload(
                 WorkloadKind.DEPLOYMENT,
                 "payments-prod",
@@ -141,7 +144,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-06-01T00:00:00Z"),
                 Map.of(),
                 Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.TYPE, "service"),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null);
 
         List<DiscoveredNode> nodes =
                 discover(new NamespaceObjects(List.of(old, current), List.of(), List.of()), config(List.of()))
@@ -188,7 +194,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Map.of(),
                 Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.REPOSITORY, "acme/old"),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null);
         ObservedWorkload two = new ObservedWorkload(
                 WorkloadKind.DEPLOYMENT,
                 "payments-prod",
@@ -196,7 +205,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-06-01T00:00:00Z"),
                 Map.of(),
                 Map.of(TopologyAnnotations.NODE, "payments-enricher", TopologyAnnotations.REPOSITORY, "acme/new"),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null);
 
         // ADR-0021 takes *scalars* from the newest object; `links[]` is a collection, and ADR-0044
         // makes collections additive with an element identity. Two writers with one `rel` and
@@ -479,7 +491,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Map.of(),
                 annotations,
-                Map.of("app", name));
+                Map.of("app", name),
+                null,
+                null,
+                null);
     }
 
     private static ObservedWorkload labelled(String name, Map<String, String> podLabels) {
@@ -490,7 +505,10 @@ class KubernetesDiscoveryTest {
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Map.of(),
                 Map.of(),
-                podLabels);
+                podLabels,
+                null,
+                null,
+                null);
     }
 
     private static ObservedWorkload annotated(String name, Instant created) {
@@ -501,7 +519,10 @@ class KubernetesDiscoveryTest {
                 created,
                 Map.of(),
                 Map.of(TopologyAnnotations.NODE, "payments-enricher"),
-                Map.of());
+                Map.of(),
+                null,
+                null,
+                null);
     }
 
     private static List<String> keys(DiscoveryResult result) {

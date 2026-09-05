@@ -8,51 +8,31 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 
-/** The other two GETs. */
+/**
+ * {@code /api/meta}, and the corners of {@code /state} that are about the endpoint rather than about
+ * the reference pipeline — which {@link ReferencePipelineStateTest} owns.
+ */
 class StateAndMetaTest extends NodqoraIntegrationTest {
 
     @Autowired
     TestRestTemplate http;
 
     @Test
-    void state_carries_every_node_key_in_the_environment() {
-        JsonNode graph = http.getForObject("/api/environments/production/graph", JsonNode.class);
+    void a_node_no_plugin_can_observe_is_unknown_and_that_is_the_honest_answer() {
         JsonNode state = http.getForObject("/api/environments/production/state", JsonNode.class);
 
-        // ADR-0057: absence is already load-bearing and already means something else — a key missing
-        // from /graph means *deleted*. Two payloads polled at different rates, in which a missing key
-        // means "deleted" in one and "fine, just unwatched" in the other, is a bug waiting for its
-        // first incident.
-        assertThat(state.get("nodes").findValuesAsText("nodeKey"))
-                .containsExactlyElementsOf(graph.get("nodes").findValuesAsText("key"));
-    }
-
-    @Test
-    void every_node_is_unknown_and_that_is_the_honest_answer() {
-        JsonNode state = http.getForObject("/api/environments/production/state", JsonNode.class);
-
-        // ADR-0011: `yaml` declares Discovery and not Health, so its nodes being permanently UNKNOWN
-        // is a consequence of the capability set rather than a rule anyone wrote. ADR-0028 makes the
-        // rendering arithmetic: no contributions, no row, and the join synthesizes all four fields.
+        // ADR-0011: `yaml` declares Discovery and not Health, and never will, so its declared-only
+        // nodes are permanently UNKNOWN — a consequence of the capability set rather than a rule
+        // anyone wrote. ADR-0028 makes the rendering arithmetic: no contributions, no row, and the
+        // outer join synthesizes all four fields.
         //
-        // This is the same answer /state will synthesize in slice 3 for any node nothing observes,
-        // so the frontend's health path does not change when contributions arrive — only its source.
-        state.get("nodes").forEach(node -> {
-            assertThat(node.get("health").asText()).isEqualTo("UNKNOWN");
-            assertThat(node.get("rawSignal").isNull()).isTrue();
-            assertThat(node.get("metrics")).isEmpty();
-            assertThat(node.get("observedAt").isNull()).isTrue();
-        });
-    }
-
-    @Test
-    void state_has_no_health_observers_to_report_on_yet() {
-        JsonNode state = http.getForObject("/api/environments/production/state", JsonNode.class);
-
-        // ADR-0085: the roster is a *config* count, so this is empty because no configured plugin
-        // declares the Health capability — not because nothing has reported.
-        assertThat(state.get("plugins")).isEmpty();
-        assertThat(state.get("observedAt").isNull()).isTrue();
+        // The prediction slice 1 made here held: when contributions arrived, the frontend's health
+        // path did not change. Only its source did.
+        JsonNode declared = ReferencePipelineStateTest.node(state, "stripe-webhooks");
+        assertThat(declared.get("health").asText()).isEqualTo("UNKNOWN");
+        assertThat(declared.get("rawSignal").isNull()).isTrue();
+        assertThat(declared.get("metrics")).isEmpty();
+        assertThat(declared.get("observedAt").isNull()).isTrue();
     }
 
     @Test
@@ -60,9 +40,13 @@ class StateAndMetaTest extends NodqoraIntegrationTest {
         JsonNode meta = http.getForObject("/api/meta", JsonNode.class);
 
         assertThat(meta.get("environments").findValuesAsText("key")).containsExactly("production", "staging");
-        assertThat(meta.get("plugins").get(0).get("id").asText()).isEqualTo("yaml");
-        // ADR-0010: present iff the bean implements the interface.
-        assertThat(capabilities(meta)).containsExactly("DISCOVERY");
+        assertThat(meta.get("plugins").findValuesAsText("id")).containsExactly("yaml", "kubernetes");
+        // ADR-0010: present iff the bean implements the interface — that is the whole of capability
+        // negotiation, with nothing declared anywhere to keep in step. `yaml` produces topology and
+        // never observes it (ADR-0029); `kubernetes` does both, and its second capability is the
+        // reason anything on the canvas has a colour.
+        assertThat(capabilities(meta, 0)).containsExactly("DISCOVERY");
+        assertThat(capabilities(meta, 1)).containsExactly("DISCOVERY", "HEALTH");
         // ADR-0059: the frontend does not hold a copy of file config that disagrees, silently, the
         // first time anyone tunes a plugin's cadence.
         assertThat(meta.get("refresh").get("graphSeconds").asLong()).isEqualTo(300);
@@ -77,9 +61,9 @@ class StateAndMetaTest extends NodqoraIntegrationTest {
         assertThat(meta).doesNotContain("fixtures/reference-pipeline").doesNotContain("dir");
     }
 
-    private static List<String> capabilities(JsonNode meta) {
+    private static List<String> capabilities(JsonNode meta, int plugin) {
         List<String> capabilities = new java.util.ArrayList<>();
-        meta.get("plugins").get(0).get("capabilities").forEach(value -> capabilities.add(value.asText()));
+        meta.get("plugins").get(plugin).get("capabilities").forEach(value -> capabilities.add(value.asText()));
         return capabilities;
     }
 }

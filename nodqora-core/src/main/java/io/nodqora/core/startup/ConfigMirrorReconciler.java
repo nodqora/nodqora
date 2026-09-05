@@ -1,6 +1,7 @@
 package io.nodqora.core.startup;
 
 import io.nodqora.core.config.BoundConfiguration;
+import io.nodqora.core.store.HealthStore;
 import io.nodqora.core.store.SnapshotStore;
 import io.nodqora.plugin.api.Plugin;
 import java.util.List;
@@ -35,16 +36,22 @@ public class ConfigMirrorReconciler {
 
     /** The tables whose rows a cascade would take, for the WARN's benefit only. */
     private static final List<String> CASCADING_BY_ENVIRONMENT =
-            List.of("plugin_snapshot", "plugin_snapshot_entry", "node", "edge", "owner");
+            List.of("plugin_snapshot", "plugin_snapshot_entry", "health_run", "node", "edge", "owner");
 
     private final JdbcTemplate jdbc;
     private final BoundConfiguration configuration;
     private final SnapshotStore snapshots;
+    private final HealthStore contributions;
 
-    public ConfigMirrorReconciler(JdbcTemplate jdbc, BoundConfiguration configuration, SnapshotStore snapshots) {
+    public ConfigMirrorReconciler(
+            JdbcTemplate jdbc,
+            BoundConfiguration configuration,
+            SnapshotStore snapshots,
+            HealthStore contributions) {
         this.jdbc = jdbc;
         this.configuration = configuration;
         this.snapshots = snapshots;
+        this.contributions = contributions;
     }
 
     @Transactional
@@ -60,7 +67,10 @@ public class ConfigMirrorReconciler {
         // silent. A version bump fails the middle test — it is a deliberate developer act — which is
         // why ADR-0101 did not grant it one, and the empty graph it causes is on this slice's
         // must-not-fix list.
-        int discarded = snapshots.discardStalePayloads();
+        // One constant across both stores, so a bump discards them together and the graph goes
+        // empty and repopulating rather than partial and wrong. The fast half self-heals in thirty
+        // seconds; the slow half takes a discovery cadence.
+        int discarded = snapshots.discardStalePayloads() + contributions.discardStalePayloads();
         log.debug("discarded {} stored rows written under a different payload version", discarded);
     }
 
@@ -91,7 +101,11 @@ public class ConfigMirrorReconciler {
                 jdbc.update("insert into plugin (id) values (?) on conflict (id) do nothing", pluginId));
 
         for (String stale : absent("select id from plugin", configured)) {
-            warnBeforeCascade("plugin", stale, List.of("plugin_snapshot", "plugin_snapshot_entry"), "plugin_id");
+            warnBeforeCascade(
+                    "plugin",
+                    stale,
+                    List.of("plugin_snapshot", "plugin_snapshot_entry", "health_run", "health_contribution"),
+                    "plugin_id");
             jdbc.update("delete from plugin where id = ?", stale);
         }
     }

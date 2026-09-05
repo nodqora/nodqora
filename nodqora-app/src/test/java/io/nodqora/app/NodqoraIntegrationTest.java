@@ -1,6 +1,7 @@
 package io.nodqora.app;
 
 import io.nodqora.core.discovery.DiscoveryEngine;
+import io.nodqora.core.health.HealthEngine;
 import io.nodqora.core.startup.ConfigMirrorReconciler;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,8 +25,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * half records nothing because it reads a directory that is itself the product's format and doubles
  * as the demo topology.
  *
- * <p>The discovery loop is never started here; tests drive {@link DiscoveryEngine} directly, so a
- * poll happens when a test says so rather than on a five-minute timer.
+ * <p>Neither loop is ever started here; tests drive {@link DiscoveryEngine} and {@link HealthEngine}
+ * directly, so a poll happens when a test says so rather than on a five-minute or thirty-second
+ * timer.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(RecordedCluster.class)
@@ -42,10 +44,18 @@ public abstract class NodqoraIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // The loops stay stopped. Spring caches one context per scenario and they all share this
+        // database, so a live thirty-second health loop would have one scenario's contexts writing
+        // contributions another scenario's test is asserting against — a flake that reproduces only
+        // when the suite is slow. The published intervals are untouched; only the timer is.
+        registry.add("nodqora.refresh.autostart", () -> false);
     }
 
     @Autowired
     protected DiscoveryEngine discovery;
+
+    @Autowired
+    protected HealthEngine health;
 
     @Autowired
     protected ConfigMirrorReconciler reconciler;
@@ -54,13 +64,19 @@ public abstract class NodqoraIntegrationTest {
     protected JdbcTemplate jdbc;
 
     /**
-     * Every test starts from an empty store and an empty graph, then polls. Truncating the config
-     * mirrors and re-reconciling is the honest reset: it is exactly what a fresh deployment does.
+     * Every test starts from an empty store and an empty graph, then polls both halves. Truncating
+     * the config mirrors and re-reconciling is the honest reset: it is exactly what a fresh
+     * deployment does, and ADR-0074's cascade is what makes one statement enough.
+     *
+     * <p>Discovery first, and not as a convention: health contributions are keyed by {@code node.id}
+     * (ADR-0072), so an observation recorded before the nodes exist has nothing to attach to and is
+     * dropped — correctly, and invisibly. The startup sequence orders the two the same way.
      */
     @BeforeEach
     void resetAndPoll() {
         jdbc.execute("truncate table environment, plugin cascade");
         reconciler.reconcile();
         discovery.pollEveryEnvironment();
+        health.observeEveryEnvironment();
     }
 }

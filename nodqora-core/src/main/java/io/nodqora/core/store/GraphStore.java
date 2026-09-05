@@ -11,6 +11,7 @@ import io.nodqora.core.graph.GraphRecords.NodeRecord;
 import io.nodqora.core.graph.GraphRecords.OwnerRecord;
 import io.nodqora.core.graph.Keys;
 import io.nodqora.plugin.api.Backing;
+import io.nodqora.plugin.api.HealthCapability.ObservableNode;
 import io.nodqora.plugin.api.Link;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -94,6 +95,23 @@ public class GraphStore {
         }
         // ADR-0047: absence deletes immediately. For a node this cascades its NodeState with it.
         deleteById(table, stored.values().stream().map(StoredRow::id).toList());
+    }
+
+    /**
+     * ADR-0013's routing table, read as cheaply as it can be: just enough of every folded node for
+     * the engine to hand each plugin the nodes carrying a backing of its own.
+     *
+     * <p>A separate query rather than a filter over {@link #read}, because this runs every thirty
+     * seconds while {@code read} exists to build a document — pulling links, metadata, sources and
+     * two timestamps for every node in the environment to look at one JSONB column would make the
+     * fast loop's cost a function of how much the slow half happens to know.
+     */
+    public List<ObservableNode> observable(String environmentKey) {
+        return jdbc.query(
+                "select key, backings from node where environment_key = ? order by lower(btrim(key))",
+                (rs, row) -> new ObservableNode(
+                        rs.getString("key"), json.read(rs.getString("backings"), BACKINGS)),
+                environmentKey);
     }
 
     // ---------------------------------------------------------------- nodes

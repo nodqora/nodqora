@@ -19,7 +19,7 @@ public record NodqoraProperties(Plugins plugins, Refresh refresh, Map<String, En
 
     public NodqoraProperties {
         plugins = plugins == null ? new Plugins(List.of(), List.of()) : plugins;
-        refresh = refresh == null ? new Refresh(null, null) : refresh;
+        refresh = refresh == null ? new Refresh(null, null, null) : refresh;
         environments = environments == null ? Map.of() : new LinkedHashMap<>(environments);
     }
 
@@ -35,12 +35,23 @@ public record NodqoraProperties(Plugins plugins, Refresh refresh, Map<String, En
      */
     public record Plugins(List<String> registryOrder, List<String> precedence) {}
 
-    /** ADR-0035, ADR-0042: 5 minute discovery, 30 second health, both file-declared. */
-    public record Refresh(Duration discovery, Duration health) {
+    /**
+     * ADR-0035, ADR-0042: 5 minute discovery, 30 second health, both file-declared and both global
+     * (ADR-0103). The timeout is derived as half the interval rather than configured, so it cannot
+     * be misconfigured above it.
+     *
+     * <p>{@code autostart} is whether the startup sequence starts the two loops. It is on in every
+     * deployment and exists so that a test can drive {@code DiscoveryEngine} and
+     * {@code HealthEngine} directly — a poll happening when a test says so rather than on a timer.
+     * Left on, a thirty-second loop belonging to one cached test context writes the same database
+     * another context is asserting against, which is a flake with no stable reproduction.
+     */
+    public record Refresh(Duration discovery, Duration health, Boolean autostart) {
 
         public Refresh {
             discovery = discovery == null ? Duration.ofMinutes(5) : discovery;
             health = health == null ? Duration.ofSeconds(30) : health;
+            autostart = autostart == null || autostart;
         }
     }
 

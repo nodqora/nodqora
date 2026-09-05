@@ -10,8 +10,9 @@ import type { Health } from '../api/types'
  * information for a substantial fraction of viewers, which for a tool whose entire job is
  * at-a-glance operational state is a defect rather than a polish item.
  *
- * `UNKNOWN` is styled **calm, not alarming**: it is a resting state, and in this slice it is the
- * state of every node in the graph.
+ * `UNKNOWN` is styled **calm, not alarming**: it is a resting state rather than an error one, and
+ * four of the fixture's ten production nodes hold it permanently because nothing will ever observe
+ * them. A node nobody is watching is not a node in trouble.
  */
 
 const GLYPHS: Record<Health, { path: JSX.Element; label: string }> = {

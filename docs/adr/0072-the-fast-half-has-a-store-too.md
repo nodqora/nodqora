@@ -1,9 +1,16 @@
 # ADR-0072: The fast half has a store too — retained contributions folded into NodeState
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0104](0104-an-abstention-is-an-omission.md)
 - **Date**: 2026-09-03
 - **Ticket**: [PostgreSQL schema and persistence](https://github.com/fredskor/nodqora/issues/16)
 - **Amends**: ADR-0013
+
+> **Amendment (ADR-0104).** `UNKNOWN` never reaches `health_contribution`: an abstention is an
+> **omission**, dropped at the store, and the state fold writes no row for a node with no surviving
+> contributions. Without it a node whose only contribution abstained would get a row that exists,
+> reads `UNKNOWN`, and reports an `observedAt` for an observation nobody made — two ways to be
+> `UNKNOWN` that disagree about a rendered field. `observedAt = min over its contributions` is
+> unchanged and now exact. Everything else below stands.
 
 ## Context
 
