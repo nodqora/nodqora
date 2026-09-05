@@ -8,12 +8,16 @@ dependencies {
     // ADR-0015: plugins are @Components in the same deployable, collected by injecting List<Plugin>.
     implementation(project(":nodqora-plugin-yaml"))
     implementation(project(":nodqora-plugin-kubernetes"))
+    implementation(project(":nodqora-plugin-connect"))
+    implementation(project(":nodqora-plugin-kafka"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
 
     // ADR-0099: the recording is replayed through the plugin's own outbound seam, so the
     // integration tests exercise the real plugin against the real fixture objects.
     testImplementation(testFixtures(project(":nodqora-plugin-kubernetes")))
+    testImplementation(testFixtures(project(":nodqora-plugin-connect")))
+    testImplementation(testFixtures(project(":nodqora-plugin-kafka")))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")

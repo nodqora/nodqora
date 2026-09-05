@@ -21,6 +21,13 @@ nodes:
   - key: payments-es-sink
     owner: data-platform
     writesTo: [payments-events-v1]
+    links:
+      - rel: repository
+        label: Repository
+        url: https://github.com/acme/connect-config
+      - rel: runbook
+        label: Runbook
+        url: https://wiki/runbooks/connect-sinks
 
   - key: payments-events-v1
     type: elasticsearch-index

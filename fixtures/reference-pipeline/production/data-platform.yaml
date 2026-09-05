@@ -28,13 +28,30 @@ types:
 nodes:
   # `connect` emits no ownerKey, and cannot see its own destination: `connection.url` is the
   # Elasticsearch cluster endpoint, not an index name (ADR-0041). Both facts are this stanza.
+  # §9's repo and runbook are here for the same reason the owner is: `connect` reads a connector's
+  # own configuration and a Connect config has nowhere to record either. Both connectors share one
+  # repository and one runbook, which is what a two-connector team looks like.
   - key: payments-es-sink
     owner: data-platform
     writesTo: [payments-events-v1]
+    links:
+      - rel: repository
+        label: Repository
+        url: https://github.com/acme/connect-config
+      - rel: runbook
+        label: Runbook
+        url: https://wiki/runbooks/connect-sinks
 
   - key: payments-iceberg-sink
     owner: data-platform
     writesTo: [analytics.payments_events]
+    links:
+      - rel: repository
+        label: Repository
+        url: https://github.com/acme/connect-config
+      - rel: runbook
+        label: Runbook
+        url: https://wiki/runbooks/connect-sinks
 
   # Declared. Links here hold verbatim URLs — `yaml` is the one writer in the MVP that does,
   # because the file is read once, for one environment (ADR-0061).

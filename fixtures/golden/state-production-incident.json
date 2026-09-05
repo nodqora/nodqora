@@ -24,8 +24,11 @@
     {
       "nodeKey": "payments-enricher",
       "health": "UNHEALTHY",
-      "rawSignal": "3 desired / 0 ready",
+      "rawSignal": "3 desired / 0 ready; lag 2100000",
       "metrics": {
+        "kafka": {
+          "maxConsumerLag": 2100000
+        },
         "kubernetes": {
           "readyReplicas": 0,
           "desiredReplicas": 3
@@ -35,10 +38,22 @@
     },
     {
       "nodeKey": "payments-es-sink",
-      "health": "UNKNOWN",
-      "rawSignal": null,
-      "metrics": {},
-      "observedAt": null
+      "health": "DISABLED",
+      "rawSignal": "2 desired / 2 ready; lag 120; PAUSED, 0/3 tasks RUNNING",
+      "metrics": {
+        "kafka": {
+          "maxConsumerLag": 120
+        },
+        "connect": {
+          "tasksTotal": 3,
+          "tasksRunning": 0
+        },
+        "kubernetes": {
+          "readyReplicas": 2,
+          "desiredReplicas": 2
+        }
+      },
+      "observedAt": "<timestamp>"
     },
     {
       "nodeKey": "payments-events-v1",
@@ -49,24 +64,44 @@
     },
     {
       "nodeKey": "payments-iceberg-sink",
-      "health": "UNKNOWN",
-      "rawSignal": null,
-      "metrics": {},
-      "observedAt": null
+      "health": "DISABLED",
+      "rawSignal": "2 desired / 2 ready; lag 8400; PAUSED, 0/3 tasks RUNNING: org.apache.kafka.connect.errors.ConnectException: Commit to Iceberg catalog analytics timed out",
+      "metrics": {
+        "kafka": {
+          "maxConsumerLag": 8400
+        },
+        "connect": {
+          "tasksTotal": 3,
+          "tasksRunning": 0
+        },
+        "kubernetes": {
+          "readyReplicas": 2,
+          "desiredReplicas": 2
+        }
+      },
+      "observedAt": "<timestamp>"
     },
     {
       "nodeKey": "payments.events.enriched.v1",
-      "health": "UNKNOWN",
-      "rawSignal": null,
-      "metrics": {},
-      "observedAt": null
+      "health": "HEALTHY",
+      "rawSignal": "max lag 8400 over 2 groups",
+      "metrics": {
+        "kafka": {
+          "maxConsumerLag": 8400
+        }
+      },
+      "observedAt": "<timestamp>"
     },
     {
       "nodeKey": "payments.events.raw.v1",
-      "health": "UNKNOWN",
-      "rawSignal": null,
-      "metrics": {},
-      "observedAt": null
+      "health": "DEGRADED",
+      "rawSignal": "lag 2100000",
+      "metrics": {
+        "kafka": {
+          "maxConsumerLag": 2100000
+        }
+      },
+      "observedAt": "<timestamp>"
     },
     {
       "nodeKey": "stripe-webhooks",
@@ -86,6 +121,20 @@
   "plugins": [
     {
       "plugin": "kubernetes",
+      "capability": "HEALTH",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "kafka",
+      "capability": "HEALTH",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "connect",
       "capability": "HEALTH",
       "outcome": "COMPLETE",
       "reasons": [],

@@ -36,9 +36,17 @@ describe('the cross-team boundary is an edge predicate', () => {
     expect(crossesTeams(edge('payments-api', 'payments.events.raw.v1'), owners)).toBe(false)
   })
 
-  it('marks nothing the slice currently renders', () => {
-    // Honest about today: both real crossings are the ADR-0041 SOURCES_FROM edges, which arrive with
-    // `connect` in slice 4. Until then the treatment is built and correct with nothing to draw.
-    expect(graph.edges.filter((candidate) => crossesTeams(candidate, owners))).toHaveLength(0)
+  it('marks exactly the two crossings the shipped graph contains', () => {
+    // Slice 1 asserted this as zero and said why: both real crossings are the ADR-0041 SOURCES_FROM
+    // edges, so the treatment was built and correct with nothing to draw. `connect` gave it
+    // something. Two of the nine edges cross the boundary, and they are the two the pipeline is
+    // about — payments-platform hands off to data-platform at the connectors, which is §9's team
+    // split becoming a visible property of the canvas rather than a fact in a table.
+    const crossings = graph.edges.filter((candidate) => crossesTeams(candidate, owners))
+
+    expect(crossings.map((candidate) => `${candidate.fromKey} -> ${candidate.toKey}`)).toEqual([
+      'payments.events.enriched.v1 -> payments-es-sink',
+      'payments.events.enriched.v1 -> payments-iceberg-sink',
+    ])
   })
 })

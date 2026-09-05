@@ -40,13 +40,17 @@ class StateAndMetaTest extends NodqoraIntegrationTest {
         JsonNode meta = http.getForObject("/api/meta", JsonNode.class);
 
         assertThat(meta.get("environments").findValuesAsText("key")).containsExactly("production", "staging");
-        assertThat(meta.get("plugins").findValuesAsText("id")).containsExactly("yaml", "kubernetes");
+        assertThat(meta.get("plugins").findValuesAsText("id"))
+                .containsExactly("yaml", "kubernetes", "kafka", "connect");
         // ADR-0010: present iff the bean implements the interface — that is the whole of capability
         // negotiation, with nothing declared anywhere to keep in step. `yaml` produces topology and
-        // never observes it (ADR-0029); `kubernetes` does both, and its second capability is the
-        // reason anything on the canvas has a colour.
+        // never observes it (ADR-0029); the other three do both, and that second capability is the
+        // reason anything on the canvas has a colour. The full roster is one plugin that only
+        // declares and three that also observe, which is exactly what the MVP set out to be.
         assertThat(capabilities(meta, 0)).containsExactly("DISCOVERY");
         assertThat(capabilities(meta, 1)).containsExactly("DISCOVERY", "HEALTH");
+        assertThat(capabilities(meta, 2)).containsExactly("DISCOVERY", "HEALTH");
+        assertThat(capabilities(meta, 3)).containsExactly("DISCOVERY", "HEALTH");
         // ADR-0059: the frontend does not hold a copy of file config that disagrees, silently, the
         // first time anyone tunes a plugin's cadence.
         assertThat(meta.get("refresh").get("graphSeconds").asLong()).isEqualTo(300);

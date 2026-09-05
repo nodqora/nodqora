@@ -29,16 +29,21 @@ nodqora:
   # precedence is "expressed as config over plugin ids, not baked into the interface".
   #
   # Registry order is the canonical order of `sources[]` and the order rawSignal contributions join
-  # in. Precedence settles a contested scalar, first non-null wins: manual beats connector config
-  # beats Kubernetes config, with kafka last. They are genuinely different orders.
+  # in. It is CONTEXT.md's own worked example read left to right: `payments-es-sink` reads
+  # "2 desired / 2 ready; lag 120; RUNNING, 3/3 tasks RUNNING", which is kubernetes, then kafka,
+  # then connect.
+  #
+  # Precedence settles a contested scalar, first non-null wins: manual beats connector config beats
+  # Kubernetes config, with kafka last. `connect` sits second because it is the authority on a
+  # connector's own type, above `kubernetes`, which only ever sees the StatefulSet hosting it;
+  # `kafka` sits last because a topic's key is all it is sure of, and every scalar it could contest
+  # is one another writer knows better. They are genuinely different orders.
   #
   # Both lists must name exactly the registered plugins, checked at startup: a misspelled id would
   # otherwise sort last in silence and the graph would go on being folded with the wrong precedence.
-  # Slices 3-4 extend these as `kafka` and `connect` arrive, to `[yaml, kubernetes, kafka, connect]`
-  # and `[yaml, connect, kubernetes, kafka]`.
   plugins:
-    registry-order: [yaml, kubernetes]
-    precedence: [yaml, kubernetes]
+    registry-order: [yaml, kubernetes, kafka, connect]
+    precedence: [yaml, connect, kubernetes, kafka]
 
   # ADR-0035, ADR-0042. Timeouts sit strictly below their interval (see DiscoveryEngine).
   refresh:
@@ -72,6 +77,43 @@ nodqora:
             logs: "https://grafana.acme.io/explore?ns={namespace}&app={name}"
             dashboard: "https://grafana.acme.io/d/{value}"
             gitops: "https://argocd.acme.io/applications/{value}"
+        # ADR-0090: a required, non-empty include-prefix list with an exact-name `ignore`. There is
+        # no default and the default would have been *everything* -- on a shared Connect cluster,
+        # every team's connectors on the payments canvas.
+        connect:
+          url: https://connect-prod.internal:8083
+          connectors:
+            include: [payments-]
+            ignore: [payments-debug-reprocessor]
+          # ADR-0022: the workload this cluster runs on, stamped onto every connector. `kubernetes`
+          # suppresses the StatefulSet from node emission by exact name (ADR-0031) and is then handed
+          # the two connector nodes to observe -- suppression removes emission, not readability.
+          workload:
+            plugin: kubernetes
+            kind: statefulset
+            reference: payments-prod/kafka-connect
+          # ADR-0039: one variable, `{name}`. `config` MUST point at a UI -- research #5 verified
+          # that `GET /connectors/{name}/config` applies no masking of any kind, so a connector with
+          # an inlined password serves it in plaintext to whoever clicks.
+          links:
+            connector: "https://connect-ui.acme.io/prod/{name}"
+            logs: "https://grafana.acme.io/explore?connector={name}"
+            config: "https://connect-ui.acme.io/prod/{name}/config"
+        # ADR-0037: prefix scope, required. `listInternal: false` is set below the seam and is not
+        # sufficient -- Connect's `connect-*` topics are ordinary topics to Kafka, so `ignore`
+        # removes them by exact name.
+        kafka:
+          bootstrap: kafka-prod.internal:9092
+          topics:
+            include: [payments.]
+            ignore: [connect-offsets]
+          # ADR-0025, ADR-0042: one threshold, not a pair, keyed by consumer group, and required --
+          # a built-in number turns nodes amber because of a threshold nobody chose.
+          lag:
+            default: 10000
+          # §9 gives a topic one link, so one template is configured. No template, no link.
+          links:
+            dashboard: "https://grafana.acme.io/d/kafka-topic?var-topic={name}"
     staging:
       display-name: Staging
       plugins:
@@ -85,3 +127,25 @@ nodqora:
             logs: "https://grafana-staging.acme.io/explore?ns={namespace}&app={name}"
             dashboard: "https://grafana-staging.acme.io/d/{value}"
             gitops: "https://argocd-staging.acme.io/applications/{value}"
+        connect:
+          url: https://connect-staging.internal:8083
+          connectors:
+            include: [payments-]
+            ignore: [payments-debug-reprocessor]
+          workload:
+            plugin: kubernetes
+            kind: statefulset
+            reference: payments-staging/kafka-connect
+          links:
+            connector: "https://connect-ui-staging.acme.io/staging/{name}"
+            logs: "https://grafana-staging.acme.io/explore?connector={name}"
+            config: "https://connect-ui-staging.acme.io/staging/{name}/config"
+        kafka:
+          bootstrap: kafka-staging.internal:9092
+          topics:
+            include: [payments.]
+            ignore: [connect-offsets]
+          lag:
+            default: 10000
+          links:
+            dashboard: "https://grafana-staging.acme.io/d/kafka-topic?var-topic={name}"

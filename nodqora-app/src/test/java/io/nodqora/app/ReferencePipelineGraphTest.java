@@ -38,21 +38,23 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     @ValueSource(strings = {"production", "staging"})
     void the_graph_document_matches_its_golden(String environmentKey) {
         assertThat(graph(environmentKey))
-                .as("`yaml` alone renders the reference pipeline: no cluster, no broker, no worker")
+                .as("§2 and §3 in full, over all four writers")
                 .isEqualTo(Golden.read(mapper, "graph-" + environmentKey + ".json"));
     }
 
     @Test
-    void production_is_ten_nodes_and_yamls_seven_edges() {
+    void production_is_ten_nodes_and_section_threes_nine_edges() {
         JsonNode graph = graph("production");
 
-        // Ten nodes with two discovery plugins running: `kubernetes` finds three workloads, two of
-        // them merge onto keys `yaml` already carries, and ADR-0031 suppresses the third by exact
-        // name. An eleventh node would mean the `kafka-connect` StatefulSet had become one.
+        // Ten nodes with four discovery plugins running, and the count is unchanged from the two-
+        // plugin slice: `kubernetes` finds three workloads and ADR-0031 suppresses the one that is
+        // not a node; `kafka` and `connect` mint five keys between them and every one merges onto a
+        // key `yaml` already carries. An eleventh node would mean either the `kafka-connect`
+        // StatefulSet had become one or a prefix scope had let something in.
         assertThat(graph.get("nodes")).hasSize(10);
-        // Seven of §3's nine, unchanged by this slice. The two SOURCES_FROM edges are `connect`'s
-        // (ADR-0041) and arrive in slice 4; `kubernetes` emits no edges at all (ADR-0033).
-        assertThat(graph.get("edges")).hasSize(7);
+        // §3 in full. Seven from `yaml`, and the last two from `connect` reading the `topics` key
+        // alone (ADR-0041); `kubernetes` and `kafka` emit no edges at all (ADR-0033, ADR-0040).
+        assertThat(graph.get("edges")).hasSize(9);
     }
 
     @Test
@@ -61,7 +63,7 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         List<String> keys = staging.findValuesAsText("key");
 
         assertThat(staging.get("nodes")).hasSize(7);
-        assertThat(staging.get("edges")).hasSize(5);
+        assertThat(staging.get("edges")).hasSize(6);
         assertThat(keys)
                 .as("ADR-0004: drift is absence. Staging lacks the Iceberg branch by having no stanza.")
                 .doesNotContain("payments-iceberg-sink", "analytics.payments_events", "trino-analytics");
@@ -102,9 +104,11 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
         JsonNode topic = node(graph("production"), "payments.events.raw.v1");
         JsonNode api = node(graph("production"), "payments-api");
 
-        // ADR-0058: the API never fabricates a value no plugin supplied. The topics wait for
-        // `kafka` in slice 4 and carry nothing but the owner YAML declares.
-        assertThat(topic.get("type").isNull()).isTrue();
+        // ADR-0058: the API never fabricates a value no plugin supplied. With every plugin built,
+        // `type` is finally populated everywhere — `kafka` supplies the topic's — and `displayName`
+        // is populated nowhere but the four declared stanzas. That asymmetry is the assertion: the
+        // remaining nulls are the ones no writer chose to fill, not the ones nobody has got to yet.
+        assertThat(topic.get("type").asText()).isEqualTo("kafka-topic");
         assertThat(topic.get("displayName").isNull()).isTrue();
         // ADR-0034: `kubernetes` emits no displayName on purpose — not to resolve a merge conflict
         // with YAML but to avoid manufacturing one. `payments-api`'s real YAML-supplied displayName
@@ -165,11 +169,14 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     void the_outcome_block_explains_the_payload_it_rides_on() {
         JsonNode plugins = graph("production").get("plugins");
 
-        // One row per (plugin, capability) pair configured for *discovery*. `kubernetes` now also
-        // declares Health, and its row for that is on /state rather than here: ADR-0072 keeps two
-        // headers written by two loops, so the two blocks cannot disagree about a shared row.
-        assertThat(plugins).hasSize(2);
-        assertThat(plugins.findValuesAsText("plugin")).containsExactly("yaml", "kubernetes");
+        // One row per (plugin, capability) pair configured for *discovery* — all four of them now.
+        // Three also declare Health, and their rows for that are on /state rather than here:
+        // ADR-0072 keeps two headers written by two loops, so the two blocks cannot disagree about a
+        // shared row. The order is `registry-order`'s, which is also the order `sources[]` is
+        // written in and the order rawSignal contributions join in.
+        assertThat(plugins).hasSize(4);
+        assertThat(plugins.findValuesAsText("plugin"))
+                .containsExactly("yaml", "kubernetes", "kafka", "connect");
         plugins.forEach(plugin -> {
             assertThat(plugin.get("capability").asText()).isEqualTo("DISCOVERY");
             assertThat(plugin.get("outcome").asText()).isEqualTo("COMPLETE");
@@ -252,9 +259,12 @@ class ReferencePipelineGraphTest extends NodqoraIntegrationTest {
     @Test
     void the_workload_hosting_both_connectors_is_not_a_node() {
         // ADR-0031, and the reason the ten-node inventory holds: `kafka-connect` is suppressed by
-        // exact `kind/name`. Suppression removes node emission only — `connect` will still stamp it
-        // onto both connector nodes in slice 4, which is what keeps ADR-0013's routing intact.
+        // exact `kind/name`. Suppression removes node emission only, and both halves of that are now
+        // visible in one document — the StatefulSet is not a node, and `connect` stamps it onto both
+        // connector nodes as a backing, which is what keeps ADR-0013's routing intact.
         assertThat(graph("production").get("nodes").findValuesAsText("key")).doesNotContain("kafka-connect");
+        assertThat(backings(node(graph("production"), "payments-es-sink")))
+                .contains("kubernetes statefulset payments-prod/kafka-connect");
     }
 
     @Test

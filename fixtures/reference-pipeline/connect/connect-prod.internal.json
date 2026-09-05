@@ -1,0 +1,66 @@
+{
+  "connectors": [
+    {
+      "name": "payments-es-sink",
+      "type": "sink",
+      "config": {
+        "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+        "tasks.max": "3",
+        "topics": "payments.events.enriched.v1",
+        "connection.url": "https://es-prod.internal:9200",
+        "type.name": "_doc"
+      },
+      "state": "RUNNING",
+      "tasks": [
+        { "id": 0, "state": "RUNNING" },
+        { "id": 1, "state": "RUNNING" },
+        { "id": 2, "state": "RUNNING" }
+      ]
+    },
+    {
+      "name": "payments-iceberg-sink",
+      "type": "sink",
+      "config": {
+        "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+        "tasks.max": "3",
+        "topics": "payments.events.enriched.v1",
+        "iceberg.catalog": "analytics",
+        "iceberg.tables": "analytics.payments_events"
+      },
+      "state": "RUNNING",
+      "tasks": [
+        { "id": 0, "state": "RUNNING" },
+        { "id": 1, "state": "RUNNING" },
+        {
+          "id": 2,
+          "state": "FAILED",
+          "trace": "org.apache.kafka.connect.errors.ConnectException: Commit to Iceberg catalog analytics timed out\n\tat org.apache.iceberg.connect.channel.Coordinator.commit(Coordinator.java:141)\n\tat org.apache.kafka.connect.runtime.WorkerSinkTask.execute(WorkerSinkTask.java:206)"
+        }
+      ]
+    },
+    {
+      "name": "payments-debug-reprocessor",
+      "type": "sink",
+      "config": {
+        "connector.class": "io.confluent.connect.s3.S3SinkConnector",
+        "tasks.max": "1",
+        "topics": "payments.events.enriched.v1"
+      },
+      "state": "RUNNING",
+      "tasks": [{ "id": 0, "state": "RUNNING" }]
+    },
+    {
+      "name": "orders-jdbc-source",
+      "type": "source",
+      "config": {
+        "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+        "tasks.max": "2"
+      },
+      "state": "RUNNING",
+      "tasks": [
+        { "id": 0, "state": "RUNNING" },
+        { "id": 1, "state": "RUNNING" }
+      ]
+    }
+  ]
+}

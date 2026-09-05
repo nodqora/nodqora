@@ -26,16 +26,6 @@ import org.junit.jupiter.api.Test;
  */
 class ReferencePipelineCountsTest {
 
-    /**
-     * §3's two {@code SOURCES_FROM} edges in production and one in staging come from {@code connect}
-     * parsing its {@code topics} key (ADR-0041), and {@code connect} arrives in slice 4. Until then
-     * the golden documents are short by exactly these, and that is a statement about which plugins
-     * exist rather than about the fixture.
-     *
-     * <p><b>Slice 4 sets both to zero</b>, at which point the goldens match §4 outright.
-     */
-    private static final Map<String, Integer> EDGES_AWAITING_CONNECT = Map.of("production", 2, "staging", 1);
-
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
@@ -50,11 +40,14 @@ class ReferencePipelineCountsTest {
                             documented.get(environmentKey).nodes())
                     .isEqualTo(documented.get(environmentKey).nodes());
 
-            assertThat(golden.get("edges").size() + EDGES_AWAITING_CONNECT.get(environmentKey))
-                    .as("docs/reference-pipeline.md §4 says %s has %d edges, of which %d await `connect`",
-                            environmentKey,
-                            documented.get(environmentKey).edges(),
-                            EDGES_AWAITING_CONNECT.get(environmentKey))
+            // Slice 4 closed the last gap this guard carried. Until `connect` existed the goldens
+            // were short by §3's two `SOURCES_FROM` edges in production and one in staging, and the
+            // guard held an allowance for exactly those; now it compares the two numbers outright.
+            // The allowance is gone rather than set to zero, because a zeroed allowance is a place
+            // for the next one to be added quietly.
+            assertThat(golden.get("edges").size())
+                    .as("docs/reference-pipeline.md §4 says %s has %d edges", environmentKey,
+                            documented.get(environmentKey).edges())
                     .isEqualTo(documented.get(environmentKey).edges());
         }
     }
