@@ -1,9 +1,14 @@
 # Nodqora Editions
 
-**Provisional.** Every placement below names the evidence that would reopen it.
-The decisions are recorded as ADR-0107 through ADR-0113 and were made by
-[The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42),
-against the survey in
+**Provisional, in one direction.** Every placement below names the evidence
+that would reopen it — but reopening only ever moves a capability *toward*
+Community. **Nothing shipped in Community ever moves to Enterprise**
+(ADR-0128). The placements are recorded as ADR-0107 through ADR-0113 and were
+made by
+[The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42);
+how Enterprise is sold is ADR-0123 through ADR-0128, from
+[Pricing unit and trial](https://github.com/fredskor/nodqora/issues/45). Both
+rest on the survey in
 [docs/research/open-core-lines-in-comparable-tools.md](research/open-core-lines-in-comparable-tools.md).
 
 Two editions. **Community** is this repository, Apache-2.0. **Enterprise** is a
@@ -91,6 +96,89 @@ today.
 
 ---
 
+## How Enterprise is sold
+
+**A flat annual subscription per installation** (ADR-0123). No price is
+published yet; see *The price* below.
+
+**The unit is a deployment of Nodqora, and nothing Nodqora observes is ever
+counted.** Nodes, environments, plugins, connected systems and authenticated
+users are unlimited on both editions, permanently. There is exactly one
+countable object and it is the thing you deploy, not the estate you own.
+
+| Question | Answer |
+|---|---|
+| Replicas of one deployment | **One installation.** Scale out freely |
+| Non-production copies — sandbox, upgrade rehearsal, config testing | **Free and unlimited** |
+| A DR standby | **Free while passive**; an installation once it serves users |
+| Environments inside one install (prod, staging, dev) | **Unlimited and free**, on both editions |
+| Discovered nodes, edges, plugins, connected systems | **Unlimited and free**, on both editions |
+| Users who sign in | **Unlimited and free**, on both editions |
+
+You receive **one key per installation**, carrying a name you choose —
+`eu-prod`, `acme-gov-enclave`. Nothing fingerprints your hardware or your
+cluster, because upgrading is a redeploy (ADR-0114) and a fingerprint would
+break on every one (ADR-0124). The key verifies offline and
+never contacts us (ADR-0121); an air-gapped install stays air-gapped.
+
+**If a subscription lapses, nothing stops working.** The install boots, the
+canvas renders, health refreshes, the journal keeps writing, and every view
+scope already configured stays enforced. What freezes is the control path — new
+roles, scopes, monitoring rules, policies and retention changes (ADR-0120).
+There is a thirty-day grace period past expiry (ADR-0121). The key is a renewal
+prompt, not a lock, and it is sold as one.
+
+### The trial
+
+**Thirty days, full-featured, arranged through us** (ADR-0125). Extended by
+reissuing a key if a security review or procurement runs long — ask.
+
+It is sales-gated rather than self-serve for a structural reason worth stating
+plainly: Enterprise is a private artifact, and possession of that artifact is
+what gates capability (ADR-0119). A self-serve download would be a decision to
+publish the proprietary build to anyone who fills in a form.
+
+### The price
+
+**Contact us.** No list price is published yet, because there is not yet enough
+selling behind it for a published number to be anything but a guess — and a
+published guess is an anchor we would own permanently (ADR-0127).
+
+We have committed to publishing a list price once **five Enterprise deals have
+closed, or twelve months of active selling have passed**, whichever comes first.
+The *unit* and the *trial terms* are published now, above, so you can tell what
+you would be charged for without a call.
+
+**There is no free Enterprise tier, at any threshold** (ADR-0126). Community is
+the answer for a small organisation, and it is a complete one. A zero-cost key
+for a university, an OSS foundation or a design partner remains something we can
+decide to do; it is not a tier and carries no published threshold.
+
+---
+
+## What is promised
+
+Three commitments, in one direction only (ADR-0128).
+
+1. **No capability shipped in Community ever moves to Enterprise.** Every
+   Community row above is a commitment, not a placement. Capabilities may move
+   the other way — Enterprise to Community — and the revisit triggers below
+   operate only in that direction.
+2. **New, unshipped capabilities are unconstrained.** The rules at the top of
+   this page place them when they ship. Nothing is promised about work that does
+   not exist yet.
+3. **The Community edition stays Apache-2.0 and self-hostable.** This closes the
+   manoeuvre the survey found vendors treat as fair game — never demoting a
+   feature, while withdrawing the free way to run it. Airbyte withdrew its
+   self-hosted Enterprise SKU during the writing of this map; we are promising
+   against the equivalent here.
+
+The cost of promising this is real and is accepted: if a Community capability
+turns out to be the one everyone would have paid for, it cannot be taken back —
+only built beside.
+
+---
+
 ## Where this contradicts the product plan
 
 §43 was a sketch and closes by saying the split *"should not be finalized until
@@ -128,9 +216,13 @@ Stated here rather than left to be discovered.
   matches what the survey found every comparable vendor actually relies on, and
   the gating mechanism ([issue #44](https://github.com/fredskor/nodqora/issues/44))
   inherits that rather than solving it.
-- **Charging per connector is foreclosed** (ADR-0112), which removes the most
-  natural expansion-revenue mechanism and narrows the choices open to
-  [the pricing unit ticket](https://github.com/fredskor/nodqora/issues/45).
+- **Charging per connector is foreclosed** (ADR-0112), which removed the most
+  natural expansion-revenue mechanism. The pricing unit gave up the rest of it:
+  a flat per-installation subscription means a twenty-person startup and a
+  ten-thousand-engineer bank pay for the same object, and expansion comes only
+  from genuinely separate estates (ADR-0123).
+- **Every free placement above is now permanent** (ADR-0128), so the cost of
+  putting a row on the wrong side of the line no longer decays — it compounds.
 - **The free tier's isolation story consumes deployments.** Eight teams wanting
   eight views run eight Nodqoras. That is the intended upgrade pressure, and it
   is also a problem a team that automates deployments may simply solve
@@ -143,12 +235,23 @@ Stated here rather than left to be discovered.
 Each ADR carries its own; these are the ones that would reopen the ledger rather
 than a single row.
 
+**All of these move capabilities toward Community, never away from it**
+(ADR-0128).
+
 - Installs active for more than six months with no Enterprise enquiry, or
   enquiries asking for something already in Community — the standing-query line
-  is drawn where value is not (ADR-0107).
+  is drawn where value is not (ADR-0107). Note what this trigger can no longer
+  mean: the answer is finding what an organisation will actually pay for, not
+  moving a Community row into Enterprise.
 - Community installs building their own journals by scraping `/state` — the free
   line is short of the need (ADR-0110).
 - Natural-language querying becoming table stakes in the category — §5.5 is
   falsified and ADR-0113 falls with it.
 - A middle tier being asked for. That is a redraw of the map's destination and
   returns as a fresh effort, not an amendment here.
+- A customer whose Enterprise value plainly scales with something *inside* one
+  install rather than with the install itself — a consultancy or managed-service
+  provider running many clients' estates in one deployment is the shape to watch
+  for. That reopens the unit and the buyer rule together (ADR-0123, ADR-0126).
+- Five closed Enterprise deals, or twelve months of active selling — the
+  commitment to publish a list price falls due (ADR-0127).

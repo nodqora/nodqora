@@ -52,6 +52,10 @@ ADR-0113 were fixed by
 [The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42);
 they place capabilities in the Community or Enterprise edition
 ([`docs/editions.md`](docs/editions.md)) and touch no part of the graph model.
+ADR-0123 through ADR-0128 were fixed by
+[Pricing unit and trial](https://github.com/fredskor/nodqora/issues/45); they decide how
+Enterprise is sold — a flat annual subscription per installation, with nothing the product
+observes ever counted — and likewise touch no part of the graph model.
 
 ---
 
