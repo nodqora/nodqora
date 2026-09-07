@@ -84,3 +84,13 @@ cd frontend && npm run typecheck
 interface and everything above it is exercised against a recording, which keeps the suite
 deterministic and offline — at the price that "the client cannot start" is a class of defect only
 running against real infrastructure will find. #32 was exactly that.
+
+## Getting help
+
+**Open an issue.** That is the whole channel: support for the Apache-2.0 edition
+is public, so there is no support email and no private channel, and every answer
+is where the next person will find it. Nothing is promised about how fast — in
+practice every issue gets read.
+
+The commercial editions, what each one includes, and the response commitment
+that comes with the paid one are in [`docs/editions.md`](docs/editions.md).

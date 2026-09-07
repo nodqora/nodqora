@@ -7,8 +7,10 @@ Community. **Nothing shipped in Community ever moves to Enterprise**
 made by
 [The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42);
 how Enterprise is sold is ADR-0123 through ADR-0128, from
-[Pricing unit and trial](https://github.com/fredskor/nodqora/issues/45). Both
-rest on the survey in
+[Pricing unit and trial](https://github.com/fredskor/nodqora/issues/45); support
+is ADR-0135 through ADR-0140, from
+[Support, SLA and what Community gets](https://github.com/fredskor/nodqora/issues/49).
+All three rest on the survey in
 [docs/research/open-core-lines-in-comparable-tools.md](research/open-core-lines-in-comparable-tools.md).
 
 Two editions. **Community** is this repository, Apache-2.0. **Enterprise** is a
@@ -156,6 +158,80 @@ decide to do; it is not a tier and carries no published threshold.
 
 ---
 
+## Support
+
+**Support is bundled into the Enterprise subscription** (ADR-0135). There is no
+separate support product, no tier ladder and no add-on. It runs with an active
+term — trials included — and ends at expiry, not at the end of the thirty-day
+grace period.
+
+### What Enterprise gets
+
+**One business day to first response, Monday to Friday, UTC+4** (ADR-0136).
+
+That is the whole commitment. There is no restoration or resolution commitment,
+no severity ladder and nothing 24x7 — because there is one maintainer, and a
+commitment that cannot be kept on a bad week is not worth publishing. The
+timezone is stated rather than hidden behind "business hours" so you can convert
+it before you buy: from US Pacific, expect an answer overnight.
+
+Two things bound what an outage costs you, and they are the reason this
+commitment is defensible rather than thin. **Nodqora observes; it does not serve
+traffic** — nothing in your estate stops when Nodqora stops. And a lapsed key
+does not cause one: the install boots, the canvas renders and health keeps
+refreshing regardless (ADR-0120).
+
+| | |
+|---|---|
+| **Covered** | Nodqora and its four first-party plugins — `yaml`, `kubernetes`, `kafka`, `connect` |
+| **Included** | Diagnosing which side of the line a problem falls on, including when the cause turns out to be your cluster |
+| **Not covered** | Remediating your own infrastructure, credentials or network; third-party and private plugins |
+| **Versions** | The latest release only. No LTS, no backports (ADR-0139) |
+| **Indemnification** | None, in either edition (ADR-0140) |
+
+**Diagnosis is included even where the fix is yours** (ADR-0140). A plugin
+showing blind is usually RBAC, a network policy or a credential — and finding
+out which is work we do before we can tell you, so we commit to doing it. What
+we do not do is reach into your cluster and change it.
+
+**Support covers the latest release** (ADR-0139). If you are behind, the first
+response will be "upgrade and tell us if it persists" — which is a fair ask only
+because upgrading is a redeploy rather than a licence event (ADR-0114), and your
+subscription already entitles you to every version released during the term
+(ADR-0123). If your change-approval window makes that impractical, say so before
+you buy; see *What this costs* below.
+
+**There is no indemnification** (ADR-0140). Apache-2.0 §§7–8 disclaims warranty
+and liability for Community, and Enterprise does not take on more than the free
+edition does. An IP indemnity is chiefly a duty to *defend*, and defence is
+unbounded at any headcount this project has.
+
+**Licence, key reissue and renewal questions are answered for anyone, at any
+time**, in or out of term (ADR-0135). A frozen control path you want unfrozen is
+not a support ticket; the key is a renewal prompt, not a lock (ADR-0121).
+
+### What Community gets
+
+**Public issues on this repository. No response commitment, and no private
+channel** (ADR-0137).
+
+There is no support email, no DM and no private Slack. Every question and every
+answer is in public, where the next person finds it — which is the only shape
+one maintainer can serve, and the only one where an answer is worth more than
+once.
+
+Nothing is promised about how fast a Community issue is answered, and that is
+deliberate rather than evasive: in practice every one gets read, and promising
+that would turn a habit into a term.
+
+**A paid support agreement against Community is possible and is not a tier**
+(ADR-0138). It has no published price, no page and no threshold — the same shape
+ADR-0126 gives a free Enterprise key. If you want assurance and no Enterprise
+capability, ask.
+
+---
+
+
 ## What is promised
 
 Three commitments, in one direction only (ADR-0128).
@@ -223,6 +299,22 @@ Stated here rather than left to be discovered.
   from genuinely separate estates (ADR-0123).
 - **Every free placement above is now permanent** (ADR-0128), so the cost of
   putting a row on the wrong side of the line no longer decays — it compounds.
+- **Three support terms lose the same buyer.** Latest-release-only fails a
+  six-week change-approval window, diagnosis-without-remediation fails the team
+  that wants a vendor's hands on their cluster, and no indemnity fails
+  procurement outright (ADR-0139, ADR-0140). Each is individually correct at one
+  maintainer, and together they say Nodqora Enterprise is not yet sellable into
+  a regulated enterprise's procurement process. That is one deliberate posture,
+  recorded as one so it can be reversed as one.
+- **Community's public-only channel excludes the private asker** (ADR-0137).
+  Someone who will not post their own topology, internal service names or a
+  misconfiguration in public either sanitizes the question or does not ask, and
+  a fraction of those quietly stop using the product — which is §77's risk. It
+  is the price of the only channel one person can serve.
+- **The fat free tier stays unmonetized, for now** (ADR-0138). Community is
+  deliberately complete, and the one thing it lacks is not being charged for
+  yet. That is a timing decision, and it is the cheapest wrong answer on this
+  page to reverse.
 - **The free tier's isolation story consumes deployments.** Eight teams wanting
   eight views run eight Nodqoras. That is the intended upgrade pressure, and it
   is also a problem a team that automates deployments may simply solve
@@ -255,3 +347,13 @@ than a single row.
   for. That reopens the unit and the buyer rule together (ADR-0123, ADR-0126).
 - Five closed Enterprise deals, or twelve months of active selling — the
   commitment to publish a list price falls due (ADR-0127).
+- A deal lost explicitly on the support terms — named as such by the buyer,
+  rather than inferred. A second one reopens the version policy and the scope
+  together (ADR-0139, ADR-0140), and the honest answer is likely an entity with
+  insurance rather than a redrafted clause.
+- Two independent asks to pay for support against Community, or one from an
+  organisation whose name would carry — the shape is then proven by demand and
+  publishing it becomes a page rather than a decision (ADR-0138).
+- A week in which the one-business-day commitment is missed for reasons of
+  volume rather than circumstance — the commitment has outgrown the headcount
+  (ADR-0136).
