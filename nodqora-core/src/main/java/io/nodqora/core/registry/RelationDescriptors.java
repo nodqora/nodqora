@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.core.registry;
 
 import static io.nodqora.core.registry.RelationDescriptor.Orientation.FORWARD;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HealthGlyph, healthLabel } from '../canvas/HealthGlyph'
 import { foldKey } from '../api/keys'

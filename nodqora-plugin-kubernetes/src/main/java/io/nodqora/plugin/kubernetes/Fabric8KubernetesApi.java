@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.plugin.kubernetes;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;

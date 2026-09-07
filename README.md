@@ -94,3 +94,15 @@ practice every issue gets read.
 
 The commercial editions, what each one includes, and the response commitment
 that comes with the paid one are in [`docs/editions.md`](docs/editions.md).
+
+## Contributing and licence
+
+Everything in this repository is [Apache-2.0](LICENSE) and always will be.
+Contributions take a DCO sign-off (`git commit -s`) and there is no CLA — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for what that means and why
+(ADR-0129, ADR-0130).
+
+Nodqora is open core. A proprietary Enterprise edition lives in a separate
+repository and consumes this one's published artifacts; no file here is ever
+proprietary, and a capability that ships in Community never becomes paid
+(ADR-0128).

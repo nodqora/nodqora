@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * ADR-0020: a key is stored verbatim and trimmed, but every comparison is on the case-folded form.
  *

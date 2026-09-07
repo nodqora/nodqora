@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { HealthGlyph, healthLabel } from '../canvas/HealthGlyph'
 import { connectionsOf } from './connections'
 import { sameKey } from '../api/keys'

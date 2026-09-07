@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { foldKey } from '../api/keys'
 import type { GraphEdge } from '../api/types'
 

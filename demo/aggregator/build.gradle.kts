@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 plugins {
     java
     id("org.springframework.boot") version "3.4.1"

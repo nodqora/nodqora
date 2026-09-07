@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * ADR-0010: `TypeDescriptor.icon` is a **name** from a fixed frontend icon set, never a shipped
  * asset — so a plugin can register a type without shipping anything, and an unknown name falls back

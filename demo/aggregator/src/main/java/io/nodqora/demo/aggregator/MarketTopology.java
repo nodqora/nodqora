@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.demo.aggregator;
 
 import com.fasterxml.jackson.databind.JsonNode;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * ADR-0092: **the URL is an environment path plus an optional node parameter, and nothing else.**
  *

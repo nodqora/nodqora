@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { cleanup, render, waitFor } from '@testing-library/react'

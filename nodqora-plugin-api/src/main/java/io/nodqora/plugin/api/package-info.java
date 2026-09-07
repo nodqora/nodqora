@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The plugin contract (ADR-0015). Immutable records and interfaces only: no Spring,
  * no persistence, no dependency on {@code nodqora-core}.

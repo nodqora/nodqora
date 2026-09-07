@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.plugin.kubernetes;
 
 import io.nodqora.plugin.api.Backing;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.core.api;
 
 import io.nodqora.core.registry.RelationDescriptor;

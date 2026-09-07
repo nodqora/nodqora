@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The node card's one optional metric line, composed from ADR-0006's plugin-namespaced map.
  *
