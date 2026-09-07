@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 plugins {
     // Lets the Java toolchain below provision a JDK 21 that is not installed locally.
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 package io.nodqora.plugin.yaml;
 
 import static org.assertj.core.api.Assertions.assertThat;

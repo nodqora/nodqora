@@ -84,3 +84,15 @@ cd frontend && npm run typecheck
 interface and everything above it is exercised against a recording, which keeps the suite
 deterministic and offline — at the price that "the client cannot start" is a class of defect only
 running against real infrastructure will find. #32 was exactly that.
+
+## Contributing and licence
+
+Everything in this repository is [Apache-2.0](LICENSE) and always will be.
+Contributions take a DCO sign-off (`git commit -s`) and there is no CLA — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for what that means and why
+(ADR-0129, ADR-0130).
+
+Nodqora is open core. A proprietary Enterprise edition lives in a separate
+repository and consumes this one's published artifacts; no file here is ever
+proprietary, and a capability that ships in Community never becomes paid
+(ADR-0128).
