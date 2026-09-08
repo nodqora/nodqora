@@ -331,6 +331,14 @@ In Kubernetes, a Service or Ingress attaches to a node **by selector** —
 and that chain is the only Kubernetes inference the MVP uses. It produces
 backing attachment, never an edge (ADR-0030, ADR-0033).
 
+One `kubernetes` backing names a **query** rather than an object: `{ kind: pods,
+reference: <namespace>/<key>=<value>[,…] }`, whose readiness is counted from the
+live pods matching the selector. It exists for a workload whose owner is a kind
+this plugin does not produce — a `StrimziPodSet`, most commonly — and it is
+declared, never discovered. A pod is still not a Node and not a Backing: the
+matched pods are counted and discarded without one of them being named
+(ADR-0148).
+
 **A backing is emitted by whichever plugin knows the node key**, whatever
 technology the object belongs to (ADR-0022). The plugin that can *read* a signal
 is routinely not the one that can *attribute* it: `kafka` is the only plugin

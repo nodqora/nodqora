@@ -153,6 +153,89 @@ class KubernetesHealthTest {
         assertThat(observeOrNothing(deployment("api", null, null))).isNull();
     }
 
+    // ---------------------------------------------------------------- a selector over pods
+
+    @Test
+    void a_pods_backing_counts_live_pods_and_runs_the_same_arithmetic() {
+        // ADR-0148. A workload someone else's operator owns has no kind this plugin produces, so
+        // there is no object to name — but its pods are ordinary pods, and all/some/none ready is
+        // the same rule ADR-0025 already fixed. `desired` is the live pod count: the number
+        // something is currently asking for, read one step downstream of the spec that asks.
+        assertThat(healthOfPods(pod("a", true), pod("b", true))).isEqualTo(Health.HEALTHY);
+        assertThat(healthOfPods(pod("a", true), pod("b", false))).isEqualTo(Health.DEGRADED);
+        assertThat(healthOfPods(pod("a", false), pod("b", false))).isEqualTo(Health.UNHEALTHY);
+    }
+
+    @Test
+    void a_strimzi_connect_worker_reads_through_its_labels_and_not_through_its_owner() {
+        // The case #36 was filed for. Strimzi has not used StatefulSets since 0.35 — a Connect
+        // worker is a StrimziPodSet — so `connect.workload` had no object to name and every
+        // connector lost its third backing. The selector names no vendor's CRD: it is core
+        // Kubernetes vocabulary that works for any owner kind, which is why reading StrimziPodSet
+        // itself was the wrong answer.
+        Map<String, String> connect = Map.of("strimzi.io/cluster", "market", "strimzi.io/kind", "KafkaConnect");
+        Map<String, String> broker = Map.of("strimzi.io/cluster", "market", "strimzi.io/kind", "Kafka");
+
+        StateContribution contribution = observePods(
+                "market-demo/strimzi.io/cluster=market,strimzi.io/kind=KafkaConnect",
+                strimziPod("market-connect-0", true, connect),
+                strimziPod("market-connect-1", false, connect),
+                // A broker pod of the same Strimzi cluster: the second label is what excludes it,
+                // and it is why the selector is AND-ed rather than matched on any one entry.
+                strimziPod("market-dual-role-0", true, broker));
+
+        assertThat(contribution.health()).isEqualTo(Health.DEGRADED);
+        assertThat(contribution.rawSignal()).isEqualTo("2 pods / 1 ready");
+        assertThat(contribution.metrics()).isEqualTo(Map.of("desiredReplicas", 2, "readyReplicas", 1));
+    }
+
+    @Test
+    void a_selector_matching_nothing_abstains_rather_than_reading_as_a_shutdown() {
+        // ADR-0029 in the one place ADR-0148 had to refuse itself. A scaled-to-zero owner and a
+        // selector with a typo in it are the identical reading — an empty set — and DISABLED
+        // requires evidence of a deliberate act, which nothing in an empty set carries. It is the
+        // same blindness `kafka` may not guess past with an EMPTY consumer group.
+        assertThat(observeOrNothingPods("payments-prod/app=absent", pod("other", true, Map.of("app", "other"))))
+                .isNull();
+    }
+
+    @Test
+    void an_unreadable_selector_abstains_because_no_startup_check_could_have_caught_it() {
+        // The reference is an opaque string in another plugin's configuration (ADR-0022), so
+        // nothing validates it at binding time. Abstaining is the only safe direction: an empty
+        // selector would be true of every pod in the namespace.
+        assertThat(observeOrNothingPods("payments-prod", pod("a", true))).isNull();
+        assertThat(observeOrNothingPods("payments-prod/app", pod("a", true))).isNull();
+    }
+
+    @Test
+    void a_completed_jobs_pods_do_not_drag_the_node_to_unhealthy_for_having_finished() {
+        // ADR-0030's reason for refusing to discover Jobs, arriving from the other direction: a
+        // Succeeded pod is never ready and sits there until it is collected, so counting it would
+        // make a successful nightly run read as a failure. Terminal is terminal, and Failed goes
+        // with it — a crash-looping pod is Running and not ready, which is the reading that alarms.
+        assertThat(healthOfPods(pod("worker", true), succeeded("nightly-reconcile-28921"), failed("import-1")))
+                .isEqualTo(Health.HEALTHY);
+    }
+
+    @Test
+    void a_terminating_pod_does_not_inflate_what_the_owner_is_asking_for() {
+        // Otherwise every rolling update would read DEGRADED for the length of the rollout, with
+        // the old pod counted against the new one. A surge pod is not excluded: it is genuinely
+        // wanted right now.
+        assertThat(observePods("payments-prod/app=api", pod("new", true), terminating("old")).rawSignal())
+                .isEqualTo("1 pods / 1 ready");
+    }
+
+    @Test
+    void a_pod_in_another_namespace_is_not_matched_however_well_its_labels_fit() {
+        // The reference is namespace-scoped, and this plugin lists several namespaces into one map.
+        // Matching on labels alone would let staging's pods answer for production's node.
+        ObservedPod elsewhere = new ObservedPod("payments-staging", "api", Map.of("app", "api"), "Running", true, false);
+
+        assertThat(observeOrNothingPods("payments-prod/app=api", elsewhere)).isNull();
+    }
+
     // ---------------------------------------------------------------- the collapse, inside the plugin
 
     @Test
@@ -183,6 +266,31 @@ class KubernetesHealthTest {
         // this?" and the overlay answers "how much is up?" — both true, and reconciling them would
         // mean throwing one of them away.
         assertThat(contribution.metrics()).isEqualTo(Map.of("desiredReplicas", 1, "readyReplicas", 0));
+    }
+
+    @Test
+    void a_pods_backing_and_a_workload_backing_on_one_node_collapse_and_sum_together() {
+        // ADR-0105 does not care which kind of backing a reading came from, and this is why
+        // normalizing them into one shape is worth a record: the naming rule, the collapse and the
+        // two sums are one rule each rather than one rule per kind.
+        ObservableNode node = new ObservableNode(
+                "market-connect",
+                List.of(
+                        new Backing("kubernetes", "pods", NAMESPACE + "/app=connect"),
+                        new Backing("kubernetes", "deployment", NAMESPACE + "/connect-sidecar")));
+
+        StateContribution contribution = observe(
+                        List.of(node),
+                        List.of(deployment("connect-sidecar", 1, 0)),
+                        List.of(
+                                pod("connect-0", true, Map.of("app", "connect")),
+                                pod("connect-1", true, Map.of("app", "connect"))))
+                .get("market-connect");
+
+        assertThat(contribution.health()).isEqualTo(Health.UNHEALTHY);
+        assertThat(contribution.rawSignal())
+                .isEqualTo("payments-prod/app=connect 2 pods / 2 ready, payments-prod/connect-sidecar 1 desired / 0 ready");
+        assertThat(contribution.metrics()).isEqualTo(Map.of("desiredReplicas", 3, "readyReplicas", 2));
     }
 
     // ---------------------------------------------------------------- outcome
@@ -283,6 +391,31 @@ class KubernetesHealthTest {
                 suspend);
     }
 
+    private static ObservedPod pod(String name, boolean ready) {
+        return pod(name, ready, Map.of("app", "api"));
+    }
+
+    private static ObservedPod pod(String name, boolean ready, Map<String, String> labels) {
+        return new ObservedPod(NAMESPACE, name, labels, "Running", ready, false);
+    }
+
+    /** The one helper that leaves {@code payments-prod}, because Strimzi's own namespace reads better. */
+    private static ObservedPod strimziPod(String name, boolean ready, Map<String, String> labels) {
+        return new ObservedPod("market-demo", name, labels, "Running", ready, false);
+    }
+
+    private static ObservedPod succeeded(String name) {
+        return new ObservedPod(NAMESPACE, name, Map.of("app", "api"), "Succeeded", false, false);
+    }
+
+    private static ObservedPod failed(String name) {
+        return new ObservedPod(NAMESPACE, name, Map.of("app", "api"), "Failed", false, false);
+    }
+
+    private static ObservedPod terminating(String name) {
+        return new ObservedPod(NAMESPACE, name, Map.of("app", "api"), "Running", true, true);
+    }
+
     /** The node routed to a single workload of the same name — the ordinary shape. */
     private static ObservableNode routedTo(ObservedWorkload workload) {
         return new ObservableNode(
@@ -306,7 +439,30 @@ class KubernetesHealthTest {
 
     private static Map<String, StateContribution> observe(
             List<ObservableNode> nodes, List<ObservedWorkload> workloads) {
-        return observe(nodes, (ignored, namespace) -> new NamespaceObjects(workloads, List.of(), List.of()));
+        return observe(nodes, workloads, List.of());
+    }
+
+    private static Map<String, StateContribution> observe(
+            List<ObservableNode> nodes, List<ObservedWorkload> workloads, List<ObservedPod> pods) {
+        return observe(
+                nodes, (ignored, namespace) -> new NamespaceObjects(workloads, List.of(), List.of(), pods));
+    }
+
+    /** A node whose only `kubernetes` backing is a `pods` selector — ADR-0148's ordinary shape. */
+    private static StateContribution observePods(String selector, ObservedPod... pods) {
+        StateContribution contribution = observeOrNothingPods(selector, pods);
+        assertThat(contribution).as("expected a contribution for %s", selector).isNotNull();
+        return contribution;
+    }
+
+    private static StateContribution observeOrNothingPods(String selector, ObservedPod... pods) {
+        ObservableNode node =
+                new ObservableNode("connect-worker", List.of(new Backing("kubernetes", "pods", selector)));
+        return observe(List.of(node), List.of(), List.of(pods)).get("connect-worker");
+    }
+
+    private static Health healthOfPods(ObservedPod... pods) {
+        return observePods(NAMESPACE + "/app=api", pods).health();
     }
 
     private static Map<String, StateContribution> observe(List<ObservableNode> nodes, KubernetesApi api) {

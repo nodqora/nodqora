@@ -1,8 +1,14 @@
 # ADR-0030: Three workload kinds become nodes; Services and Ingresses attach as backings
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0148](0148-a-pods-backing-names-a-selector-and-readiness-is-counted-from-live-pods.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
+
+> **Amendment (ADR-0148).** A `kubernetes` backing may also be `{ kind: pods, reference:
+> <namespace>/<label selector> }`, which health reads by counting live matching pods. It is **not**
+> a produced kind: discovery never emits it, `WorkloadKind` does not gain a constant, and a pod is
+> still not a node and not a backing (ADR-0005) — the backing names a query, and the pods it
+> matches are counted without one of them ever being named. Which kinds become nodes is unchanged.
 
 ## Context
 

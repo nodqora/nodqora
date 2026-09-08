@@ -1,8 +1,15 @@
 # ADR-0034: Kubernetes has declared intent, so it is the plugin that emits `DISABLED`
 
-- **Status**: Amended by [ADR-0105](0105-a-node-backed-by-several-workloads-names-each-and-sums-their-replicas.md)
+- **Status**: Amended by [ADR-0105](0105-a-node-backed-by-several-workloads-names-each-and-sums-their-replicas.md), [ADR-0148](0148-a-pods-backing-names-a-selector-and-readiness-is-counted-from-live-pods.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
+
+> **Amendment (ADR-0148).** "Only workload backings contribute" now reads "only workload and
+> `pods` backings". A backing of kind `pods` names a `<namespace>/<label selector>` reference and
+> its readiness is counted from the live pods that match, for a workload whose owner is a kind this
+> plugin does not produce — a `StrimziPodSet`, most commonly. It may never say `DISABLED`: an empty
+> pod set is not evidence of intent (ADR-0029), so a scaled-to-zero owner read through a selector
+> abstains where the same owner named directly would be `DISABLED`.
 
 > **Amendment (ADR-0105).** The `rawSignal` and `metrics` shapes below describe **one** workload.
 > When a node has several, `rawSignal` prefixes each with its `namespace/name` and `metrics` sums

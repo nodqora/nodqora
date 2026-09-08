@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import org.slf4j.Logger;
@@ -34,6 +35,13 @@ import org.slf4j.LoggerFactory;
  * own spec, written by a human or by an autoscaler acting on one, rather than being inferred from an
  * absence of activity. That is why {@code kafka} may never emit it — an {@code EMPTY} consumer group
  * is the exact state of a scaled-down consumer and a crashed one — and why this plugin may.
+ *
+ * <p><b>Two kinds of backing are read</b> (ADR-0148). A workload backing names one object;
+ * a {@code pods} backing names a <em>selector</em>, {@code <namespace>/<labels>}, and its readiness
+ * is counted from the live pods that match. The second exists because a workload someone else's
+ * operator owns — a {@code StrimziPodSet}, most commonly — has no kind this plugin produces, so
+ * naming the owner is not available at any price while counting its pods is available for every
+ * owner at once.
  *
  * <p>Three things it deliberately does <em>not</em> do:
  *
@@ -59,6 +67,13 @@ class KubernetesHealth {
     private static final String READY_REPLICAS = "readyReplicas";
 
     /**
+     * ADR-0148's kind. It is not in {@link WorkloadKind} and must not be: that enum is what the
+     * plugin <em>asks the cluster for</em> and what becomes a node, and a selector is neither an
+     * object nor a node.
+     */
+    private static final String PODS_KIND = "pods";
+
+    /**
      * ADR-0034: only workload backings contribute — a Service and an Ingress have no readiness to
      * report and are inert for health. Derived from the enum rather than listed, so a kind added to
      * ADR-0030 cannot be silently left out of health while being discovered.
@@ -82,14 +97,15 @@ class KubernetesHealth {
         }
 
         Map<String, ObservedWorkload> byReference = new LinkedHashMap<>();
+        List<ObservedPod> pods = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
         int unreachable = 0;
 
         for (String namespace : config.namespaces()) {
             try {
-                api.list(config, namespace)
-                        .workloads()
-                        .forEach(workload -> byReference.put(workload.reference(), workload));
+                NamespaceObjects objects = api.list(config, namespace);
+                objects.workloads().forEach(workload -> byReference.put(workload.reference(), workload));
+                pods.addAll(objects.pods());
             } catch (RuntimeException e) {
                 unreachable++;
                 reasons.add("namespace %s could not be listed: %s".formatted(namespace, message(e)));
@@ -106,7 +122,7 @@ class KubernetesHealth {
 
         Map<String, StateContribution> contributions = new LinkedHashMap<>();
         for (ObservableNode node : nodes) {
-            contribution(node, byReference).ifPresent(observed -> contributions.put(node.key(), observed));
+            contribution(node, byReference, pods).ifPresent(observed -> contributions.put(node.key(), observed));
         }
 
         log.debug(
@@ -121,37 +137,49 @@ class KubernetesHealth {
     }
 
     /**
-     * ADR-0034: several workload backings on one node collapse with <b>ADR-0024's own algorithm</b>,
-     * inside the plugin. One collapse applied at two levels, and no second rule to keep in step —
-     * which is why the node ADR-0034 warns about behaves correctly for free: scaling the shared
+     * ADR-0034: several backings on one node collapse with <b>ADR-0024's own algorithm</b>, inside
+     * the plugin. One collapse applied at two levels, and no second rule to keep in step — which is
+     * why the node ADR-0034 warns about behaves correctly for free: scaling the shared
      * {@code kafka-connect} StatefulSet to zero contributes {@code DISABLED} to every node it backs,
      * and {@code DISABLED} wins outright at both levels.
      *
-     * <p>Returns nothing when every workload abstained. An abstention is an omission (ADR-0104), so
+     * <p>Returns nothing when every backing abstained. An abstention is an omission (ADR-0104), so
      * a node this plugin could not read has no contribution rather than an {@code UNKNOWN} one that
      * the fold would discard a step later anyway.
      */
-    private java.util.Optional<StateContribution> contribution(
-            ObservableNode node, Map<String, ObservedWorkload> byReference) {
-        List<ObservedWorkload> observed = node.backings().stream()
+    private Optional<StateContribution> contribution(
+            ObservableNode node, Map<String, ObservedWorkload> byReference, List<ObservedPod> pods) {
+        List<Readiness> readings = node.backings().stream()
                 .filter(backing -> KubernetesDiscovery.PLUGIN_ID.equals(backing.plugin()))
-                .filter(backing -> WORKLOAD_KINDS.contains(backing.kind()))
-                .map(Backing::reference)
-                // A backing whose object has vanished abstains: deletion is discovery's to read from
-                // its own snapshot, never encoded as health.
-                .map(byReference::get)
-                .filter(java.util.Objects::nonNull)
-                .sorted(Comparator.comparing(ObservedWorkload::reference))
+                .map(backing -> reading(backing, byReference, pods))
+                .flatMap(Optional::stream)
+                .sorted(Comparator.comparing(Readiness::reference))
                 .toList();
 
-        List<Health> healths = observed.stream().map(KubernetesHealth::health).toList();
-        Health collapsed = Health.collapse(healths);
+        Health collapsed = Health.collapse(readings.stream().map(Readiness::health).toList());
         if (collapsed == Health.UNKNOWN) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
 
-        return java.util.Optional.of(
-                new StateContribution(collapsed, rawSignal(observed), metrics(observed)));
+        return Optional.of(new StateContribution(collapsed, rawSignal(readings), metrics(readings)));
+    }
+
+    /**
+     * The one place a backing's kind decides what it means. A kind this plugin has no reading for —
+     * a Service, an Ingress, or something a future ADR adds to discovery and not to health — is not
+     * an error and not an abstention: it is simply not a health input, and yields nothing.
+     */
+    private static Optional<Readiness> reading(
+            Backing backing, Map<String, ObservedWorkload> byReference, List<ObservedPod> pods) {
+        if (WORKLOAD_KINDS.contains(backing.kind())) {
+            // A backing whose object has vanished abstains: deletion is discovery's to read from
+            // its own snapshot, never encoded as health.
+            return Optional.ofNullable(byReference.get(backing.reference())).map(KubernetesHealth::workload);
+        }
+        if (PODS_KIND.equals(backing.kind())) {
+            return Optional.of(podSet(backing.reference(), pods));
+        }
+        return Optional.empty();
     }
 
     /**
@@ -172,16 +200,16 @@ class KubernetesHealth {
      * there: nought of nought ready is both "all of them" and "none of them", and ADR-0025 is
      * explicit that all/some/none applies only when {@code desired > 0}.
      */
-    private static Health health(ObservedWorkload workload) {
+    private static Readiness workload(ObservedWorkload workload) {
+        String reference = workload.reference();
         if (workload.kind() == WorkloadKind.CRONJOB) {
-            return Boolean.TRUE.equals(workload.suspend()) ? Health.DISABLED : Health.UNKNOWN;
+            return Boolean.TRUE.equals(workload.suspend())
+                    ? new Readiness(reference, Health.DISABLED, "suspended", null, null)
+                    : Readiness.abstains(reference, "scheduled");
         }
         Integer desired = workload.desiredReplicas();
         if (desired == null) {
-            return Health.UNKNOWN;
-        }
-        if (desired == 0) {
-            return Health.DISABLED;
+            return Readiness.abstains(reference, "replicas unreported");
         }
         // A missing `readyReplicas` is a zero, while a missing `desiredReplicas` above was an
         // abstention — and the asymmetry is the API's rather than ours. Kubernetes omits
@@ -189,10 +217,53 @@ class KubernetesHealth {
         // `spec.replicas` is always populated on a Deployment or StatefulSet, so absent there means
         // we could not read the spec, and guessing would turn that into a deliberate shutdown.
         int ready = workload.readyReplicas() == null ? 0 : workload.readyReplicas();
-        if (ready >= desired) {
-            return Health.HEALTHY;
+        if (desired == 0) {
+            return new Readiness(reference, Health.DISABLED, "scaled to 0", 0, ready);
         }
-        return ready == 0 ? Health.UNHEALTHY : Health.DEGRADED;
+        return new Readiness(
+                reference,
+                Readiness.arithmetic(desired, ready),
+                "%d desired / %d ready".formatted(desired, ready),
+                desired,
+                ready);
+    }
+
+    /**
+     * ADR-0148: the same arithmetic over a selector's live pods, and <b>no {@code DISABLED}</b>.
+     *
+     * <p>Zero matching pods abstains, which is ADR-0029 applied rather than a gap. A scaled-to-zero
+     * owner and a selector with a typo in it produce the identical reading — an empty set — and
+     * {@code DISABLED} requires evidence of a deliberate act, which nothing in an empty set carries.
+     * It is the same blindness ADR-0029 already refuses to let {@code kafka} guess past with an
+     * {@code EMPTY} consumer group; here it costs less, because the operator who wants
+     * {@code DISABLED} can name the owning workload instead and get it from the spec.
+     *
+     * <p>A reference that does not parse abstains too, and says so in the log — the reference is
+     * config a human wrote, and it is bound as an opaque string that no startup validation can
+     * check (ADR-0022).
+     */
+    private static Readiness podSet(String reference, List<ObservedPod> pods) {
+        Optional<PodSelector> selector = PodSelector.parse(reference);
+        if (selector.isEmpty()) {
+            log.warn(
+                    "pods backing '{}' is not a <namespace>/<key>=<value>[,...] selector and was not read",
+                    reference);
+            return Readiness.abstains(reference, "unreadable selector");
+        }
+        List<ObservedPod> matched = pods.stream()
+                .filter(ObservedPod::live)
+                .filter(selector.get()::selects)
+                .toList();
+        if (matched.isEmpty()) {
+            return Readiness.abstains(reference, "no matching pods");
+        }
+        int ready = (int) matched.stream().filter(ObservedPod::ready).count();
+        return new Readiness(
+                reference,
+                Readiness.arithmetic(matched.size(), ready),
+                "%d pods / %d ready".formatted(matched.size(), ready),
+                matched.size(),
+                ready);
     }
 
     /**
@@ -201,40 +272,33 @@ class KubernetesHealth {
      * signal, so a node observed by three plugins reads
      * {@code "2/2 ready; lag 120; RUNNING, 3/3 tasks RUNNING"}.
      *
-     * <p>ADR-0105: a node backed by several workloads names each one. With one workload the
-     * reference would be noise repeating what {@code backings[]} already says; with two, an
-     * unlabelled {@code "3 desired / 3 ready, 0 desired / 0 ready"} makes the reader guess which is
-     * which. Ordered by reference, because the cluster's list order is not stable.
+     * <p>ADR-0105: a node backed by several workloads names each one. With one backing the reference
+     * would be noise repeating what {@code backings[]} already says; with two, an unlabelled
+     * {@code "3 desired / 3 ready, 0 desired / 0 ready"} makes the reader guess which is which.
+     * Ordered by reference, because the cluster's list order is not stable.
      */
-    private static String rawSignal(List<ObservedWorkload> observed) {
-        if (observed.isEmpty()) {
+    private static String rawSignal(List<Readiness> readings) {
+        if (readings.isEmpty()) {
             return null;
         }
-        boolean several = observed.size() > 1;
-        return observed.stream()
-                .map(workload -> several ? workload.reference() + " " + phrase(workload) : phrase(workload))
+        boolean several = readings.size() > 1;
+        return readings.stream()
+                .map(reading -> several ? reading.reference() + " " + reading.phrase() : reading.phrase())
                 .collect(java.util.stream.Collectors.joining(", "));
-    }
-
-    private static String phrase(ObservedWorkload workload) {
-        if (workload.kind() == WorkloadKind.CRONJOB) {
-            return Boolean.TRUE.equals(workload.suspend()) ? "suspended" : "scheduled";
-        }
-        Integer desired = workload.desiredReplicas();
-        if (desired == null) {
-            return "replicas unreported";
-        }
-        int ready = workload.readyReplicas() == null ? 0 : workload.readyReplicas();
-        return desired == 0 ? "scaled to 0" : "%d desired / %d ready".formatted(desired, ready);
     }
 
     /**
      * ADR-0028's allow-list: {@code desiredReplicas} and {@code readyReplicas}, enumerated by name.
      *
-     * <p>ADR-0105: summed across the node's workloads, because the overlay answers "how much of this
-     * node is running" and a node backed by two workloads runs in proportion to both. A workload
-     * with no {@code spec.replicas} contributes to neither sum — a zero there would render as a
+     * <p>ADR-0105: summed across the node's backings, because the overlay answers "how much of this
+     * node is running" and a node backed by two workloads runs in proportion to both. A backing with
+     * no replica concept — a CronJob — contributes to neither sum; a zero there would render as a
      * scaled-down workload, which is the one reading it must not have.
+     *
+     * <p>ADR-0148: a {@code pods} backing contributes its <em>live pod count</em> as
+     * {@code desiredReplicas}. It is the count something is currently asking for, read one step
+     * downstream of the spec that asks for it, and the alternative — no metrics — would drop the
+     * overlay from exactly the nodes this backing exists to serve.
      *
      * <p>The sums and the glyph can look like they disagree, and ADR-0105 accepts it: a node backed
      * by a StatefulSet scaled to zero and a Deployment at 1 desired / 0 ready reads {@code DISABLED}
@@ -242,25 +306,18 @@ class KubernetesHealth {
      * the overlay answers "how much is up?"; both are true, and reconciling them would mean
      * discarding one of them.
      */
-    private static Map<String, Object> metrics(List<ObservedWorkload> observed) {
-        // One filter, not two: a CronJob has no `spec.replicas` at all, so the null check already
-        // excludes it. Naming the kind as well would be a second rule saying the same thing, and the
-        // day they disagreed the wrong one would be the one someone had remembered to update.
-        List<ObservedWorkload> replicated = observed.stream()
-                .filter(workload -> workload.desiredReplicas() != null)
-                .toList();
+    private static Map<String, Object> metrics(List<Readiness> readings) {
+        List<Readiness> replicated =
+                readings.stream().filter(reading -> reading.desired() != null).toList();
         if (replicated.isEmpty()) {
             return Map.of();
         }
         Map<String, Object> metrics = new TreeMap<>();
         metrics.put(
                 DESIRED_REPLICAS,
-                replicated.stream().mapToInt(ObservedWorkload::desiredReplicas).sum());
+                replicated.stream().mapToInt(Readiness::desired).sum());
         metrics.put(
-                READY_REPLICAS,
-                replicated.stream()
-                        .mapToInt(workload -> workload.readyReplicas() == null ? 0 : workload.readyReplicas())
-                        .sum());
+                READY_REPLICAS, replicated.stream().mapToInt(Readiness::ready).sum());
         return metrics;
     }
 
