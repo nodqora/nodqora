@@ -1,11 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# ADR-0150: this file is the Community install. The copy attached to the GitHub Release for a tag is
-# the one supported way in — `curl -LO`, `docker compose up`, open http://localhost:8080.
+# ADR-0150: this file is the Community install. `curl -LO`, `docker compose up`, then open
+# http://localhost:8080.
+# >>> tree-only
 #
-# The copy in the tree is deliberately not that file. `@VERSION@` is rendered by `./gradlew release`
-# (ADR-0155), which writes `build/compose.yaml` and uploads *that* as the release asset. Two reasons
-# it is a placeholder rather than a real tag:
+# Everything between these two markers is stripped by `./gradlew release` and never reaches the
+# release asset, because it is addressed to a reader of this repository rather than to someone
+# installing Nodqora. The rest of the file is rendered verbatim with `@VERSION@` substituted.
+#
+# The copy in the tree is deliberately not the install. `@VERSION@` is rendered by `./gradlew
+# release` (ADR-0155), which writes `build/release/compose.yaml` and uploads *that* as the release
+# asset. Two reasons it is a placeholder rather than a real tag:
 #
 #   * ADR-0143 makes a published version immutable, which is worth nothing if the compose file
 #     naming it floats. A `:latest` here would be a runnable, unpinned install sitting on `main` —
@@ -16,6 +21,7 @@
 #
 # So this file does not run as it stands, on purpose. To try an unreleased build, build the image
 # locally and point the `image:` line at your own tag.
+# <<< tree-only
 
 services:
   nodqora:
