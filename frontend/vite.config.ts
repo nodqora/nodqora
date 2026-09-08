@@ -41,8 +41,18 @@ const thirdPartyNpm = license({
   },
 })
 
+// ADR-0156: the running version, baked in so the first-run screen's documentation link can be
+// pinned to the tag this build was cut from. ADR-0153 makes a minor version able to want a config
+// edit, so an unpinned link would teach an old install a grammar it does not have, undetectably.
+//
+// A `define` rather than Vite's `.env` discovery, deliberately: the same replacement then happens
+// under `vite build` and under vitest, so the constant is never a value only the bundle has. The
+// Dockerfile's node stage passes it; a working tree has none and the link falls back to `main`.
+const nodqoraVersion = process.env.NODQORA_VERSION || null
+
 export default defineConfig({
   plugins: [react()],
+  define: { __NODQORA_VERSION__: JSON.stringify(nodqoraVersion) },
   build: {
     // Build-only: `vite dev` and the vitest runs have no artifact to attribute.
     rollupOptions: { plugins: [thirdPartyNpm] },

@@ -286,6 +286,26 @@ body {
 }
 .drawer-unresolved { margin: 18px 0 0; color: var(--ink-quiet); }
 
+/* ADR-0156: the first-run screen replaces the shell, so it centres in the whole app rather than in
+   a canvas region — there is no canvas. It borrows the not-found's quiet headline deliberately:
+   this is the same family of statement one step earlier, and it must not read as an error. */
+.first-run {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 40px; text-align: center;
+}
+.first-run-headline { margin: 0; font-size: 15px; color: var(--ink-quiet); }
+/* Left-aligned inside the centred column: the headline is one line and centres well, but the route
+   is four clauses and centred prose ragged on both edges is measurably harder to follow — on the
+   one screen whose entire job is being followed. */
+.first-run-route {
+  margin: 0; max-width: 58ch; line-height: 1.65; font-size: 13px; color: var(--ink-quiet);
+  text-align: left;
+}
+.first-run-doc { margin: 0; font-size: 13px; }
+.first-run-doc a { color: var(--accent); }
+.first-run-version { color: var(--ink-quiet); }
+
 /* ---------------------------------------------------------------- search (ADR-0066 … ADR-0070) */
 
 .search { position: relative; }

@@ -25,6 +25,15 @@ no redirect.
 
 > "No environment named `Production`." — Available: `production`, `staging`
 
+> **Amended by [ADR-0156](0156-the-unconfigured-install-has-a-first-run-screen-that-replaces-the-shell.md).**
+> Both rules above presuppose a **non-empty** roster, and ADR-0152 makes the
+> shipped image start with an empty one. With no environments there is no
+> `environments[0]` to redirect to, and the not-found's roster line — the thing
+> that turns a case typo into one click — renders nothing at all. So an empty
+> roster is checked **before** either rule and renders a first-run screen on
+> every route, leaving the URL exactly as given. Ordering it the other way frames
+> a config-absent install as a **typo** and offers an empty repair.
+
 ## Consequences
 
 - **A redirect makes the root's ambiguity last zero screens.** Bare `/` asserts no
