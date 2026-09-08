@@ -21,9 +21,9 @@ This image is built FROM
 and redistributes that image's layers unmodified. Its own attribution travels
 with it, in place, and is not reproduced here:
 
-  * Debian package copyright files, one per installed package, at
+  * Ubuntu package copyright files, one per installed package, at
         /usr/share/doc/*/copyright
-    The Debian container images configure dpkg with
+    The Ubuntu container images configure dpkg with
     `path-exclude=/usr/share/doc/*` alongside an explicit
     `path-include=/usr/share/doc/*/copyright`, so these files are retained
     deliberately, for exactly this purpose, even though the rest of the
