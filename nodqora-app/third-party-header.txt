@@ -1,0 +1,73 @@
+Nodqora — third-party attribution
+=================================
+
+This file accompanies the Nodqora Community image and reproduces the licences and
+notices of the third-party code distributed inside it. Nodqora's own code is
+Apache-2.0; see LICENSE and NOTICE in the source repository.
+
+It is an attribution file, not a software bill of materials. It records what the
+licences of the bundled code oblige this distribution to carry. It is not a
+complete inventory of everything present in the image, and it is not intended to
+be consumed by a scanner.
+
+
+The base image
+--------------
+
+This image is built FROM
+
+    @BASE_IMAGE@
+
+and redistributes that image's layers unmodified. Its own attribution travels
+with it, in place, and is not reproduced here:
+
+  * Debian package copyright files, one per installed package, at
+        /usr/share/doc/*/copyright
+    The Debian container images configure dpkg with
+    `path-exclude=/usr/share/doc/*` alongside an explicit
+    `path-include=/usr/share/doc/*/copyright`, so these files are retained
+    deliberately, for exactly this purpose, even though the rest of the
+    documentation is stripped.
+
+  * The Eclipse Temurin JDK notice and licences, at
+        /opt/java/openjdk/NOTICE
+        /opt/java/openjdk/legal/
+    covering the GNU General Public License v2 with the Classpath Exception under
+    which OpenJDK is distributed, and the licences of everything OpenJDK itself
+    vendors.
+
+To read them:
+
+    docker run --rm --entrypoint sh @BASE_IMAGE@ \
+      -c 'cat /usr/share/doc/*/copyright; cat /opt/java/openjdk/legal/*/*'
+
+The base image reference above is pinned by digest, so it identifies exactly the
+layers this Nodqora version was built on. A later Nodqora release may be built on
+a different base.
+
+
+What is listed below
+--------------------
+
+Everything the Nodqora build *adds* on top of that base:
+
+  * the Java libraries bundled inside the application jar, under BOOT-INF/lib
+  * the npm packages whose code is bundled into the served JavaScript assets
+
+Both lists are generated from the built artifacts themselves rather than from a
+dependency manifest, so they name what is present rather than what was requested.
+
+
+A known limitation
+------------------
+
+Java libraries are attributed from the metadata their publishers provide. Where a
+library ships its own licence or notice file inside its jar, that file is
+reproduced verbatim below. Many do not: for those, the licence is identified by
+name and URL from the library's POM, and no copyright line is available to
+reproduce, because none is published in a machine-readable form. Permissive
+licences such as MIT and BSD ask that the copyright notice accompany the
+distribution; where a publisher does not ship one, the URL is the pointer to it.
+
+The frontend packages do not have this gap — each one's own LICENSE file is read
+from the package and reproduced in full.

@@ -1,0 +1,12 @@
+{
+  "org.apache.logging.log4j:log4j-api": {
+    "license": "Apache-2.0",
+    "licenseUrl": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "why": "ADR-0154: log4j publishes its licence through a Bundle-License OSGi manifest header, and the resolved value arrives with the header's quoting and link attribute intact (\"Apache-2.0\";link=\"...\"). The licence is not in doubt; only its spelling is."
+  },
+  "org.apache.logging.log4j:log4j-to-slf4j": {
+    "license": "Apache-2.0",
+    "licenseUrl": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "why": "ADR-0154: as log4j-api above — an OSGi Bundle-License header read verbatim."
+  }
+}
