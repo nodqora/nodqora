@@ -45,6 +45,17 @@ their place on a ten-node graph.
 > load fits, then pans per ADR-0069, then selects — so the upstream/downstream
 > highlight above is visible to the reader with the least context.
 
+> **Amended by [ADR-0149](0149-an-edge-claims-only-that-it-has-stopped-never-that-it-carries.md).**
+> Edges also carry a **stalled** treatment — a hollow arrowhead and a thinner
+> stroke where the edge is known to be carrying nothing, because an end is
+> `DISABLED` or `UNHEALTHY` or the source is starved of every inbound edge. This
+> list named the treatments an edge has (ADR-0016's crossing, the highlight above)
+> and said nothing about the consequence of a node being off: ADR-0027 keeps the
+> downstream nodes `UNKNOWN`, correctly, so the blast radius had nowhere to appear.
+> It is not one of the deferred filters — it has no control, no toggle and no
+> state — and it never claims the opposite, because nothing measures flow
+> (ADR-0038).
+
 **Deferred:**
 
 - **minimap** — near-useless at fixture scale, and cheap to restore later
