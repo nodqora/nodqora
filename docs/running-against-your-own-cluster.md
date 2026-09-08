@@ -1,8 +1,10 @@
 # Running against your own cluster
 
-The shipped configuration points at the reference pipeline: fictional hosts, a demo topology, a
-canvas that renders without a cluster anywhere near it. This is how you point Nodqora at
-infrastructure you actually run.
+`./gradlew :nodqora-app:bootRun` renders the reference pipeline: fictional hosts, a demo topology,
+a canvas that renders without a cluster anywhere near it. That comes from
+`fixtures/reference-pipeline/application-demo.yaml`, which the Gradle tasks load and which
+**deliberately does not ship** — ADR-0152 puts no environments in the image at all. This is how you
+point Nodqora at infrastructure you actually run.
 
 It is two files, and the interesting part is which one holds what.
 
@@ -45,9 +47,23 @@ Layer it on top of the packaged configuration rather than editing that file:
 ./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./local.yaml"
 ```
 
-Environments merge by key, so `homelab` appears in the switcher alongside the demo `production` and
+**This replaces the demo rather than joining it.** `bootRun` sets that same property to point at
+`fixtures/reference-pipeline/application-demo.yaml`, and a command-line argument outranks it, so
+`homelab` is the whole roster — which is usually what you want here. Name both, comma-separated, if
+you want the demo in the switcher too:
+
+```bash
+./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./fixtures/reference-pipeline/application-demo.yaml,file:./local.yaml"
+```
+
+Environments merge by key, so listing both puts `homelab` in the switcher beside `production` and
 `staging`. Omitting a plugin block is how you scope an environment — an environment with no `kafka:`
 block simply has no Kafka, and reports nothing about one.
+
+Everything above is the *development* path. In a container the same file arrives as a bind mount at
+`/app/config/application.yaml` and needs no flag at all, because that is Spring Boot's own default
+search location — `compose.yaml` mounts `./config` there, and the topology directory at
+`/etc/nodqora/topology/<environment>`.
 
 ### What the `kubernetes` block needs
 

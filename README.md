@@ -54,10 +54,15 @@ Out of the box this renders the reference pipeline and nothing else: the `kubern
 with four banners saying so. That is the honesty layer working, not a broken install — every node is
 `UNKNOWN` because nothing observed it.
 
+That demo is a **repository** thing, not a shipped one. It lives in
+`fixtures/reference-pipeline/application-demo.yaml` beside the topology it names, `bootRun` and the
+`test` task both load it, and ADR-0152 keeps it out of the image — a published build declares no
+environments, because a baked-in one could be overridden by an operator's config but never removed.
+
 The topology comes from `fixtures/reference-pipeline/{production,staging}/*.yaml`. Editing it is
 invisible for up to one discovery cadence — five minutes — which is the accepted cost of there being
 no refresh endpoint (ADR-0053). Shorten `nodqora.refresh.discovery` in
-`nodqora-app/src/main/resources/application.yaml` while iterating; it is config, not code.
+`fixtures/reference-pipeline/application-demo.yaml` while iterating; it is config, not code.
 
 ## The API
 

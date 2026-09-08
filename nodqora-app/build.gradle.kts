@@ -35,15 +35,26 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// The fixture directory is named in application.yaml as a repo-relative path, so tests and
-// `bootRun` must agree on where the repo root is. ADR-0099 makes those files genuine inputs that
-// double as the demo topology, so there is deliberately no second copy under test resources.
+// ADR-0152: the shipped `application.yaml` declares no environments, so both tasks load the demo
+// from the repository instead. It is one file, in one place, with two consumers — the `test` task,
+// which binds it for the golden documents, the incident scenario and the frontend routing tests,
+// and `bootRun`, which is the only way to look at the thing on a laptop. A second copy under test
+// resources would be the drift ADR-0099 refused for the topology, one level up.
+//
+// Both paths are repo-relative — the demo config's `yaml: { dir: ... }` lines and the location of
+// the demo config itself — which is why `workingDir` is pinned to the repo root rather than to the
+// subproject. `optional:` so that neither task dies if the file is gone; the empty roster it leaves
+// behind is the same one a config-less container serves.
+val demoConfig = "optional:file:./fixtures/reference-pipeline/application-demo.yaml"
+
 tasks.named<Test>("test") {
     workingDir = rootProject.projectDir
+    systemProperty("spring.config.additional-location", demoConfig)
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     workingDir = rootProject.projectDir
+    systemProperty("spring.config.additional-location", demoConfig)
 }
 
 // ---------------------------------------------------------------------------------------------
