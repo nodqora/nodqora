@@ -1,16 +1,31 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# ADR-0150: this file is the Community install. It is attached to the GitHub Release for a tag and
-# is the one supported way in — `curl -LO`, `docker compose up`, open http://localhost:8080.
+# ADR-0150: this file is the Community install. `curl -LO`, `docker compose up`, then open
+# http://localhost:8080.
+# >>> tree-only
 #
-# TODO(#64) the image tag. ADR-0150 requires this to pin the exact version of its release, and what
-#           `v0.1.0` means for a deployable is that ticket's question. `:latest` is a placeholder
-#           and must not survive the tag: ADR-0143 makes a published version immutable, which is
-#           worth nothing if the compose file that names it floats.
+# Everything between these two markers is stripped by `./gradlew release` and never reaches the
+# release asset, because it is addressed to a reader of this repository rather than to someone
+# installing Nodqora. The rest of the file is rendered verbatim with `@VERSION@` substituted.
+#
+# The copy in the tree is deliberately not the install. `@VERSION@` is rendered by `./gradlew
+# release` (ADR-0155), which writes `build/release/compose.yaml` and uploads *that* as the release
+# asset. Two reasons it is a placeholder rather than a real tag:
+#
+#   * ADR-0143 makes a published version immutable, which is worth nothing if the compose file
+#     naming it floats. A `:latest` here would be a runnable, unpinned install sitting on `main` —
+#     and a runnable unpinned file is precisely the thing that gets copied out.
+#   * ADR-0155 keeps the version in one home, the root `build.gradle.kts`. Committing the exact
+#     number here would make `main` permanently advertise the *previous* release and give the
+#     version a second place to drift from.
+#
+# So this file does not run as it stands, on purpose. To try an unreleased build, build the image
+# locally and point the `image:` line at your own tag.
+# <<< tree-only
 
 services:
   nodqora:
-    image: ghcr.io/fredskor/nodqora:latest
+    image: ghcr.io/fredskor/nodqora:@VERSION@
     depends_on:
       postgres:
         condition: service_healthy
