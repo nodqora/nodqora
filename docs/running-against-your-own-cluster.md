@@ -1,12 +1,13 @@
 # Running against your own cluster
 
-`./gradlew :nodqora-app:bootRun` renders the reference pipeline: fictional hosts, a demo topology,
-a canvas that renders without a cluster anywhere near it. That comes from
-`fixtures/reference-pipeline/application-demo.yaml`, which the Gradle tasks load and which
-**deliberately does not ship** — ADR-0152 puts no environments in the image at all. This is how you
-point Nodqora at infrastructure you actually run.
+A fresh install has no environments — [ADR-0152](adr/0152-the-image-ships-no-environments-and-config-arrives-as-two-mounts.md)
+puts none in the image at all, because a baked-in environment could be overridden by your
+configuration but never removed. So the canvas opens saying so, and this is how you fill it: point
+Nodqora at infrastructure you actually run.
 
-It is two files, and the interesting part is which one holds what.
+It is two files, and the interesting part is which one holds what. If you have not installed yet,
+[docs/install.md](install.md) is the four-step route that gets you to the screen this page answers.
+
 
 ## The division of labour
 
@@ -24,10 +25,11 @@ field written there that a plugin also knows is a silent, permanent override of 
 
 ## File 1 — the configuration
 
-One environment, and the plugins that observe it:
+One environment, and the plugins that observe it. It goes in the config directory beside your
+`compose.yaml`, which the shipped `compose.yaml` mounts at `/app/config`:
 
 ```yaml
-# local.yaml
+# ./config/application.yaml
 nodqora:
   refresh:
     discovery: 30s      # the shipped cadence is 5m; 30s while you are iterating
@@ -36,34 +38,32 @@ nodqora:
     homelab:
       display-name: Homelab
       plugins:
-        yaml: { dir: /absolute/path/to/your/topology-dir }
+        yaml: { dir: /etc/nodqora/topology/homelab }
         kubernetes:
           namespaces: [n8n, monitoring, actual]
 ```
 
-Layer it on top of the packaged configuration rather than editing that file:
-
 ```bash
-./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./local.yaml"
+docker compose restart nodqora
 ```
 
-**This replaces the demo rather than joining it.** `bootRun` sets that same property to point at
-`fixtures/reference-pipeline/application-demo.yaml`, and a command-line argument outranks it, so
-`homelab` is the whole roster — which is usually what you want here. Name both, comma-separated, if
-you want the demo in the switcher too:
+**No flag names that file, and none needs to.** `/app/config/` is Spring Boot's own default search
+location, so the file is found and **merged** with the `application.yaml` inside the jar rather than
+replacing it. That is why yours carries `nodqora.environments` and, if you want them, the refresh
+cadences — the two plugin orders, and the Jackson, problemdetails and cache settings all inherit.
+Restating them is not required and is a way to drift.
 
-```bash
-./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./fixtures/reference-pipeline/application-demo.yaml,file:./local.yaml"
-```
+The `yaml` plugin's `dir` is a path **inside the container**. `compose.yaml` mounts `./topology`
+read-only at `/etc/nodqora/topology`, one directory per environment
+([ADR-0061](adr/0061-yaml-is-a-directory-per-environment.md)), so `./topology/homelab/*.yaml` beside
+your compose file arrives as `/etc/nodqora/topology/homelab` above. It is a separate mount from the
+config on purpose: Spring searches `config/` and one level of `config/*/` for `application.yaml`, so
+a topology file with that name under `/app/config` would be read as configuration by Spring and as
+topology by the plugin.
 
-Environments merge by key, so listing both puts `homelab` in the switcher beside `production` and
-`staging`. Omitting a plugin block is how you scope an environment — an environment with no `kafka:`
-block simply has no Kafka, and reports nothing about one.
-
-Everything above is the *development* path. In a container the same file arrives as a bind mount at
-`/app/config/application.yaml` and needs no flag at all, because that is Spring Boot's own default
-search location — `compose.yaml` mounts `./config` there, and the topology directory at
-`/etc/nodqora/topology/<environment>`.
+Environments merge by key, so a second key beside `homelab` puts both in the switcher. Omitting a
+plugin block is how you scope an environment — an environment with no `kafka:` block simply has no
+Kafka, and reports nothing about one.
 
 ### What the `kubernetes` block needs
 
@@ -80,8 +80,57 @@ Everything else is optional:
 | `ignore` | exact `kind/name` entries, no globs — suppresses *node emission* only, so the object can still be stamped as a backing |
 | `links` | URL templates, composed here rather than stored, so one manifest renders correctly in every environment (ADR-0032) |
 
-Running on your laptop with no `kubeconfig` line, the plugin uses `~/.kube/config`. If that file has
-expired credentials, every namespace listing fails — see [Troubleshooting](#troubleshooting).
+**In a container there is no ambient kubeconfig**, so unless Nodqora is running *inside* the cluster
+it observes, this key is required. Mount the file and reference it — the value is the kubeconfig's
+contents, and `${file:...}` has already read the mount by the time config is bound
+([ADR-0014](adr/0014-file-declared-plugin-config.md)):
+
+```yaml
+# compose.yaml, on the `nodqora` service
+volumes:
+  - ~/.kube/config:/etc/nodqora/kubeconfig:ro
+```
+
+```yaml
+# ./config/application.yaml
+kubernetes:
+  namespaces: [n8n, monitoring, actual]
+  kubeconfig: "${file:/etc/nodqora/kubeconfig}"
+```
+
+Two things that mount does not solve. A kubeconfig naming `127.0.0.1` or `localhost` points at the
+*container*, so the server address has to be one the container can reach — a LAN address, or
+`host.docker.internal` on Docker Desktop. And a config whose credentials are an `exec` plugin (`aws
+eks get-token`, `gke-gcloud-auth-plugin`) needs that binary in the image, which
+[ADR-0154](adr/0154-third-party-covers-what-the-build-adds-and-the-base-image-attributes-itself.md)
+keeps out of it; use a long-lived ServiceAccount token instead.
+
+Running from a clone on your laptop with no `kubeconfig` line, the plugin uses `~/.kube/config`
+directly. If that file has expired credentials, every namespace listing fails — see
+[Troubleshooting](#troubleshooting).
+
+### From source
+
+Running from a clone rather than the image, the same file is layered on with a flag:
+
+```bash
+./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./local.yaml"
+```
+
+**This replaces the demo rather than joining it.** `bootRun` sets that same property to point at
+`fixtures/reference-pipeline/application-demo.yaml`, and a command-line argument outranks it, so
+`homelab` is the whole roster — which is usually what you want here. Name both, comma-separated, if
+you want the demo in the switcher too:
+
+```bash
+./gradlew :nodqora-app:bootRun --args="--spring.config.additional-location=file:./fixtures/reference-pipeline/application-demo.yaml,file:./local.yaml"
+```
+
+The demo's own `yaml: { dir: ... }` lines are repo-relative — both Gradle tasks pin `workingDir` to
+the repo root to make that work — so a `dir` written for a clone is not the one written for a
+container. That file is also the fullest worked example there is: four plugins, two environments,
+and the whole `nodqora-app` suite binds it, so it cannot go stale without the build going red.
+
 
 ## File 2 — the topology
 

@@ -14,8 +14,39 @@ plugin reports an `outcome` — **`health` says what we found; `outcome` says ho
 a failed poll leaves the last reading standing and says so, rather than turning a node green or red
 on evidence nobody gathered.
 
-To point it at infrastructure you actually run, see
-[docs/running-against-your-own-cluster.md](docs/running-against-your-own-cluster.md).
+## Install
+
+Docker with Compose v2, and nothing else — no JDK and no clone.
+
+```bash
+curl -LO https://github.com/fredskor/nodqora/releases/latest/download/compose.yaml
+mkdir -p config topology
+docker compose up -d
+```
+
+Then open **http://localhost:8080**, which will tell you that no environments are configured. That is
+a working install: the image ships zero environments on purpose (ADR-0152), because a baked-in one
+could be overridden by your config but never removed. Declare one in `./config/application.yaml` and
+`docker compose restart nodqora`:
+
+```yaml
+nodqora:
+  environments:
+    homelab:
+      display-name: Homelab
+      plugins:
+        kubernetes:
+          namespaces: [n8n, monitoring, actual]
+```
+
+**Take `compose.yaml` from the Release, not from this repository** — the copy in the tree names a
+`@VERSION@` placeholder and does not run, so that an unpinned install cannot be copied out of `main`
+(ADR-0155).
+
+- **[docs/install.md](docs/install.md)** — the whole route: upgrades and the backup they require,
+  pointing at a PostgreSQL you already run, what the image bundles, troubleshooting.
+- **[docs/running-against-your-own-cluster.md](docs/running-against-your-own-cluster.md)** — the
+  configuration and topology grammar, and the join between what you declare and what is observed.
 
 ## Layout
 
@@ -33,7 +64,9 @@ fixtures/
   golden/                   ADR-0099's assertions: two graphs, three states, two layouts.
 ```
 
-## Running it
+## From source
+
+This is the contributor path. To *run* Nodqora, use the install above.
 
 The backend needs PostgreSQL. The schema uses `jsonb`, generated columns and partial unique indexes
 over `lower(btrim(...))`, so it is not portable and is not meant to be.
