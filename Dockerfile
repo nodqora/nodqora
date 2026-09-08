@@ -30,6 +30,16 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
+
+# ADR-0156: the running version, baked into the bundle so the first-run screen's documentation link
+# points at the tag this build was cut from rather than at `main`. ADR-0153 makes a minor version
+# able to want a config edit, so an unpinned link teaches an old install a config grammar it does
+# not have — and the reader cannot detect it, because they are on that screen precisely for not yet
+# knowing how the thing is configured. Unset here, the link falls back to `main`, which is correct
+# for a working tree; the release passes it.
+ARG NODQORA_VERSION
+ENV NODQORA_VERSION=${NODQORA_VERSION}
+
 # `npm run build` is `tsc --noEmit && vite build`, so a type error fails the image rather than
 # shipping a bundle nobody typechecked.
 RUN npm run build

@@ -5,6 +5,8 @@ import { api } from './api/client'
 import { sameKey } from './api/keys'
 import { Canvas } from './canvas/Canvas'
 import { EmptyCanvas } from './canvas/EmptyCanvas'
+import { FirstRun } from './firstrun/FirstRun'
+import { isFirstRun } from './firstrun/unconfigured'
 import { emptyStateOf } from './canvas/emptyState'
 import { Drawer } from './inspector/Drawer'
 import { UnresolvedDrawer } from './inspector/UnresolvedDrawer'
@@ -187,6 +189,23 @@ export function App() {
 
   const unresolved =
     graph && route.nodeKey && selectedNode === null ? unresolvedStateOf(graph.nodes, graph.plugins) : null
+
+  /**
+   * ADR-0156: **the empty roster beats the URL, on every route, and the URL is not rewritten.**
+   *
+   * Checked before the known-check below, so `/`, `/environments/production` and
+   * `/environments/anything?node=payments-api` all land here: there is one fact about this install
+   * and it does not vary by URL. Ordering it the other way sends a stranger who was handed a link to
+   * ADR-0093's not-found — *"No environment named `production`. Available:"* followed by nothing —
+   * which frames a config-absent install as a **typo** and offers an empty repair.
+   *
+   * The URL is left exactly as given, because the pasted link is *correct in the future*: the reader
+   * writes their config, restarts, reloads, and it resolves. A carried `?node=` is a deliberate
+   * no-op, not a dropped input.
+   */
+  if (isFirstRun(meta)) {
+    return <FirstRun />
+  }
 
   if (meta && route.environmentKey !== null && !known) {
     return <UnknownEnvironment meta={meta} attempted={route.environmentKey} onPick={switchEnvironment} />
