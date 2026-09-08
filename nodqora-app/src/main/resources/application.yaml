@@ -15,6 +15,15 @@ spring:
     # the frontend's one error path would read `detail` off a document that has none.
     problemdetails:
       enabled: true
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # ADR-0151: index.html has a fixed name and names the content-hashed bundles, so it is the
+          # one file a browser must revalidate — a stale copy after an upgrade points at bundles the
+          # new image no longer has. `/assets/**` overrides this with a year of immutability in
+          # FrontendCacheHeaders; specificity, not order, decides which handler serves a request.
+          no-cache: true
 
 server:
   port: 8080

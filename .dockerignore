@@ -1,0 +1,16 @@
+# ADR-0150 builds the image from a clean clone with `COPY . .`, so everything a developer's working
+# tree accumulates would otherwise become image context — and, worse, could shadow what the build
+# produces. `frontend/dist` and the static directory are listed for that second reason: a stale
+# local build must never win over the one the node stage just made.
+.git
+.gradle
+build
+*/build
+node_modules
+frontend/node_modules
+frontend/dist
+nodqora-app/src/main/resources/static
+.idea
+*.iml
+*.log
+.DS_Store

@@ -7,3 +7,7 @@ dist/
 *.log
 .idea/
 *.iml
+
+# ADR-0151: the Vite output is copied here inside the image's Gradle stage. It is a build product
+# that happens to land in a source tree, and it is never committed.
+nodqora-app/src/main/resources/static/
