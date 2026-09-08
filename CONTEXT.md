@@ -47,7 +47,9 @@ implementation ADR, which amended ADR-0035; ADR-0104 and ADR-0105 by
 [Slice 3 — Health end-to-end](https://github.com/fredskor/nodqora/issues/24), which amended
 ADR-0072 and ADR-0034; and ADR-0106 by
 [Slice 5 — The honesty layer](https://github.com/fredskor/nodqora/issues/26), which amended
-ADR-0083 and ADR-0088. ADR-0018 was amended by tickets #17, #19 and #21. ADR-0107 through
+ADR-0083 and ADR-0088. ADR-0018 was amended by tickets #17, #19, #21 and #39 —
+the last of these by ADR-0149, which adds a **stalled** edge treatment and states the
+boundary between it and ADR-0027's refusal to propagate health. ADR-0107 through
 ADR-0113 were fixed by
 [The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42);
 they place capabilities in the Community or Enterprise edition
@@ -1017,6 +1019,7 @@ ADR-0096's two halves, so changing either costs it (ADR-0096).
 | generic external node | **declared node** | implies a mechanism that does not exist — a node with no plugin behind it is ordinary (ADR-0011) |
 | the plugin's health value | the plugin's **StateContribution** | several plugins observe one node; only the state engine produces `health` (ADR-0013) |
 | health rolls up / propagates | health is **local** | a propagated value has no raw signal behind it, and it flattens the shape the canvas exists to show (ADR-0027) |
+| the edge is flowing / carrying data | the edge is **stalled**, or nothing is said | nothing measures flow — sampling is diffing, which plugins may not do — so only the negative claim is available and a plain edge asserts nothing (ADR-0012, ADR-0038, ADR-0149) |
 | the plugin returned UNKNOWN | the plugin **abstained** | `UNKNOWN` is discarded in composition, so returning it for something observed deletes the plugin's own vote (ADR-0024, ADR-0029) |
 | plugin config in the database | **file-declared** config | the MVP ships without auth; config is bound at startup, secrets are references (ADR-0014) |
 | consumer group node | a **routed group** — a backing | a group is how a component consumes, not a component; unrouted, it is invisible (ADR-0036, ADR-0040) |

@@ -19,6 +19,7 @@ import { layout } from './layout'
 import { edgeIsHighlighted, highlightFrom } from './highlight'
 import { foldKey } from '../api/keys'
 import { crossesTeams, ownersByNodeKey } from './crossTeam'
+import { edgeIsStalled, stalledEdges } from './stalled'
 import { summarizeMetrics } from './metrics'
 import { marksOf } from '../outcome/marks'
 import type { Rosters } from '../outcome/plugins'
@@ -35,6 +36,21 @@ const METRIC_LINE_HEIGHT = 22
 // ADR-0083's footer token is a line like any other, so it has to be declared for the same reason.
 const BLIND_TOKEN_HEIGHT = 18
 const NODE_TYPES = { card: NodeCard }
+// ADR-0149's arrowhead pair. Hollow versus filled is the encoding, and it has to be chosen here
+// rather than in CSS: XYFlow renders markers into one shared `<defs>`, keyed by this config, so an
+// arrowhead is not a descendant of the edge that points with it and no `.edge-stalled` selector can
+// reach it. Hueless either way — ADR-0082 leaves health sole owner of the colour channel.
+const SOLID_HEAD = { type: MarkerType.ArrowClosed, width: 18, height: 18 } as const
+// `userSpaceOnUse` because XYFlow's default scales a marker by the stroke width of the path it caps,
+// which would shrink this head by the same factor `.edge-stalled` thins the line — collapsing the
+// shape that carries the encoding into a dot at the exact moment it has something to say.
+const STALLED_HEAD = {
+  type: MarkerType.Arrow,
+  width: 18,
+  height: 18,
+  strokeWidth: 1.6,
+  markerUnits: 'userSpaceOnUse',
+} as const
 
 /**
  * ADR-0018's MVP canvas: pan, zoom, fit-to-screen, node rendering, an optional metric line behind a
@@ -139,9 +155,16 @@ export function Canvas({
 
   const owners = useMemo(() => ownersByNodeKey(graph.nodes), [graph.nodes])
 
+  // ADR-0149. Both inputs are already in the client's hands, so this is a pure function next to
+  // `highlight.ts` rather than an API field — ADR-0053 keeps traversal client-side.
+  const stalled = useMemo(() => stalledEdges(graph.edges, health), [graph.edges, health])
+
   const drawn = useMemo<Edge[]>(
     () =>
       graph.edges.map((edge) => {
+        // ADR-0149: known to be carrying nothing. Never the opposite — a plain edge asserts nothing
+        // observed says otherwise, which is why it stays plain and why nothing here animates.
+        const stalls = edgeIsStalled(edge, stalled)
         const drawnEdge: Edge = {
           id: `${edge.fromKey}|${edge.relation}|${edge.toKey}`,
           source: edge.fromKey,
@@ -149,20 +172,21 @@ export function Canvas({
           // ADR-0002: an arrowhead, on every edge, pointing the way data flows. The stored
           // direction is the same for all six relations, so a reader never has to know which of
           // them read against the flow — that difference survives only in the drawer's wording.
-          markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
+          markerEnd: stalls ? STALLED_HEAD : SOLID_HEAD,
           animated: false,
         }
         const classes: string[] = []
         // ADR-0016: an edge treatment, not a layout axis. The fixture crosses at the connectors,
         // which is the hand-off the product exists to make visible.
         if (crossesTeams(edge, owners)) classes.push('edge-cross-team')
+        if (stalls) classes.push('edge-stalled')
         if (highlight) {
           classes.push(edgeIsHighlighted(edge, highlight) ? 'edge-highlighted' : 'edge-dimmed')
         }
         if (classes.length > 0) drawnEdge.className = classes.join(' ')
         return drawnEdge
       }),
-    [graph.edges, highlight, owners],
+    [graph.edges, highlight, owners, stalled],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(laidOut)

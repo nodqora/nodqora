@@ -110,13 +110,27 @@ body {
 .glyph-disabled  { fill: var(--health-disabled);  stroke: var(--health-disabled); }
 .glyph-unknown   { fill: none;                    stroke: var(--health-unknown); }
 
+/* Stroke weight is a product of two independent factors rather than a value each state overwrites.
+   ADR-0149's stalled treatment has to compose with the three below — a stalled cross-team edge under
+   a dimmed selection is a real combination — and last-rule-wins would have made "reduce the weight"
+   silently mean "and discard whatever cross-team or the selection was saying with it". */
+.react-flow__edge .react-flow__edge-path { stroke-width: calc(var(--edge-weight, 1) * var(--edge-stall, 1)); }
+
 .react-flow__edge.edge-dimmed { opacity: 0.22; }
 /* ADR-0016: where owner(from) != owner(to). Dashed rather than coloured, so it survives the
    highlight/dim states above and does not compete with ADR-0017's health channel. */
-.react-flow__edge.edge-cross-team .react-flow__edge-path { stroke-dasharray: 6 4; stroke-width: 1.8; }
+.react-flow__edge.edge-cross-team { --edge-weight: 1.8; }
+.react-flow__edge.edge-cross-team .react-flow__edge-path { stroke-dasharray: 6 4; }
 
-.react-flow__edge.edge-highlighted .react-flow__edge-path { stroke: var(--accent); stroke-width: 2; }
+.react-flow__edge.edge-highlighted { --edge-weight: 2; }
+.react-flow__edge.edge-highlighted .react-flow__edge-path { stroke: var(--accent); }
 .react-flow__edge.edge-highlighted .react-flow__arrowhead polyline { stroke: var(--accent); fill: var(--accent); }
+
+/* ADR-0149: this edge is known to be carrying nothing. The other half of the encoding is the hollow
+   arrowhead, which `Canvas.tsx` picks — XYFlow's markers live in one shared `<defs>`, so no selector
+   here can reach the head this edge points with. Hueless, and it takes neither opacity, dashes nor
+   stroke colour, all three of which are already spoken for above. */
+.react-flow__edge.edge-stalled { --edge-stall: 0.55; }
 
 /* ---------------------------------------------------------------- drawer */
 
