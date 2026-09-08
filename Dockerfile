@@ -9,11 +9,8 @@
 # boot jar serves its own UI from the same origin the API is on. Gradle never learns about npm, and
 # `./gradlew build` on a laptop needs no Node.
 #
-# Three things are deliberately unfinished, each owned by its own ticket rather than settled here by
+# Two things are deliberately unfinished, each owned by its own ticket rather than settled here by
 # implementation:
-#   TODO(#63) the topology directory. `nodqora.environments.*.plugins.yaml.dir` is repo-relative
-#             today, and a container has no repo root — a volume and a set of environment variables
-#             have to replace it, along with whatever configuration ships by default.
 #   TODO(#67) THIRD-PARTY. ADR-0146 parks the attribution obligation on whoever bundles, and this
 #             file is what bundles: the JRE base image, the Gradle runtime dependencies, and the
 #             node stage's contribution.
@@ -81,5 +78,29 @@ COPY --from=backend /src/nodqora-app/build/libs/nodqora-app-*.jar /app/nodqora.j
 
 # ADR-0150's compose file publishes this port and the install instructions open it.
 EXPOSE 8080
+
+# ADR-0152: the image ships no environments, and an operator's own arrive as two mounts.
+#
+# `/app/config/application.yaml` is Spring Boot's own default search location — `optional:file:./
+# config/` relative to this WORKDIR — which is why no flag, no `SPRING_CONFIG_ADDITIONAL_LOCATION`
+# and no line of Dockerfile names it. It *merges* with the `application.yaml` inside the jar, so the
+# file an operator writes carries `nodqora.environments` and nothing else: the two plugin orders,
+# the refresh cadences and the Jackson, problemdetails and cache settings all inherit.
+#
+# `/etc/nodqora/topology/<environment>` is ADR-0061's own path, mounted read-only and optional —
+# `yaml` is a plugin like any other, and an operator observing only Kubernetes and Kafka never
+# declares it. It is deliberately *not* under `/app/config`: Spring searches `config/` and one level
+# of `config/*/` for `application.yaml`, so a topology file with that name would be read as
+# configuration by Spring and as topology by the plugin, and ADR-0064 makes an unknown top-level key
+# the whole environment's failure.
+#
+# Environment variables keep the two jobs they are good at: the `NODQORA_DB_URL` / `_USER` /
+# `_PASSWORD` triple, and ADR-0014's `${env:...}` and `${file:...}` secret references, which is how
+# credentials stay out of the mounted file. They are not a way to declare an environment —
+# `KafkaConfig.properties` holds dotted Kafka client keys like `security.protocol`, and Boot's
+# environment source maps `_` to `.`, so that key is not expressible as a variable at all.
+#
+# Neither directory is created here. A bind mount makes its own, and an install with neither starts
+# and serves an empty roster rather than crash-looping (UnconfiguredInstallTest).
 
 ENTRYPOINT ["java", "-jar", "/app/nodqora.jar"]

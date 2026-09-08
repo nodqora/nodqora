@@ -59,102 +59,20 @@ nodqora:
     discovery: 5m
     health: 30s
 
-  # ADR-0004, ADR-0014: environment is a first-class entity holding its own discovery connection
-  # configuration, declared in a file and bound at startup. Declaration order is ADR-0077's second
-  # tiebreak for a contested type descriptor.
-  environments:
-    production:
-      display-name: Production
-      plugins:
-        # ADR-0061: one directory per environment, every *.yaml in it read together as one snapshot.
-        yaml: { dir: fixtures/reference-pipeline/production }
-        # ADR-0035: enumerated namespaces, required and non-empty, with no wildcard and no `all`
-        # mode -- a forgotten namespace should read as "half my graph is gone" rather than as one
-        # subtly absent node, which ADR-0004 cannot tell from real drift. One cluster per
-        # environment, so `<namespace>/<name>` stays unique as a backing reference.
-        kubernetes:
-          namespaces: [payments-prod]
-          # ADR-0031: exact `kind/name`, no globs and no regex. `kafka-connect` hosts both
-          # connectors and is not itself a node; suppression removes node emission only, so
-          # `connect` can still stamp it as a backing on both of them.
-          ignore: [statefulset/kafka-connect]
-          # ADR-0032: the annotations hold ids, and the URL is composed here -- which is what lets
-          # one manifest render correctly in production and in staging. No template, no link.
-          links:
-            workload: "https://k8s.acme.io/{namespace}/{kind}/{name}"
-            pods: "https://k8s.acme.io/{namespace}/{kind}/{name}/pods"
-            logs: "https://grafana.acme.io/explore?ns={namespace}&app={name}"
-            dashboard: "https://grafana.acme.io/d/{value}"
-            gitops: "https://argocd.acme.io/applications/{value}"
-        # ADR-0090: a required, non-empty include-prefix list with an exact-name `ignore`. There is
-        # no default and the default would have been *everything* -- on a shared Connect cluster,
-        # every team's connectors on the payments canvas.
-        connect:
-          url: https://connect-prod.internal:8083
-          connectors:
-            include: [payments-]
-            ignore: [payments-debug-reprocessor]
-          # ADR-0022: the workload this cluster runs on, stamped onto every connector. `kubernetes`
-          # suppresses the StatefulSet from node emission by exact name (ADR-0031) and is then handed
-          # the two connector nodes to observe -- suppression removes emission, not readability.
-          workload:
-            plugin: kubernetes
-            kind: statefulset
-            reference: payments-prod/kafka-connect
-          # ADR-0039: one variable, `{name}`. `config` MUST point at a UI -- research #5 verified
-          # that `GET /connectors/{name}/config` applies no masking of any kind, so a connector with
-          # an inlined password serves it in plaintext to whoever clicks.
-          links:
-            connector: "https://connect-ui.acme.io/prod/{name}"
-            logs: "https://grafana.acme.io/explore?connector={name}"
-            config: "https://connect-ui.acme.io/prod/{name}/config"
-        # ADR-0037: prefix scope, required. `listInternal: false` is set below the seam and is not
-        # sufficient -- Connect's `connect-*` topics are ordinary topics to Kafka, so `ignore`
-        # removes them by exact name.
-        kafka:
-          bootstrap: kafka-prod.internal:9092
-          topics:
-            include: [payments.]
-            ignore: [connect-offsets]
-          # ADR-0025, ADR-0042: one threshold, not a pair, keyed by consumer group, and required --
-          # a built-in number turns nodes amber because of a threshold nobody chose.
-          lag:
-            default: 10000
-          # §9 gives a topic one link, so one template is configured. No template, no link.
-          links:
-            dashboard: "https://grafana.acme.io/d/kafka-topic?var-topic={name}"
-    staging:
-      display-name: Staging
-      plugins:
-        yaml: { dir: fixtures/reference-pipeline/staging }
-        kubernetes:
-          namespaces: [payments-staging]
-          ignore: [statefulset/kafka-connect]
-          links:
-            workload: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}"
-            pods: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}/pods"
-            logs: "https://grafana-staging.acme.io/explore?ns={namespace}&app={name}"
-            dashboard: "https://grafana-staging.acme.io/d/{value}"
-            gitops: "https://argocd-staging.acme.io/applications/{value}"
-        connect:
-          url: https://connect-staging.internal:8083
-          connectors:
-            include: [payments-]
-            ignore: [payments-debug-reprocessor]
-          workload:
-            plugin: kubernetes
-            kind: statefulset
-            reference: payments-staging/kafka-connect
-          links:
-            connector: "https://connect-ui-staging.acme.io/staging/{name}"
-            logs: "https://grafana-staging.acme.io/explore?connector={name}"
-            config: "https://connect-ui-staging.acme.io/staging/{name}/config"
-        kafka:
-          bootstrap: kafka-staging.internal:9092
-          topics:
-            include: [payments.]
-            ignore: [connect-offsets]
-          lag:
-            default: 10000
-          links:
-            dashboard: "https://grafana-staging.acme.io/d/kafka-topic?var-topic={name}"
+  # ADR-0152: no `environments` ship. The block that used to sit here was the reference pipeline —
+  # `acme.io` links and `*.internal` hosts — and a baked-in environment is not a default a user can
+  # decline: Spring merges property sources, so a mounted file can override
+  # `nodqora.environments.production.plugins.yaml.dir` but can never *delete* the `production` key.
+  # It would survive into ADR-0055's roster and ADR-0085's `plugins[]` forever, and ADR-0093 would
+  # redirect bare `/` to somebody else's fiction on every install.
+  #
+  # A user declares their own environments in a file bind-mounted at `/app/config/application.yaml`
+  # — Spring Boot's own default search location, which is why nothing here names it. That file
+  # *merges* with this one, so it needs to carry `nodqora.environments` and nothing else: the two
+  # plugin orders above, the cadences, and the Jackson and cache settings all inherit.
+  #
+  # The demo now lives at `fixtures/reference-pipeline/application-demo.yaml`, beside the topology
+  # it points at, and is loaded by `bootRun` and by the `test` task. It is repo-only by design: the
+  # fixture declares the gaps rather than the graph (ADR-0063), so without `kubernetes`, `kafka` and
+  # `connect` it renders as untyped nodes with no health — a worse first screen than an honest
+  # empty one.

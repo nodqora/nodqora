@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# ADR-0150: this file is the Community install. It is attached to the GitHub Release for a tag and
+# is the one supported way in — `curl -LO`, `docker compose up`, open http://localhost:8080.
+#
+# TODO(#64) the image tag. ADR-0150 requires this to pin the exact version of its release, and what
+#           `v0.1.0` means for a deployable is that ticket's question. `:latest` is a placeholder
+#           and must not survive the tag: ADR-0143 makes a published version immutable, which is
+#           worth nothing if the compose file that names it floats.
+
+services:
+  nodqora:
+    image: ghcr.io/fredskor/nodqora:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # ADR-0150: the documented way to point at an existing PostgreSQL instead of the one below.
+      NODQORA_DB_URL: jdbc:postgresql://postgres:5432/nodqora
+      NODQORA_DB_USER: nodqora
+      NODQORA_DB_PASSWORD: nodqora
+    volumes:
+      # ADR-0152. Your configuration: put an `application.yaml` in `./config` declaring
+      # `nodqora.environments` and nothing else — it merges with the one inside the image, so the
+      # plugin orders, the refresh cadences and the cache and error settings all inherit. This is
+      # Spring Boot's own default search location, which is why no flag names it.
+      #
+      # With this directory empty, Nodqora starts and serves an empty roster. That is the honest
+      # state of an unconfigured install, not a failure.
+      - ./config:/app/config
+      # Your YAML topology, if you declare the `yaml` plugin: one directory per environment
+      # (ADR-0061), so `./topology/production/*.yaml` for an environment keyed `production`.
+      # Optional — an operator observing only Kubernetes and Kafka never mounts it. Read-only
+      # because ADR-0064 makes the directory an authored artifact Nodqora only ever reads.
+      - ./topology:/etc/nodqora/topology:ro
+
+  postgres:
+    # The version the integration tests already run, so the shipped path and the tested path are the
+    # same database (ADR-0150).
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nodqora
+      POSTGRES_USER: nodqora
+      POSTGRES_PASSWORD: nodqora
+    volumes:
+      # Not incidental. ADR-0087 and ADR-0088 make the canvas reason about what it has seen before,
+      # so a store that emptied on `docker compose down` would make the second `up` lie about
+      # history.
+      - nodqora-db:/var/lib/postgresql/data
+    healthcheck:
+      # `depends_on` alone waits for the container, not for the server, and Flyway runs at Nodqora's
+      # startup — an unready database is a crash on the first `up` and a working install on the
+      # retry, which is the worst kind of first impression.
+      test: ["CMD-SHELL", "pg_isready -U nodqora -d nodqora"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  nodqora-db:

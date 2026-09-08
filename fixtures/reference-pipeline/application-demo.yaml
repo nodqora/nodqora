@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The demo. ADR-0152 keeps it in the repository and out of the image: it is loaded by `bootRun` and
+# by the `test` task through `spring.config.additional-location`, and it is the only place the
+# reference pipeline's environments are declared.
+#
+# It lives here, beside `production/` and `staging/`, because the `yaml: { dir: ... }` lines below
+# are repo-relative — both Gradle tasks pin `workingDir` to the repo root to make that work — and
+# because ADR-0099 makes those directories genuine test inputs with deliberately no second copy.
+# Config and topology travelling together is what keeps them from drifting apart.
+#
+# This file is also the worked example the install documentation points at, and the reason it can
+# be trusted is that the whole `nodqora-app` suite binds it: the golden documents, the incident
+# scenario and the frontend routing tests all fail if it stops being true.
+#
+# The `acme.io` links and `*.internal` hosts are fiction, and that is precisely why this does not
+# ship. A user's own file is bind-mounted at `/app/config/application.yaml` and carries only its
+# own `nodqora.environments`.
+
+nodqora:
+  # ADR-0004, ADR-0014: environment is a first-class entity holding its own discovery connection
+  # configuration, declared in a file and bound at startup. Declaration order is ADR-0077's second
+  # tiebreak for a contested type descriptor.
+  environments:
+    production:
+      display-name: Production
+      plugins:
+        # ADR-0061: one directory per environment, every *.yaml in it read together as one snapshot.
+        yaml: { dir: fixtures/reference-pipeline/production }
+        # ADR-0035: enumerated namespaces, required and non-empty, with no wildcard and no `all`
+        # mode -- a forgotten namespace should read as "half my graph is gone" rather than as one
+        # subtly absent node, which ADR-0004 cannot tell from real drift. One cluster per
+        # environment, so `<namespace>/<name>` stays unique as a backing reference.
+        kubernetes:
+          namespaces: [payments-prod]
+          # ADR-0031: exact `kind/name`, no globs and no regex. `kafka-connect` hosts both
+          # connectors and is not itself a node; suppression removes node emission only, so
+          # `connect` can still stamp it as a backing on both of them.
+          ignore: [statefulset/kafka-connect]
+          # ADR-0032: the annotations hold ids, and the URL is composed here -- which is what lets
+          # one manifest render correctly in production and in staging. No template, no link.
+          links:
+            workload: "https://k8s.acme.io/{namespace}/{kind}/{name}"
+            pods: "https://k8s.acme.io/{namespace}/{kind}/{name}/pods"
+            logs: "https://grafana.acme.io/explore?ns={namespace}&app={name}"
+            dashboard: "https://grafana.acme.io/d/{value}"
+            gitops: "https://argocd.acme.io/applications/{value}"
+        # ADR-0090: a required, non-empty include-prefix list with an exact-name `ignore`. There is
+        # no default and the default would have been *everything* -- on a shared Connect cluster,
+        # every team's connectors on the payments canvas.
+        connect:
+          url: https://connect-prod.internal:8083
+          connectors:
+            include: [payments-]
+            ignore: [payments-debug-reprocessor]
+          # ADR-0022: the workload this cluster runs on, stamped onto every connector. `kubernetes`
+          # suppresses the StatefulSet from node emission by exact name (ADR-0031) and is then handed
+          # the two connector nodes to observe -- suppression removes emission, not readability.
+          workload:
+            plugin: kubernetes
+            kind: statefulset
+            reference: payments-prod/kafka-connect
+          # ADR-0039: one variable, `{name}`. `config` MUST point at a UI -- research #5 verified
+          # that `GET /connectors/{name}/config` applies no masking of any kind, so a connector with
+          # an inlined password serves it in plaintext to whoever clicks.
+          links:
+            connector: "https://connect-ui.acme.io/prod/{name}"
+            logs: "https://grafana.acme.io/explore?connector={name}"
+            config: "https://connect-ui.acme.io/prod/{name}/config"
+        # ADR-0037: prefix scope, required. `listInternal: false` is set below the seam and is not
+        # sufficient -- Connect's `connect-*` topics are ordinary topics to Kafka, so `ignore`
+        # removes them by exact name.
+        kafka:
+          bootstrap: kafka-prod.internal:9092
+          topics:
+            include: [payments.]
+            ignore: [connect-offsets]
+          # ADR-0025, ADR-0042: one threshold, not a pair, keyed by consumer group, and required --
+          # a built-in number turns nodes amber because of a threshold nobody chose.
+          lag:
+            default: 10000
+          # §9 gives a topic one link, so one template is configured. No template, no link.
+          links:
+            dashboard: "https://grafana.acme.io/d/kafka-topic?var-topic={name}"
+    staging:
+      display-name: Staging
+      plugins:
+        yaml: { dir: fixtures/reference-pipeline/staging }
+        kubernetes:
+          namespaces: [payments-staging]
+          ignore: [statefulset/kafka-connect]
+          links:
+            workload: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}"
+            pods: "https://k8s-staging.acme.io/{namespace}/{kind}/{name}/pods"
+            logs: "https://grafana-staging.acme.io/explore?ns={namespace}&app={name}"
+            dashboard: "https://grafana-staging.acme.io/d/{value}"
+            gitops: "https://argocd-staging.acme.io/applications/{value}"
+        connect:
+          url: https://connect-staging.internal:8083
+          connectors:
+            include: [payments-]
+            ignore: [payments-debug-reprocessor]
+          workload:
+            plugin: kubernetes
+            kind: statefulset
+            reference: payments-staging/kafka-connect
+          links:
+            connector: "https://connect-ui-staging.acme.io/staging/{name}"
+            logs: "https://grafana-staging.acme.io/explore?connector={name}"
+            config: "https://connect-ui-staging.acme.io/staging/{name}/config"
+        kafka:
+          bootstrap: kafka-staging.internal:9092
+          topics:
+            include: [payments.]
+            ignore: [connect-offsets]
+          lag:
+            default: 10000
+          links:
+            dashboard: "https://grafana-staging.acme.io/d/kafka-topic?var-topic={name}"
