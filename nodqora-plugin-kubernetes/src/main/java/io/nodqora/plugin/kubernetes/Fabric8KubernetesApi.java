@@ -2,6 +2,9 @@
 package io.nodqora.plugin.kubernetes;
 
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.PodCondition;
+import io.fabric8.kubernetes.api.model.PodStatus;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
@@ -36,7 +39,7 @@ import org.springframework.stereotype.Component;
  * gap rather than hiding it: the MVP never proves it can talk to a real cluster, and first contact
  * is a known, bounded, manual step. Everything that has behaviour worth testing sits above the seam.
  *
- * <p>Five list calls per namespace and no {@code watch}. Watch is the native, cheaper,
+ * <p>Six list calls per namespace and no {@code watch}. Watch is the native, cheaper,
  * lower-latency mechanism and is what a Kubernetes integration would normally use — ADR-0012 rules
  * it out, because plugins are stateless singletons returning full snapshots while a watch is a
  * stateful delta stream. If latency or apiserver load ever becomes a complaint, <b>ADR-0012 is what
@@ -92,7 +95,13 @@ class Fabric8KubernetesApi implements KubernetesApi {
                             .map(Fabric8KubernetesApi::ingress)
                             .toList();
 
-            return new NamespaceObjects(workloads, services, ingresses);
+            // ADR-0148: the sixth list, and health's alone. Pods are out of the graph (ADR-0005)
+            // and a `pods` backing counts them without ever naming one.
+            List<ObservedPod> pods = client.pods().inNamespace(namespace).list().getItems().stream()
+                    .map(Fabric8KubernetesApi::pod)
+                    .toList();
+
+            return new NamespaceObjects(workloads, services, ingresses, pods);
         } catch (RuntimeException e) {
             throw new KubernetesApiException("listing namespace %s failed: %s".formatted(namespace, e.getMessage()), e);
         }
@@ -133,6 +142,31 @@ class Fabric8KubernetesApi implements KubernetesApi {
                 desiredReplicas,
                 readyReplicas,
                 suspend);
+    }
+
+    /**
+     * {@code Ready} is read from {@code status.conditions} here and nowhere else, which looks like
+     * ADR-0025's rejected route and is its opposite: the condition being rejected is the
+     * <em>workload's</em> {@code Available}, which holds at 2 of 3 replicas and would erase the
+     * fixture's one Kubernetes signal. A pod's {@code Ready} is per-pod and is the very thing
+     * {@code status.readyReplicas} counts — so a selector over a Deployment's pods reports the same
+     * numbers the Deployment does, by the same definition.
+     */
+    private static ObservedPod pod(Pod pod) {
+        boolean ready = Optional.ofNullable(pod.getStatus())
+                .map(PodStatus::getConditions)
+                .orElseGet(List::of)
+                .stream()
+                .filter(condition -> "Ready".equals(condition.getType()))
+                .map(PodCondition::getStatus)
+                .anyMatch("True"::equals);
+        return new ObservedPod(
+                pod.getMetadata().getNamespace(),
+                pod.getMetadata().getName(),
+                pod.getMetadata().getLabels(),
+                pod.getStatus() == null ? null : pod.getStatus().getPhase(),
+                ready,
+                pod.getMetadata().getDeletionTimestamp() != null);
     }
 
     private static ObservedService service(Service service) {

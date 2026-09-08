@@ -19,7 +19,7 @@ import java.util.List;
  *     ignore: [payments-debug-reprocessor]           # exact connector names (ADR-0031)
  *   workload:                                        # optional (ADR-0022)
  *     plugin: kubernetes
- *     kind: statefulset
+ *     kind: statefulset                              # or `pods`, with a selector (ADR-0148)
  *     reference: payments-prod/kafka-connect
  *   links: { connector: ..., logs: ..., config: ... }
  * </pre>
@@ -96,6 +96,13 @@ public record ConnectConfig(
      * bare metal, Docker — is normal, and requiring this would force operators to invent a
      * reference. Absent, connectors carry two backings instead of three and lose the readiness
      * contribution.
+     *
+     * <p><b>These three fields are opaque here and that is what keeps them cheap.</b> This plugin
+     * never interprets them, so ADR-0148 could give {@code kubernetes} a second kind — {@code kind:
+     * pods} with a {@code <namespace>/<label selector>} reference, for a Connect cluster whose owner
+     * is a {@code StrimziPodSet} or any other CRD — without touching this record. The cost of the
+     * same property is that nothing validates the reference at startup: a malformed one is found by
+     * the plugin that reads it, per poll, in the log.
      */
     public record Workload(@NotBlank String plugin, @NotBlank String kind, @NotBlank String reference) {}
 

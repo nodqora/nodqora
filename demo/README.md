@@ -172,11 +172,15 @@ scripts/                  up · down · status · connectors · publish-aggregat
 
 ### Three decisions worth knowing about
 
-**Connect is a plain Deployment, not a Strimzi `KafkaConnect`.** Two reasons. Strimzi builds
-connector plugins into an image and needs a registry to push it to, which an initContainer and an
-`emptyDir` do not. And Strimzi runs Connect as a `StrimziPodSet`, which ADR-0030 produces no nodes
-or backings from — so `connect.workload` would have nothing to point at and every connector would
-lose a backing. That is [#36](https://github.com/fredskor/nodqora/issues/36).
+**Connect is a plain Deployment, not a Strimzi `KafkaConnect`.** Strimzi builds connector plugins
+into an image and needs a registry to push it to, which an initContainer and an `emptyDir` do not.
+
+That used to have a second reason — Strimzi runs Connect as a `StrimziPodSet`, which ADR-0030
+produces no nodes or backings from, so `connect.workload` had nothing to point at and every
+connector lost a backing. [#36](https://github.com/fredskor/nodqora/issues/36) fixed that:
+`connect.workload` can name a label selector instead (ADR-0148), and `local.yaml` carries the line
+it would use. Naming the Deployment directly is still the better answer *here*, because a selector
+cannot report `DISABLED` and scaling this Connect to zero is something the demo can do.
 
 **Connect 3.9 against a Kafka 4.3 broker.** The HTTP source connector was last released in 2021;
 a 3.x worker is the least adventurous host for it, and old clients against new brokers is the

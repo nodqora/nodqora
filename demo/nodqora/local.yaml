@@ -36,8 +36,16 @@ nodqora:
             # required prefix list degenerates into an enumeration, which ADR-0090 accepts.
             include: [market-]
           # ADR-0022: the workload this Connect cluster runs on, stamped onto every connector it
-          # discovers. This is why Connect is a Deployment and not a Strimzi KafkaConnect — a
-          # StrimziPodSet is not a kind `kubernetes` produces nodes or backings from.
+          # discovers. Connect is a plain Deployment here, so it is named directly — which also
+          # keeps `DISABLED` working, since a spec is where declared intent lives.
+          #
+          # Were it a Strimzi `KafkaConnect`, there would be no such object to name and ADR-0148's
+          # selector form would be the line instead:
+          #
+          #   workload:
+          #     plugin: kubernetes
+          #     kind: pods
+          #     reference: market-demo/strimzi.io/cluster=market,strimzi.io/kind=KafkaConnect
           workload:
             plugin: kubernetes
             kind: deployment
