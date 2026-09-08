@@ -1,0 +1,20 @@
+<!doctype html>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+
+  A stand-in for the real Vite output. ADR-0151 keeps the frontend build outside Gradle, so
+  `nodqora-app/src/main/resources/static/` is empty in a clone and filled only inside the image's
+  Gradle stage — which means a test asserting the forward has nothing to forward *to* unless the
+  test classpath supplies it. This file is that supply, and it deliberately mimics the one shape the
+  routing depends on: a fixed-name entry document referencing a content-hashed bundle.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nodqora</title>
+    <script type="module" src="/assets/index-a1b2c3.js"></script>
+  </head>
+  <body>
+    <div id="root" data-fixture="nodqora-frontend-stand-in"></div>
+  </body>
+</html>
