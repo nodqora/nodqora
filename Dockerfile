@@ -169,7 +169,7 @@ LABEL org.opencontainers.image.title="Nodqora" \
       org.opencontainers.image.description="Topology and health canvas for event-driven systems" \
       org.opencontainers.image.version="${NODQORA_VERSION}" \
       org.opencontainers.image.created="${NODQORA_CREATED}" \
-      org.opencontainers.image.source="https://github.com/fredskor/nodqora" \
+      org.opencontainers.image.source="https://github.com/nodqora/nodqora" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="${RUNTIME_BASE}"
 
