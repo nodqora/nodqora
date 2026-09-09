@@ -1998,7 +1998,7 @@ Comparison against tag `4.0.0`:
 
 #### Repository context
 
-- `/Users/fredskor/Documents/Projects/nodqora/nodqora-product-plan.md` §11.3
+- `nodqora-product-plan.md` §11.3 — moved to the private planning repository by ADR-0158
 
 ### Kafka Connect
 
