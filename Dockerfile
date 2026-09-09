@@ -86,7 +86,12 @@ COPY nodqora-plugin-kubernetes/build.gradle.kts nodqora-plugin-kubernetes/
 COPY nodqora-plugin-connect/build.gradle.kts nodqora-plugin-connect/
 COPY nodqora-plugin-kafka/build.gradle.kts nodqora-plugin-kafka/
 COPY nodqora-app/build.gradle.kts nodqora-app/
-RUN ./gradlew --no-daemon :nodqora-app:dependencies --configuration runtimeClasspath > /dev/null
+# ADR-0157: a knob for networks that drop Gradle's parallel fetches, not a change to the build.
+# Empty by default, so the substitution below expands to nothing and Gradle picks its own worker
+# count exactly as it always has. Set it and both invocations serialise. It is declared once, here,
+# before the first `gradlew` call, because the dependency warm-up downloads as much as the build.
+ARG GRADLE_MAX_WORKERS
+RUN ./gradlew --no-daemon ${GRADLE_MAX_WORKERS:+--max-workers=$GRADLE_MAX_WORKERS} :nodqora-app:dependencies --configuration runtimeClasspath > /dev/null
 
 COPY . .
 
@@ -111,7 +116,7 @@ ARG RUNTIME_BASE
 # ADR-0154 makes both `-P` properties required with no defaults — the npm fragment because half a
 # notices file is worse than a missing one, and the base image because this file is the only place
 # that knows the digest.
-RUN ./gradlew --no-daemon -x test \
+RUN ./gradlew --no-daemon ${GRADLE_MAX_WORKERS:+--max-workers=$GRADLE_MAX_WORKERS} -x test \
       :nodqora-app:bootJar \
       :nodqora-app:thirdParty \
       -PnpmFragment=/src/frontend/build/third-party-npm.json \

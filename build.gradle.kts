@@ -80,6 +80,12 @@ val treeOnlyClose = "<<< tree-only"
 val publishUserProperty = "nodqora.publish.user"
 val publishTokenProperty = "nodqora.publish.token"
 
+// ADR-0157: some networks drop Gradle's parallel Maven Central fetches mid-handshake. This is a
+// machine-local escape hatch, not a property of the build, so it lives in the same
+// `~/.gradle/gradle.properties` as the credentials above and is absent by default — unset, the
+// Dockerfile's substitution expands to nothing and Gradle chooses its own worker count.
+val buildMaxWorkersProperty = "nodqora.build.maxWorkers"
+
 // -------------------------------------------------------------------------------------- publish
 
 configure(subprojects.filter { it.name in publishedModules }) {
@@ -364,6 +370,12 @@ fun buildImage(push: Boolean) {
         addAll(listOf("--platform", "linux/amd64,linux/arm64"))
         addAll(listOf("--build-arg", "NODQORA_VERSION=$releaseVersion"))
         addAll(listOf("--build-arg", "NODQORA_CREATED=$created"))
+        // Passed to both invocations of this function or neither: the dry run has to build the
+        // same image the push builds, and a worker count that differed between them would make
+        // act 1 prove something about an image act 3 never produces.
+        providers.gradleProperty(buildMaxWorkersProperty).orNull?.let {
+            addAll(listOf("--build-arg", "GRADLE_MAX_WORKERS=$it"))
+        }
         // ADR-0153: a release pushes the exact version and `latest`, and nothing else.
         addAll(listOf("--tag", "$imageName:$releaseVersion"))
         addAll(listOf("--tag", "$imageName:latest"))
