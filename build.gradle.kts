@@ -456,8 +456,11 @@ val releaseVerifyPublic = tasks.register("releaseVerifyPublic") {
             "$imageName:$releaseVersion is not anonymously pullable, so every stranger following " +
                 "the install instructions would get `denied`.\n\n" +
                 "  $step: $detail\n\n" +
-                "A package created from a private repository inherits private visibility, and " +
-                "there is no reliable API to flip it, so this is a one-time manual step:\n\n" +
+                "A GHCR container pushed by hand is created private whatever the " +
+                "repository's visibility — measured, not assumed: this package was first " +
+                "pushed with the repository already public and was still denied " +
+                "anonymously. There is no reliable API to flip it, so this is a " +
+                "one-time manual step:\n\n" +
                 "  https://github.com/orgs/nodqora/packages/container/nodqora/settings\n" +
                 "  -> Danger Zone -> Change visibility -> Public\n\n" +
                 "The image is pushed and nothing is tagged. Act 2 has already published the " +
