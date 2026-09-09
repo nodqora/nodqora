@@ -25,7 +25,7 @@
 
 services:
   nodqora:
-    image: ghcr.io/fredskor/nodqora:@VERSION@
+    image: ghcr.io/nodqora/nodqora:@VERSION@
     depends_on:
       postgres:
         condition: service_healthy

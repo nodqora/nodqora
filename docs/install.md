@@ -9,7 +9,7 @@ The whole install is four steps, and the third one is the only one that takes th
 ## 1. Get the compose file
 
 ```bash
-curl -LO https://github.com/fredskor/nodqora/releases/latest/download/compose.yaml
+curl -LO https://github.com/nodqora/nodqora/releases/latest/download/compose.yaml
 ```
 
 **Take it from the Release, never from this repository.** The `compose.yaml` in the tree carries a
@@ -121,7 +121,7 @@ backup *is* your escape hatch.
 
 ```bash
 pg_dump ... > nodqora-backup.sql          # or `docker compose exec postgres pg_dump ...`
-curl -LO https://github.com/fredskor/nodqora/releases/latest/download/compose.yaml
+curl -LO https://github.com/nodqora/nodqora/releases/latest/download/compose.yaml
 docker compose up -d
 ```
 
@@ -135,7 +135,7 @@ What the number promises (ADR-0153):
 Below `1.0` the config grammar is still settling; `1.0` is the point at which it stops moving.
 
 **`latest` is not for installs.** The image tag exists and is honest — the latest release is the
-entire support surface (ADR-0147) — so that `docker run ghcr.io/fredskor/nodqora` works for someone
+entire support surface (ADR-0147) — so that `docker run ghcr.io/nodqora/nodqora` works for someone
 thirty seconds into meeting this project. But every `compose.yaml` asset pins an exact version, which
 is what stops a stray `docker compose pull` walking you across a one-way migration you did not
 choose.
@@ -156,7 +156,7 @@ in the image rather than what was in it once.
 Everything the build adds is attributed in a notices file inside the image:
 
 ```bash
-docker run --rm --entrypoint cat ghcr.io/fredskor/nodqora:<version> /app/THIRD-PARTY
+docker run --rm --entrypoint cat ghcr.io/nodqora/nodqora:<version> /app/THIRD-PARTY
 ```
 
 It lives at that path and nowhere else — not a release asset, not served over HTTP, not in the jar.

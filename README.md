@@ -19,7 +19,7 @@ on evidence nobody gathered.
 Docker with Compose v2, and nothing else — no JDK and no clone.
 
 ```bash
-curl -LO https://github.com/fredskor/nodqora/releases/latest/download/compose.yaml
+curl -LO https://github.com/nodqora/nodqora/releases/latest/download/compose.yaml
 mkdir -p config topology
 docker compose up -d
 ```

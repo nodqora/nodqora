@@ -34,7 +34,7 @@ describe('the documentation link is pinned to the version that is running', () =
     // a grammar their install does not have, undetectably — the failure invisible to the only
     // person harmed, which ADR-0155 refused when it verified GHCR visibility rather than assuming.
     expect(configuringDocUrl('0.1.0')).toBe(
-      'https://github.com/fredskor/nodqora/blob/v0.1.0/docs/running-against-your-own-cluster.md',
+      'https://github.com/nodqora/nodqora/blob/v0.1.0/docs/running-against-your-own-cluster.md',
     )
   })
 

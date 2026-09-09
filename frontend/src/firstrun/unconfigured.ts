@@ -55,5 +55,5 @@ export function configuringDocUrl(version: string | null): string {
   // exist, and a link to nothing is the 404 this constant exists to avoid.
   const released = version !== null && !version.endsWith('-SNAPSHOT')
   const ref = released ? `v${version}` : 'main'
-  return `https://github.com/fredskor/nodqora/blob/${ref}/${CONFIGURING_DOC}`
+  return `https://github.com/nodqora/nodqora/blob/${ref}/${CONFIGURING_DOC}`
 }

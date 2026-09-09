@@ -66,7 +66,7 @@ val publishedModules = setOf(
 // ADR-0150 fixes this name and ADR-0155 hardcodes the token scope built from it. It is one string
 // in one place; `compose.yaml` names it too, and the release renders that file rather than letting
 // the two drift.
-val imageRepository = "fredskor/nodqora"
+val imageRepository = "nodqora/nodqora"
 val imageName = "ghcr.io/$imageRepository"
 
 // ADR-0155 renders `compose.yaml` into the release asset. The file also carries commentary
