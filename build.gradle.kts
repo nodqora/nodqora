@@ -458,7 +458,7 @@ val releaseVerifyPublic = tasks.register("releaseVerifyPublic") {
                 "  $step: $detail\n\n" +
                 "A package created from a private repository inherits private visibility, and " +
                 "there is no reliable API to flip it, so this is a one-time manual step:\n\n" +
-                "  https://github.com/users/fredskor/packages/container/nodqora/settings\n" +
+                "  https://github.com/orgs/nodqora/packages/container/nodqora/settings\n" +
                 "  -> Danger Zone -> Change visibility -> Public\n\n" +
                 "The image is pushed and nothing is tagged. Act 2 has already published the " +
                 "Maven coordinates for $releaseVersion, though, and ADR-0143 makes those " +
