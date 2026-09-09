@@ -1,0 +1,95 @@
+# ADR-0159: the release runs here rather than on a laptop, and the trigger is deliberate.
+#
+# This is `workflow_dispatch` and NOT `on: push: tags:`. The usual recipe — push a tag, let CI
+# build and publish — inverts the one invariant ADR-0155 exists to protect: the tag is the *last*
+# act, so a tag can never exist without an image behind it. Tag-triggered, a failed build leaves a
+# tag pointing at nothing, which under ADR-0143 is the single failure that cannot be fixed by
+# re-cutting. Here the run creates the tag at the end, or there is no tag.
+#
+# Act 1 of ADR-0155's three — setting the version and committing it — stays a human act on `main`
+# before this is dispatched, because ADR-0142 makes a version *be* a commit and a bot author would
+# make that commit no one's. This workflow is act 2. Act 3, the bump back to -SNAPSHOT, stays a
+# human commit too.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type the version being released (must match build.gradle.kts, e.g. 0.1.2)'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # act 5 creates the tag, the Release and uploads the asset
+  packages: write   # act 2 publishes the coordinates, act 3 pushes the image
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # `ref: main` rather than the default detached HEAD: `releasePreflight` reads
+      # `git rev-parse --abbrev-ref HEAD` and refuses anything that is not `main`.
+      # `fetch-depth: 0` because the gate also lists tags to refuse a version already released.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # The version is read from the tree, never from the input. The input is a confirmation, so
+      # that dispatching from a stale browser tab cannot release whatever `main` happens to hold.
+      - name: Check the input matches the tree
+        run: |
+          tree_version=$(grep -oE '^    version = "[^"]+"' build.gradle.kts | head -1 | sed -E 's/.*"(.*)"/\1/')
+          echo "build.gradle.kts says: $tree_version"
+          echo "you typed:             ${{ inputs.confirm }}"
+          if [ "$tree_version" != "${{ inputs.confirm }}" ]; then
+            echo "::error::Refusing: the tree is at '$tree_version' but the dispatch asked for '${{ inputs.confirm }}'. Commit the version you mean to release first (ADR-0155 act 1)."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The runtime stage is per-architecture and does `RUN useradd`, so the non-native half needs
+      # emulation. The two build stages do not — ADR-0155 pinned them `FROM --platform=$BUILDPLATFORM`
+      # so they run once, natively, which is what makes multi-arch cost about what single-arch costs.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # `buildx --push` reads ~/.docker/config.json and nothing else — not GITHUB_TOKEN, not the
+      # Gradle properties. `releasePreflight` checks for this credential precisely because act 3
+      # runs after act 2 has published immutable coordinates.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ADR-0145 keeps these out of the repository and in ~/.gradle/gradle.properties. On a runner
+      # that file is created here and dies with the machine. GITHUB_TOKEN already carries
+      # `packages: write`, so no personal access token is involved at all — which is the whole of
+      # what moving this off a laptop buys in credential terms.
+      #
+      # `nodqora.build.maxWorkers` is deliberately NOT set. ADR-0157's serialisation is a
+      # workaround for one network that drops Gradle's parallel fetches; a runner has no such
+      # fault, and leaving it unset is what makes this build minutes faster than the laptop's.
+      - name: Write the publishing credentials
+        run: |
+          mkdir -p ~/.gradle
+          {
+            echo "nodqora.publish.user=${{ github.actor }}"
+            echo "nodqora.publish.token=${{ secrets.GITHUB_TOKEN }}"
+          } >> ~/.gradle/gradle.properties
+
+      # ADR-0155's five acts, unchanged and in one command. The ordering, the gates, the anonymous
+      # visibility check and the single `gh release create` all live in the Gradle task — this
+      # workflow supplies a machine and credentials, and owns none of the release's logic.
+      - name: ./gradlew release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew release
