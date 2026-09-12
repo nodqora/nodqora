@@ -30,6 +30,26 @@ way (ADR-0160):
 
 ![The same canvas in the light theme](docs/images/canvas-light.png)
 
+## What this isn't
+
+Three tools get mistaken for this one, and the distinction is the same every time: Nodqora **never
+writes**. GET-only is enforced at both ends — into Connect by the build (ADR-0042), and outward
+through an API that has no write endpoints (ADR-0053).
+
+- **Not a deployment tool.** ArgoCD and Flux reconcile: git holds the desired state and they sync,
+  prune and roll back until the cluster matches. Nodqora deploys nothing and changes nothing. Their
+  graph is an ownership tree of what they deployed — Application → Deployment → ReplicaSet → Pod —
+  where this one is the data flow across whatever is already running, most of whose nodes are not
+  Kubernetes objects at all: a topic, a connector, a third-party API nobody owns. *Is what is
+  running what I asked for?* is their question. *What is wired to what, and is it keeping up?* is
+  this one's. Both answers are useful and nothing stops you having both.
+- **Not a metrics dashboard.** No time series, no charts, no history. Throughput and topic size are
+  deliberately out (ADR-0038) and consumer lag is the one number read against a threshold, so a node
+  carries a current reading and who took it rather than a trend.
+- **Not a tracer.** The graph is discovered from control-plane APIs and from the gaps a human wrote
+  down (ADR-0063), never inferred from request traffic. Nothing here sees a message, which is why an
+  edge may report that it has stopped but never claims anything traversed it (ADR-0149).
+
 ## Install
 
 Docker with Compose v2, and nothing else — no JDK and no clone.
