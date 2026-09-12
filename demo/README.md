@@ -214,3 +214,10 @@ demo/scripts/down.sh
 
 The namespace takes the PVCs with it. Strimzi's CRDs are cluster-scoped and are left alone; the
 script prints the one-liner that removes them too.
+
+The KafkaTopics are deleted first, and that order is load-bearing. The Topic Operator puts a
+`strimzi.io/topic-operator` finalizer on each one and clears it only after deleting the topic from
+the broker, so deleting the namespace — which tears topics, broker and operator down together —
+leaves finalizers that nothing can clear, and a namespace cannot finish terminating while anything
+in it still holds one. `market-demo` would sit in `Terminating` for good, and `up.sh` could not be
+re-run, because a terminating namespace cannot be recreated.
