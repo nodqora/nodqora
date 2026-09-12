@@ -1,6 +1,6 @@
 # ADR-0159: The release runs on a runner, and the trigger is not a tag
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0163](0163-the-release-gate-asks-the-registry-what-the-credential-may-do.md)
 - **Date**: 2026-09-09
 - **Ticket**: [Move the release to a runner, now that ADR-0155's reasons have expired](https://github.com/nodqora/nodqora/issues/85)
 - **Supersedes**: [ADR-0155](0155-the-release-is-one-gradle-command-and-the-tag-is-the-last-act.md)'s *by hand* decision only. Its ordering, its five acts and its gates are untouched.
@@ -61,6 +61,13 @@ stale browser tab is submitted.
 `docker login ghcr.io` both disappear — two of the three manual setup steps the
 first release needed. The credentials file is written on the runner and dies
 with it.
+
+> Amended by [ADR-0163](0163-the-release-gate-asks-the-registry-what-the-credential-may-do.md):
+> this holds for packages the workflow **creates**, which is every Maven
+> coordinate here. A container package pushed by hand before the workflow existed
+> carries no repository link, and `GITHUB_TOKEN` has no write role on it until one
+> is granted. That is what the first runner-cut release discovered, at the cost of
+> 0.1.2.
 
 **`nodqora.build.maxWorkers` is deliberately unset** on the runner. ADR-0157's
 serialisation is a workaround for one network's fault, and a runner does not
