@@ -15,6 +15,7 @@ import { PluginsChip } from './outcome/PluginsChip'
 import { bannersOf, labeller, type Rosters } from './outcome/plugins'
 import { blindPlugins, retainedSources } from './outcome/marks'
 import { SearchBox } from './search/SearchBox'
+import { ThemePicker, useTheme } from './theme/ThemePicker'
 import {
   defaultEnvironmentKey,
   environmentIsKnown,
@@ -25,6 +26,19 @@ import {
 import { needsCanonicalizing, resolveNode, unresolvedStateOf } from './routing/resolve'
 import type { Graph, Meta, PluginOutcome, State } from './api/types'
 
+/**
+ * The mark and the wordmark. `alt=""` because the word beside it says the same thing, and a reader
+ * on a screen reader should hear "Nodqora" once rather than twice.
+ */
+function Brand() {
+  return (
+    <span className="brand">
+      <img className="brand-mark" src="/mark.png" alt="" width={265} height={240} />
+      Nodqora
+    </span>
+  )
+}
+
 export function App() {
   const [meta, setMeta] = useState<Meta | null>(null)
   const [graph, setGraph] = useState<Graph | null>(null)
@@ -32,6 +46,7 @@ export function App() {
   // ADR-0018: metrics are opt-in, default on, so users can drop the overlay to avoid clutter.
   const [showMetrics, setShowMetrics] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [theme, chooseTheme] = useTheme()
 
   /**
    * ADR-0092: the URL is the state. There are exactly two pieces of it — the environment as a path
@@ -214,7 +229,7 @@ export function App() {
   return (
     <div className="app">
       <header className="top-bar">
-        <span className="brand">Nodqora</span>
+        <Brand />
         <label className="environment-switcher">
           Environment
           <select
@@ -241,6 +256,7 @@ export function App() {
           Metrics
         </label>
         {error && <span className="error">{error}</span>}
+        <ThemePicker choice={theme} onChoose={chooseTheme} />
       </header>
 
       <div className="workspace">
@@ -263,6 +279,7 @@ export function App() {
                 rosters={rosters}
                 registry={meta?.plugins ?? []}
                 label={label}
+                colorMode={theme}
               />
             </ReactFlowProvider>
           )}
@@ -313,7 +330,7 @@ function UnknownEnvironment({
   return (
     <div className="app">
       <header className="top-bar">
-        <span className="brand">Nodqora</span>
+        <Brand />
       </header>
       <div className="not-found">
         <p className="not-found-headline">
