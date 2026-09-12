@@ -1,6 +1,6 @@
 # ADR-0133: The mention is an inert label, one factual line and one link
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0161](0161-the-link-constant-ships-only-when-its-page-resolves-and-the-page-follows-the-build.md)
 - **Date**: 2026-09-07
 - **Ticket**: [How Community surfaces gated features](https://github.com/fredskor/nodqora/issues/47)
 
