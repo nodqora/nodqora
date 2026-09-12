@@ -6,6 +6,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.Base64
 
 plugins {
     java
@@ -150,11 +151,164 @@ fun releaseExec(vararg command: String): Int {
     return process.waitFor()
 }
 
-/** Runs a command quietly. Returns the exit status and the combined output, trimmed. */
-fun releaseCapture(vararg command: String): Pair<Int, String> {
+/**
+ * Runs a command quietly. Returns the exit status and the combined output, trimmed.
+ *
+ * [input] is written to the process's stdin and the stream closed; a credential helper reads the
+ * registry it is being asked about that way, and reads until end-of-input, so leaving stdin open
+ * would hang the gate rather than fail it.
+ */
+fun releaseCapture(vararg command: String, input: String? = null): Pair<Int, String> {
     val process = ProcessBuilder(*command).directory(rootDir).redirectErrorStream(true).start()
+    process.outputStream.bufferedWriter().use { writer -> input?.let { writer.write(it) } }
     val output = process.inputStream.bufferedReader().readText().trim()
     return process.waitFor() to output
+}
+
+/** A username and the secret behind it. Read to be presented to ghcr.io, and to nothing else. */
+data class GhcrCredential(val username: String, val secret: String) {
+    // A data class prints its fields, and this one would print the secret into a build log the
+    // first time it reached an exception message or a `logger` call. Nothing needs it, so nothing
+    // gets it — the gate's refusals name what the credential may do, never what it is.
+    override fun toString() = "GhcrCredential($username, ****)"
+}
+
+/**
+ * The ghcr.io credential `buildx --push` would use, resolved the way Docker resolves one: a helper
+ * named for the registry first, then the global store, then the inline `auth`. Null when there is
+ * none to be had — including when the helper binary is missing or has nothing stored, because in
+ * both of those cases `buildx` gets nothing either.
+ *
+ * The three sections are keyed independently on purpose. `auths` may hold `https://ghcr.io/` where
+ * `credHelpers` holds `ghcr.io`; taking the helper's key from `auths` would miss the helper and
+ * refuse a machine that can push perfectly well.
+ */
+fun ghcrCredential(config: File): GhcrCredential? {
+    if (!config.isFile) return null
+
+    @Suppress("UNCHECKED_CAST")
+    val parsed = runCatching { JsonSlurper().parse(config) as Map<String, Any?> }.getOrNull()
+        ?: return null
+    fun ghcrKeyIn(section: String) = (parsed[section] as? Map<*, *>)
+        ?.keys?.map { it.toString() }?.firstOrNull { it.contains("ghcr.io") }
+
+    val helperKey = ghcrKeyIn("credHelpers")
+    val authsKey = ghcrKeyIn("auths")
+    // A helper named for this registry wins; `credsStore` holds everything and is asked second.
+    val helper = helperKey?.let { (parsed["credHelpers"] as? Map<*, *>)?.get(it)?.toString() }
+        ?: parsed["credsStore"]?.toString()
+    if (helper != null) {
+        // Whichever section named the registry spells it the way the helper has it stored.
+        val server = helperKey ?: authsKey ?: "ghcr.io"
+        val (status, output) = runCatching {
+            releaseCapture("docker-credential-$helper", "get", input = server)
+        }.getOrElse { return null }
+        if (status != 0) return null
+
+        @Suppress("UNCHECKED_CAST")
+        val stored = runCatching { JsonSlurper().parseText(output) as Map<String, Any?> }
+            .getOrNull() ?: return null
+        val username = stored["Username"]?.toString() ?: return null
+        val secret = stored["Secret"]?.toString() ?: return null
+        return GhcrCredential(username, secret)
+    }
+
+    val encoded = ((parsed["auths"] as? Map<*, *>)?.get(authsKey) as? Map<*, *>)
+        ?.get("auth")?.toString() ?: return null
+    val decoded = runCatching { String(Base64.getDecoder().decode(encoded)) }.getOrNull()
+        ?: return null
+    val separator = decoded.indexOf(':')
+    if (separator < 0) return null
+    return GhcrCredential(decoded.substring(0, separator), decoded.substring(separator + 1))
+}
+
+/**
+ * Asks ghcr.io for a token scoped to [actions] on [repository], anonymously unless a [credential]
+ * is given. One call, two readers: act 4 asks anonymously for `pull` and reads a refusal as *this
+ * package is not public*; the gate asks with the credential for `pull,push` and reads the answer
+ * as *what this machine may do*. What a non-200 means is therefore left to the caller.
+ */
+fun ghcrTokenResponse(
+    repository: String,
+    actions: String,
+    credential: GhcrCredential? = null,
+): HttpResponse<String> {
+    val uri = URI.create("https://ghcr.io/token?service=ghcr.io&scope=repository:$repository:$actions")
+    val request = HttpRequest.newBuilder(uri).GET()
+    credential?.let {
+        val basic = Base64.getEncoder().encodeToString("${it.username}:${it.secret}".toByteArray())
+        request.header("Authorization", "Basic $basic")
+    }
+    return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+        .send(request.build(), HttpResponse.BodyHandlers.ofString())
+}
+
+/** The `token` field of a ghcr.io token response, or null when the body carries none. */
+fun ghcrTokenIn(body: String): String? = runCatching {
+    @Suppress("UNCHECKED_CAST")
+    (JsonSlurper().parseText(body) as Map<String, Any?>)["token"] as? String
+}.getOrNull()
+
+/**
+ * What ghcr.io says this credential may actually do to [repository] — the gate's whole question,
+ * asked of the registry instead of inferred from a file.
+ *
+ * A registry does not refuse an over-broad scope request; it answers 200 and *narrows* what it
+ * grants, so the answer is in the token's `access` claim and never in the status code. A failure
+ * is returned rather than thrown so that the gate owns the wording of its own refusal.
+ */
+fun ghcrGrantedActions(credential: GhcrCredential, repository: String): Result<Set<String>> {
+    val response = runCatching { ghcrTokenResponse(repository, "pull,push", credential) }
+        .getOrElse { return Result.failure(it) }
+
+    // A refusal to issue the token at all is an answer, not an outage: this credential gets
+    // nothing on this repository, which is the same verdict as a token granting nothing.
+    if (response.statusCode() == 401 || response.statusCode() == 403) {
+        return Result.success(emptySet())
+    }
+    if (response.statusCode() != 200) {
+        return Result.failure(
+            IllegalStateException(
+                "HTTP ${response.statusCode()} from ghcr.io/token — ${response.body().trim()}",
+            ),
+        )
+    }
+
+    val token = ghcrTokenIn(response.body()) ?: return Result.failure(
+        IllegalStateException("ghcr.io returned no token in ${response.body().trim()}"),
+    )
+    return registryTokenActions(token, repository)
+}
+
+/**
+ * The actions a registry token's `access` claim names for [repository] — what was granted, which
+ * is not what was asked for.
+ *
+ * The middle segment of a JWT is its claims, base64url and unpadded. They are read, not verified:
+ * the signature is the registry's business, and this claim is only ever used to refuse early. A
+ * token naming no access at all is a token that grants nothing, not a malformed one — but a token
+ * that is not a JWT is a failure, because then nothing here has been measured.
+ */
+fun registryTokenActions(token: String, repository: String): Result<Set<String>> {
+    @Suppress("UNCHECKED_CAST")
+    val claims = runCatching {
+        JsonSlurper().parseText(
+            String(Base64.getUrlDecoder().decode(token.split(".")[1])),
+        ) as Map<String, Any?>
+    }.getOrElse {
+        return Result.failure(
+            IllegalStateException("ghcr.io's token is not a JWT this can read the `access` claim of"),
+        )
+    }
+
+    val access = claims["access"] as? List<*> ?: return Result.success(emptySet())
+    return Result.success(
+        access.filterIsInstance<Map<*, *>>()
+            .filter { it["type"] == "repository" && it["name"] == repository }
+            .flatMap { (it["actions"] as? List<*>).orEmpty() }
+            .map { it.toString() }
+            .toSet(),
+    )
 }
 
 /** The RFC 3339 instant both image builds label themselves with. Written by the gate, read twice. */
@@ -261,16 +415,17 @@ val releasePreflight = tasks.register("releasePreflight") {
         // property either: `buildx --push` reads ~/.docker/config.json. This is checked here and
         // not left to act 3 because act 3 runs after the coordinates are published, and ADR-0143
         // makes those immutable — an auth failure there costs the version number, not a retry.
-        // A credential helper leaves an empty `auths` entry, so presence of the key is the test.
+        //
+        // ADR-0163: the question is whether the credential may *push*, and it is put to ghcr.io
+        // rather than inferred from the file. Presence of the key was the test until 0.1.2, and
+        // presence was only ever a proxy: on a laptop the sole way a ghcr.io entry appeared was a
+        // `docker login` with a PAT scoped write:packages, so it held. ADR-0159 moved the release
+        // to a runner, where `docker/login-action` writes an entry for GITHUB_TOKEN — present, and
+        // denied on a package that predates the workflow. The proxy stopped holding in silence,
+        // which is the one way a gate can fail that costs more than having no gate.
         val dockerConfig = File(System.getProperty("user.home"), ".docker/config.json")
-        val ghcrAuthorised = dockerConfig.isFile && runCatching {
-            @Suppress("UNCHECKED_CAST")
-            val config = JsonSlurper().parse(dockerConfig) as Map<String, Any?>
-            listOf("auths", "credHelpers").any { section ->
-                (config[section] as? Map<*, *>)?.keys?.any { it.toString().contains("ghcr.io") } == true
-            }
-        }.getOrDefault(false)
-        if (!ghcrAuthorised) {
+        val credential = ghcrCredential(dockerConfig)
+        if (credential == null) {
             error(
                 "The Docker daemon has no ghcr.io credential, and act 3 pushes the image with " +
                     "`buildx --push`.\n\n" +
@@ -278,6 +433,40 @@ val releasePreflight = tasks.register("releasePreflight") {
                     "Maven coordinates for $releaseVersion are published and ADR-0143 makes them " +
                     "immutable — the failure would cost the version, not a retry.\n\n" +
                     "  echo <a personal access token with write:packages> | \\\n" +
+                    "    docker login ghcr.io -u <your github username> --password-stdin",
+            )
+        }
+        val granted = ghcrGrantedActions(credential, imageRepository).getOrElse { failure ->
+            error(
+                "The release could not ask ghcr.io what its credential may do to " +
+                    "$imageRepository:\n\n" +
+                    "  ${failure.message}\n\n" +
+                    "The gate refuses rather than assuming, because assuming is what cost 0.1.2: " +
+                    "act 3 pushes after act 2 has published coordinates ADR-0143 makes immutable.\n\n" +
+                    "If ghcr.io is simply unreachable from here, the release cannot be cut from " +
+                    "here and nothing is wrong with this machine. If the token no longer carries " +
+                    "a readable `access` claim, the probe has stopped measuring anything and " +
+                    "ADR-0163 names that as its revisit trigger — fix the gate rather than " +
+                    "removing it, because act 3 has no second chance.",
+            )
+        }
+        if ("push" !in granted) {
+            error(
+                "The ghcr.io credential may not push $imageRepository. ghcr.io grants it " +
+                    (if (granted.isEmpty()) "nothing" else granted.sorted().joinToString(", ")) +
+                    ", and act 3 pushes the image with `buildx --push`.\n\n" +
+                    "This is gated here rather than discovered at act 3, because by then the " +
+                    "Maven coordinates for $releaseVersion are published and ADR-0143 makes them " +
+                    "immutable — the failure would cost the version, not a retry. 0.1.2 paid " +
+                    "that price once, which is why this asks the registry rather than the file.\n\n" +
+                    "On a runner, GITHUB_TOKEN carries `packages: write` only for packages the " +
+                    "workflow itself created. A container package pushed by hand before its " +
+                    "first run carries no repository link, so the link is granted once, by hand:\n\n" +
+                    "  https://github.com/orgs/nodqora/packages/container/nodqora/settings\n" +
+                    "  -> Manage Actions access -> Add repository -> $imageRepository -> Write\n\n" +
+                    "On a laptop, log in with a personal access token scoped `write:packages` " +
+                    "that can write this package:\n\n" +
+                    "  echo <the token> | \\\n" +
                     "    docker login ghcr.io -u <your github username> --password-stdin",
             )
         }
@@ -470,13 +659,10 @@ val releaseVerifyPublic = tasks.register("releaseVerifyPublic") {
                 "the one that pays for it.",
         )
 
-        val tokenUri = URI.create(
-            "https://ghcr.io/token?service=ghcr.io&scope=repository:$imageRepository:pull",
-        )
-        val tokenResponse = client.send(
-            HttpRequest.newBuilder(tokenUri).GET().build(),
-            HttpResponse.BodyHandlers.ofString(),
-        )
+        // The same call `releasePreflight` makes with the credential, made here anonymously and
+        // asked for `pull` — which is the whole difference between *can this runner push it* and
+        // *can a stranger pull it*.
+        val tokenResponse = ghcrTokenResponse(imageRepository, "pull")
         if (tokenResponse.statusCode() != 200) {
             notPublic(
                 "anonymous pull token",
@@ -485,9 +671,7 @@ val releaseVerifyPublic = tasks.register("releaseVerifyPublic") {
             )
         }
 
-        @Suppress("UNCHECKED_CAST")
-        val token = (JsonSlurper().parseText(tokenResponse.body()) as Map<String, Any?>)["token"]
-            as? String
+        val token = ghcrTokenIn(tokenResponse.body())
             ?: notPublic("anonymous pull token", "ghcr.io returned no token: ${tokenResponse.body()}")
 
         val manifestUri = URI.create("https://ghcr.io/v2/$imageRepository/manifests/$releaseVersion")
