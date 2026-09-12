@@ -22,6 +22,87 @@
   --health-disabled: #7b8794;
   /* Calm, not alarming: a node nothing observes is not a node in trouble. */
   --health-unknown: #aab2bd;
+
+  /* Shadows are a colour too. On paper they are the ink at low alpha; on the dark ground they have
+     to be near-black, because the ink *is* the light thing there. */
+  --shadow-card: 0 1px 2px rgba(16, 20, 26, 0.05);
+  --shadow-popover: 0 6px 20px rgba(16, 20, 26, 0.13);
+  --accent-halo: rgba(47, 109, 246, 0.18);
+
+  /* ADR-0082's pair. Declared here with the rest of the light palette; the outcome section below
+     explains what they encode. */
+  --outcome-ink: #3b424b;
+  --outcome-ground: #eef0f3;
+}
+
+/*
+ * The dark palette, drawn from nodqora.com's own tokens so the product and the vendor site are the
+ * same object in two places. `--paper` is the navy the brand lockup was drawn against.
+ *
+ * The five health hues are **re-picked for this ground, not reused**. A hue chosen to carry against
+ * white is not the same hue that carries against #071322: the greens and reds both need lifting to
+ * clear the ground, and holding them fixed would quietly undo half of ADR-0017 — the half that
+ * argues the palette is legible before you reach for the glyph. The glyph is still the primary
+ * encoding and still does the work if these fail; this keeps them from failing.
+ *
+ * `--health-unknown` stays the quietest of the five against its ground, because ADR-0017 styles it
+ * calm rather than alarming and that is a statement about contrast, not about a hex value.
+ *
+ * The block is written twice, under the media query and under the pin, because CSS has no way to
+ * share one declaration block across both. ADR-0160 records why the pin has to win over the query.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ink: #e4ecf5;
+    --ink-quiet: #93a4b8;
+    --ink-faint: #6c7f94;
+    --paper: #071322;
+    --card: #0e1e31;
+    --line: #1c3149;
+    --accent: #56a8ff;
+
+    --health-healthy: #3fc27a;
+    --health-degraded: #e0a03a;
+    --health-unhealthy: #f2685f;
+    --health-disabled: #8296ab;
+    --health-unknown: #5c6f85;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.5);
+    --accent-halo: rgba(86, 168, 255, 0.26);
+
+    /* ADR-0082's pair, kept in this block so the dark palette has one home rather than four.
+       Still monochrome and still not from the health palette — on this ground "ink" is the light
+       value and the tinted ground is the lifted one, which is the same statement inverted. */
+    --outcome-ink: #c7d3df;
+    --outcome-ground: #152840;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ink: #e4ecf5;
+  --ink-quiet: #93a4b8;
+  --ink-faint: #6c7f94;
+  --paper: #071322;
+  --card: #0e1e31;
+  --line: #1c3149;
+  --accent: #56a8ff;
+
+  --health-healthy: #3fc27a;
+  --health-degraded: #e0a03a;
+  --health-unhealthy: #f2685f;
+  --health-disabled: #8296ab;
+  --health-unknown: #5c6f85;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --accent-halo: rgba(86, 168, 255, 0.26);
+
+  /* ADR-0082's pair, kept in this block so the dark palette has one home rather than four.
+     Still monochrome and still not from the health palette — on this ground "ink" is the light
+     value and the tinted ground is the lifted one, which is the same statement inverted. */
+  --outcome-ink: #c7d3df;
+  --outcome-ground: #152840;
 }
 
 * { box-sizing: border-box; }
@@ -45,15 +126,26 @@ body {
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
-.brand { font-weight: 650; letter-spacing: 0.01em; }
-.environment-switcher, .metric-toggle {
+/* The mark and the wordmark, in the site's order and proportion. The counters in the monogram are
+   transparent rather than white, so the bar's own background shows through them and one file is
+   correct in both themes — which is why there is no second asset here. */
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: 0.01em; }
+.brand-mark { display: block; width: 22px; height: auto; }
+
+.environment-switcher, .metric-toggle, .theme-picker {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; color: var(--ink-quiet); text-transform: uppercase; letter-spacing: 0.04em;
 }
-.environment-switcher select {
+.environment-switcher select, .theme-picker select {
   font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0;
   padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card);
+  color: var(--ink);
 }
+/* Pushed to the trailing edge: it is the one control in the bar that says nothing about the graph,
+   and it should not sit between two that do. It is the last child, so on the ordinary screen it
+   takes the whole gap; when `.error` appears the two share it, which puts the error beside the
+   controls it is about rather than alone in the corner. */
+.theme-picker { margin-left: auto; }
 .error { margin-left: auto; color: var(--health-unhealthy); }
 
 .workspace { display: flex; flex: 1 1 auto; min-height: 0; }
@@ -71,7 +163,7 @@ body {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 9px;
-  box-shadow: 0 1px 2px rgba(16, 20, 26, 0.05);
+  box-shadow: var(--shadow-card);
   transition: opacity 120ms ease, border-color 120ms ease;
 }
 .node-card-head { display: flex; align-items: center; gap: 7px; }
@@ -94,7 +186,7 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.node-card-selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47, 109, 246, 0.18); }
+.node-card-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-halo); }
 .node-card-upstream, .node-card-downstream { border-color: var(--accent); }
 .node-card-dimmed { opacity: 0.34; }
 
@@ -188,12 +280,12 @@ body {
  * to itself, so ADR-0017's colour-blind argument is not diluted by a second colour-coded axis
  * fighting it for attention. The only non-neutral treatment on this axis is the banner's and chip's
  * border and tinted ground, and neither is drawn from the health palette.
+ *
+ * The pair is declared at the top with the rest of the light palette rather than here. Left in
+ * place it came *after* the dark blocks and survived only on `:not()`'s specificity — true, but a
+ * reader would have to work that out to know which value applies, and a later edit that reordered
+ * the file would silently flip the theme.
  */
-
-:root {
-  --outcome-ink: #3b424b;
-  --outcome-ground: #eef0f3;
-}
 
 .outcome-glyph { flex: 0 0 auto; fill: var(--outcome-ink); stroke: var(--outcome-ink); }
 .outcome-glyph line { stroke: var(--outcome-ink); }
@@ -210,7 +302,7 @@ body {
   position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: 340px;
   padding: 10px 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 9px;
-  box-shadow: 0 6px 20px rgba(16, 20, 26, 0.13);
+  box-shadow: var(--shadow-popover);
 }
 .plugins-popover ul { margin: 0; padding: 0; list-style: none; }
 .plugins-popover li {
@@ -318,7 +410,7 @@ body {
   position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 380px;
   padding: 6px; background: var(--card);
   border: 1px solid var(--line); border-radius: 9px;
-  box-shadow: 0 6px 20px rgba(16, 20, 26, 0.13);
+  box-shadow: var(--shadow-popover);
 }
 .search-results ul { margin: 0; padding: 0; list-style: none; }
 .search-results li button {

@@ -10,6 +10,7 @@ import {
   useNodesState,
   useReactFlow,
   useUpdateNodeInternals,
+  type ColorMode,
   type Edge,
   type Node,
 } from '@xyflow/react'
@@ -72,6 +73,7 @@ export function Canvas({
   rosters,
   registry,
   label,
+  colorMode,
 }: {
   graph: Graph
   state: State | null
@@ -81,6 +83,13 @@ export function Canvas({
   rosters: Rosters
   registry: PluginRef[]
   label: (pluginId: string) => string
+  /**
+   * XYFlow resolves `'system'` itself, against the same `prefers-color-scheme` the stylesheet
+   * reads, so the choice is handed over whole rather than resolved here. It writes a `light`/`dark`
+   * class onto its own wrapper, which is what re-colours the parts this stylesheet does not own:
+   * the background dots, the controls, and the edge stroke defaults.
+   */
+  colorMode: ColorMode
 }) {
   const highlight = useMemo(
     () => (selectedKey ? highlightFrom(selectedKey, graph.edges) : null),
@@ -323,6 +332,7 @@ export function Canvas({
         onNodeClick={(_, node) => onSelect(node.id)}
         onPaneClick={() => onSelect(null)}
         nodesConnectable={false}
+        colorMode={colorMode}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={22} size={1} />

@@ -55,6 +55,9 @@ function mount() {
         rosters={ROSTERS}
         registry={REGISTRY}
         label={labelOf}
+        // Pinned rather than `system`: jsdom implements no `matchMedia`, and the theme is not what
+        // either of these tests is about.
+        colorMode="light"
       />
     </ReactFlowProvider>,
   )
