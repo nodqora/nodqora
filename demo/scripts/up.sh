@@ -27,6 +27,7 @@ kubectl apply -f "$here/k8s/11-topics.yaml"
 kubectl apply -f "$here/k8s/20-mongodb.yaml"
 kubectl apply -f "$here/k8s/21-opensearch.yaml"
 kubectl apply -f "$here/k8s/30-kafka-connect.yaml"
+kubectl apply -f "$here/k8s/40-aggregator.yaml"
 kubectl apply -f "$here/k8s/50-kafka-ui.yaml"
 
 echo "==> waiting for Connect to load its three plugins"
