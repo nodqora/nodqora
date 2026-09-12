@@ -161,7 +161,7 @@ k8s/11-topics.yaml        three KafkaTopics, 3 partitions each
 k8s/20-mongodb.yaml       MongoDB 8 + PVC
 k8s/21-opensearch.yaml    OpenSearch 2.19, security plugin off, vm.max_map_count via initContainer
 k8s/30-kafka-connect.yaml Connect 3.9 as a plain Deployment; an initContainer downloads the plugins
-k8s/40-aggregator.yaml    the Streams service, with the topology.io annotations that do the joining
+k8s/40-aggregator.yaml    the Streams service and its topology.io annotations; a template, see below
 k8s/50-kafka-ui.yaml      kafbat console — what Nodqora's link templates point at
 connectors/*.json         four connector configs, applied with PUT /config so re-running is safe
 aggregator/               Spring Boot + Kafka Streams, its own Gradle build, outside the root one
@@ -186,10 +186,25 @@ cannot report `DISABLED` and scaling this Connect to zero is something the demo 
 a 3.x worker is the least adventurous host for it, and old clients against new brokers is the
 compatibility direction Kafka supports.
 
-**The aggregator image goes to ttl.sh.** Anonymous, no registry credentials, and it expires 24
-hours after the push — `scripts/publish-aggregator.sh` re-pushes under a fresh name and rolls the
-Deployment. ttl.sh reads the *tag* as a lifetime, which is why the version lives in the repository
-name. For anything longer-lived, push to a registry you own and change one line in that script.
+**The aggregator image goes to ttl.sh, so its manifest is a template.** ttl.sh is anonymous, needs
+no registry credentials, and expires the image 24 hours after the push. It reads the *tag* as a
+lifetime, which is why the version lives in the repository name — so every push invents a new
+coordinate, and no image line committed to `40-aggregator.yaml` could be the one the demo runs.
+
+That file therefore names `@IMAGE@`, which `scripts/publish-aggregator.sh` renders after pushing,
+piping the result to `kubectl apply -f -`:
+
+```bash
+demo/scripts/publish-aggregator.sh    # build, push, render, apply, wait for the rollout
+```
+
+`kubectl apply -f demo/k8s/40-aggregator.yaml` is **not** how you deploy the aggregator, and it
+fails saying so — `@` cannot start a plain YAML scalar, so kubectl refuses the file whole and
+nothing reaches the cluster. That is `compose.yaml`'s `@VERSION@` (ADR-0155) applied to a demo
+manifest; ADR-0162 has the reasoning.
+
+For anything longer-lived, push to a registry you own and change the one `image=` line in that
+script.
 
 ## Tearing it down
 
