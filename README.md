@@ -4,6 +4,11 @@ A topology and health canvas for event-driven systems. The decisions are in
 [`CONTEXT.md`](CONTEXT.md) and [`docs/adr/`](docs/adr/); the worked example everything is tested
 against is [`docs/reference-pipeline.md`](docs/reference-pipeline.md).
 
+![The Nodqora canvas: eleven nodes from a live Kafka pipeline, laid out left to right](docs/images/canvas-dark.png)
+
+Eleven nodes and eleven edges of the pipeline in [`demo/`](demo/), which runs on a real cluster
+against a real third-party API. Four plugins contributed to that canvas and no node names which.
+
 **Status: all five slices merged (ADR-0098).** Four discovery plugins — `yaml`, `kubernetes`,
 `kafka`, `connect` — fold into one graph under a configured precedence, three of them also reporting
 Health on their own cadence. Production renders at 10 nodes and 9 edges, staging at 7 and 6.
@@ -13,6 +18,17 @@ judgement suspended, so only `HEALTHY < DEGRADED < UNHEALTHY` is a severity orde
 plugin reports an `outcome` — **`health` says what we found; `outcome` says how well we looked** — so
 a failed poll leaves the last reading standing and says so, rather than turning a node green or red
 on evidence nobody gathered.
+
+![The node inspector: health, per-plugin metrics, upstream and downstream connections, ownership](docs/images/inspector-dark.png)
+
+Selecting a node opens the inspector. `market-aggregator` above is one node carrying what three
+plugins each know about it — Kafka's consumer lag, Kubernetes' replica counts, and an ownership
+block no plugin can observe, which is why a human wrote it down (ADR-0063).
+
+The canvas follows your desktop's light or dark setting, and the control in the bar pins it either
+way (ADR-0160):
+
+![The same canvas in the light theme](docs/images/canvas-light.png)
 
 ## Install
 
