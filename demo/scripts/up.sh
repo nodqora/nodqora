@@ -27,7 +27,6 @@ kubectl apply -f "$here/k8s/11-topics.yaml"
 kubectl apply -f "$here/k8s/20-mongodb.yaml"
 kubectl apply -f "$here/k8s/21-opensearch.yaml"
 kubectl apply -f "$here/k8s/30-kafka-connect.yaml"
-kubectl apply -f "$here/k8s/40-aggregator.yaml"
 kubectl apply -f "$here/k8s/50-kafka-ui.yaml"
 
 echo "==> waiting for Connect to load its three plugins"
@@ -38,7 +37,10 @@ kubectl -n "$ns" rollout status deployment/opensearch --timeout=10m
 echo "==> connectors"
 "$here/scripts/connectors.sh" apply
 
-echo "==> aggregator (builds, pushes to ttl.sh, deploys)"
+# 40-aggregator.yaml is not applied above: ADR-0162 leaves it unrendered in the tree, and the
+# publish script is what turns it into something appliable. That also closes the window #88 left,
+# where the Deployment existed on an unpullable tag for the length of one build.
+echo "==> aggregator (builds, pushes to ttl.sh, applies the Deployment)"
 "$here/scripts/publish-aggregator.sh"
 
 "$here/scripts/status.sh"

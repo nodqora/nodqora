@@ -26,9 +26,19 @@ spec:
     spec:
       containers:
         - name: aggregator
-          # ttl.sh is anonymous and ephemeral: this tag stops resolving 24h after the push.
+          # ADR-0162. If you arrived here from `found character that cannot start any token`:
+          # that is this line, and it is deliberate. Apply this file with
+          #
+          #     demo/scripts/publish-aggregator.sh
+          #
+          # which renders the `@IMAGE@` below and is the only thing that knows the coordinate —
+          # ttl.sh reads the *tag* as a lifetime, so every push invents a new repository name, and
+          # no tag written here could be the one the demo runs. `@` cannot start a plain YAML
+          # scalar, so the unrendered file is refused whole, by kubectl, before anything reaches
+          # the cluster.
+          image: @IMAGE@
+          # ttl.sh is anonymous and ephemeral: a rendered tag stops resolving 24h after the push.
           # IfNotPresent keeps a restarted pod running off the node's cached copy.
-          image: ttl.sh/nodqora-market-aggregator:24h
           imagePullPolicy: IfNotPresent
           env:
             - { name: KAFKA_BOOTSTRAP, value: "market-kafka-bootstrap:9092" }
