@@ -14,7 +14,7 @@ metadata:
     # ADR-0063: the plugin that can read this group's lag is not the plugin that can say whose
     # lag it is. This annotation is the join.
     topology.io/consumer-groups: "market-aggregator"
-    topology.io/repository: https://github.com/fredskor/nodqora/tree/main/demo/aggregator
+    topology.io/repository: https://github.com/nodqora/nodqora/tree/main/demo/aggregator
 spec:
   # Three partitions per topic, so both replicas get work and neither idles.
   replicas: 2
