@@ -1,6 +1,6 @@
 # ADR-0133: The mention is an inert label, one factual line and one link
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0161](0161-the-link-constant-ships-only-when-its-page-resolves-and-the-page-follows-the-build.md)
 - **Date**: 2026-09-07
 - **Ticket**: [How Community surfaces gated features](https://github.com/fredskor/nodqora/issues/47)
 
@@ -26,7 +26,7 @@ and one link to a single URL held in one constant.** Taking a shell-owned
 Compare ▾
   Previous fold
   Any point in time — Enterprise          ← inert
-    Enterprise keeps topology history. nodqora.io/editions
+    Enterprise keeps topology history. nodqora.com/editions
 ```
 
 **Tone.** The house voice, unchanged. The line states what the capability is, in
