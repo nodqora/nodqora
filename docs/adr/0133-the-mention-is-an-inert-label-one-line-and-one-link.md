@@ -26,7 +26,7 @@ and one link to a single URL held in one constant.** Taking a shell-owned
 Compare ▾
   Previous fold
   Any point in time — Enterprise          ← inert
-    Enterprise keeps topology history. nodqora.io/editions
+    Enterprise keeps topology history. nodqora.com/editions
 ```
 
 **Tone.** The house voice, unchanged. The line states what the capability is, in
