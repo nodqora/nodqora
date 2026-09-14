@@ -89,6 +89,20 @@ included, until [#111](https://github.com/nodqora/nodqora/issues/111) — and `d
 [docs/install.md](docs/install.md#kubernetes-needs-a-kubeconfig-in-the-container) has the addresses
 that work from inside a container, and why.
 
+That gives a canvas of workloads, each on its own row and none connected — correct, because the
+`kubernetes` plugin emits no edges (ADR-0033). Edges come from a topology file, or from `kafka` and
+`connect` observing real topics and connectors. Add `yaml: { dir: /etc/nodqora/topology/homelab }`
+beside `kubernetes`, write the edges into `./topology/homelab/*.yaml`, and restart:
+
+```yaml
+environment: homelab
+nodes:
+  - key: n8n            # the exact Deployment / StatefulSet name, or it renders as a second card
+    calls: [postgres]
+```
+
+[docs/install.md](docs/install.md#5-draw-the-edges) has the verbs and the rules.
+
 **Take `compose.yaml` from the Release, not from this repository** — the copy in the tree names a
 `@VERSION@` placeholder and does not run, so that an unpinned install cannot be copied out of `main`
 (ADR-0155).
