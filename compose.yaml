@@ -55,8 +55,10 @@ services:
       # kubeconfig every namespace fails to list. Write a self-contained one beside this file with
       # `kubectl config view --minify --flatten > kubeconfig`, change its `server:` away from
       # 127.0.0.1 — which inside this container is the container — uncomment the line below, add
-      # `kubeconfig: "${file:/etc/nodqora/kubeconfig}"` beside `namespaces`, and `docker compose up
-      # -d`. Commented out because Docker turns a missing bind-mount source into a directory.
+      # `kubeconfig: '\${file:/etc/nodqora/kubeconfig}'` beside `namespaces` — the backslash and
+      # single quotes are needed until nodqora/nodqora#111 is fixed, or Spring hands the plugin the
+      # path instead of the contents — and `docker compose up -d`. Commented out because Docker
+      # turns a missing bind-mount source into a directory.
       # https://github.com/nodqora/nodqora/blob/main/docs/install.md#kubernetes-needs-a-kubeconfig-in-the-container
       # - ./kubeconfig:/etc/nodqora/kubeconfig:ro
 

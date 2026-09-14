@@ -84,7 +84,8 @@ kubectl config view --minify --flatten > kubeconfig   # then change server: away
 ```
 
 add `- ./kubeconfig:/etc/nodqora/kubeconfig:ro` under the `nodqora` service's `volumes:`, add
-`kubeconfig: "${file:/etc/nodqora/kubeconfig}"` beside `namespaces`, and `docker compose up -d`.
+`kubeconfig: '\${file:/etc/nodqora/kubeconfig}'` beside `namespaces` — backslash and single quotes
+included, until [#111](https://github.com/nodqora/nodqora/issues/111) — and `docker compose up -d`.
 [docs/install.md](docs/install.md#kubernetes-needs-a-kubeconfig-in-the-container) has the addresses
 that work from inside a container, and why.
 
