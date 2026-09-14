@@ -75,6 +75,19 @@ nodqora:
           namespaces: [n8n, monitoring, actual]
 ```
 
+The container cannot see your `~/.kube/config`, so `kubectl` working on the same machine does not
+mean Nodqora can list anything. Unless it runs inside the cluster it observes, give it a kubeconfig
+of its own or every namespace fails with `Operation: [list] for kind: [Deployment] … failed`:
+
+```bash
+kubectl config view --minify --flatten > kubeconfig   # then change server: away from 127.0.0.1
+```
+
+add `- ./kubeconfig:/etc/nodqora/kubeconfig:ro` under the `nodqora` service's `volumes:`, add
+`kubeconfig: "${file:/etc/nodqora/kubeconfig}"` beside `namespaces`, and `docker compose up -d`.
+[docs/install.md](docs/install.md#kubernetes-needs-a-kubeconfig-in-the-container) has the addresses
+that work from inside a container, and why.
+
 **Take `compose.yaml` from the Release, not from this repository** — the copy in the tree names a
 `@VERSION@` placeholder and does not run, so that an unpinned install cannot be copied out of `main`
 (ADR-0155).
