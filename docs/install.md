@@ -4,7 +4,7 @@ Community Nodqora ships as **one image and one `compose.yaml`** (ADR-0150). You 
 Compose v2 and nothing else — no JDK, no clone, no build. If you have arrived here wanting to work
 *on* Nodqora rather than run it, the source path is in [the README](../README.md#from-source).
 
-The whole install is four steps, and the third one is the only one that takes thought.
+The whole install is five steps, and the third and fifth are the ones that take thought.
 
 ## 1. Get the compose file
 
@@ -74,8 +74,9 @@ error settings all inherit. `/app/config` is Spring Boot's own default search lo
 no flag names it and why `compose.yaml` mounts `./config` there.
 
 If you declare the `yaml` plugin, its topology is a second mount: one directory per environment
-under `./topology/<environment>/`, read-only, matching ADR-0061's path. An operator observing only
-Kubernetes and Kafka never creates it.
+under `./topology/<environment>/`, read-only, matching ADR-0061's path. It is optional to *start*,
+but with the `kubernetes` plugin alone it is the only source of edges, so leave it out and every
+workload renders unconnected — [step 5](#5-draw-the-edges).
 
 ### Kubernetes needs a kubeconfig in the container
 
@@ -155,6 +156,71 @@ fills in.
 
 If you added a mount — the kubeconfig above — run `docker compose up -d` instead. `restart` reuses the
 existing container, and the new mount is not in it.
+
+## 5. Draw the edges
+
+With only the `kubernetes` plugin, the canvas that fills in is every workload on its own row and
+nothing connected. **That is correct, not broken.** Kubernetes knows what runs; it does not know what
+talks to what, so the plugin emits no edges at all (ADR-0033). Nodqora does not guess them from
+Services or network traffic either. Edges come from:
+
+| source | edges it gives you |
+|---|---|
+| `yaml` — a topology file you write | anything you write down |
+| `kafka`, `connect` | observed producers, consumers, topics and connectors |
+
+For a cluster without Kafka, that means a topology file. Turn the `yaml` plugin on beside
+`kubernetes` — `compose.yaml` already mounts `./topology` at `/etc/nodqora/topology`, so no new mount:
+
+```yaml
+# ./config/application.yaml
+      plugins:
+        yaml: { dir: /etc/nodqora/topology/homelab }
+        kubernetes:
+          namespaces: [n8n, monitoring, actual]
+```
+
+and write the edges into any `*.yaml` under `./topology/homelab/`:
+
+```yaml
+# ./topology/homelab/homelab.yaml
+environment: homelab            # must match the environment key
+
+owners:                         # optional: groups nodes on the canvas
+  - key: apps
+    displayName: Apps
+
+nodes:
+  - key: cloudflared            # the exact Deployment / StatefulSet / CronJob name
+    owner: apps
+    calls: [n8n]
+  - key: n8n
+    owner: apps
+    calls: [postgres]
+  - key: grafana
+    queries: [prometheus]       # written from the consumer's side; the arrow still follows the data
+```
+
+Then `docker compose restart nodqora`. Four rules cover almost every surprise:
+
+- **`key` must equal the workload's name exactly.** A mismatch is not an error — it renders as a second,
+  unconnected card beside the real one. List the names first:
+  `kubectl -n <namespace> get deploy,sts,cronjob --no-headers -o custom-columns=NAME:.metadata.name`.
+- **DaemonSets are never nodes**, so nothing can point at one. A Deployment whose only peer is a
+  DaemonSet — Longhorn's CSI sidecars, MetalLB's controller — has no edge to draw.
+- **Six verbs.** `calls`, `producesTo` and `writesTo` are written from the source.
+  `consumesFrom`, `sourcesFrom` and `queries` are written from the consumer, and stored reversed so
+  the arrow always points the way data moves.
+- **Declare the gaps, not the graph.** Anything this file sets that a plugin also observes is a
+  permanent override of the live value, so write edges and owners and leave replicas and Services to
+  Kubernetes.
+
+A file with an unknown key or a YAML error is not ignored: the `yaml` plugin's discovery reports
+`FAILED` with the file and the key named, and the Kubernetes nodes still render. While
+you are iterating, `nodqora.refresh.discovery: 30s` shows each edit in half a minute instead of five.
+Annotations on your manifests carry type, owner and links but **cannot** carry edges.
+[Running against your own cluster](running-against-your-own-cluster.md#file-2--the-topology) has the
+full grammar.
 
 ---
 
@@ -255,6 +321,9 @@ on purpose. See [step 1](#1-get-the-compose-file).
 **Nodqora crashed on the first `up` and worked on the retry.**
 It should not: the compose file health-checks Postgres before starting Nodqora, because `depends_on`
 alone waits for the container rather than for the server. If you edited that block out, put it back.
+
+**Every node sits on its own row and nothing is connected.**
+Expected with only the `kubernetes` plugin: it emits no edges. See [step 5](#5-draw-the-edges).
 
 **My environment renders, but the nodes and my workloads are separate cards.**
 That is the join, and it is a topology question rather than an install one —
