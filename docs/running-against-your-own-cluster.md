@@ -75,7 +75,7 @@ Everything else is optional:
 
 | key | effect |
 |---|---|
-| `kubeconfig` | the kubeconfig **contents**, not a path — pair it with `${file:...}` below, which has already read the mounted file by the time config is bound. **Absent means in-cluster**, falling back to your ambient kubeconfig when you are not running in one |
+| `kubeconfig` | the kubeconfig **contents**, not a path — pair it with `'\${file:...}'` below — escaped, see [Credentials](#credentials) — which has already read the mounted file by the time config is bound. **Absent means in-cluster**, falling back to your ambient kubeconfig when you are not running in one |
 | `context` | a named context within that kubeconfig |
 | `ignore` | exact `kind/name` entries, no globs — suppresses *node emission* only, so the object can still be stamped as a backing |
 | `links` | URL templates, composed here rather than stored, so one manifest renders correctly in every environment (ADR-0032) |
@@ -101,7 +101,7 @@ volumes:
 # ./config/application.yaml
 kubernetes:
   namespaces: [n8n, monitoring, actual]
-  kubeconfig: "${file:/etc/nodqora/kubeconfig}"
+  kubeconfig: '\${file:/etc/nodqora/kubeconfig}'   # backslash and single quotes: see Credentials
 ```
 
 `--flatten` matters: a kubeconfig naming certificate *files* names host paths the container does not
@@ -356,9 +356,16 @@ Discovery runs on a cadence and there is no refresh endpoint (ADR-0053). Wait a 
 Secrets are **references, never values**, resolved at use time and never persisted (ADR-0014):
 
 ```yaml
-password: "${env:KAFKA_PASSWORD}"
-kubeconfig: "${file:/etc/nodqora/kubeconfig}"
+password: '\${env:KAFKA_PASSWORD}'
+kubeconfig: '\${file:/etc/nodqora/kubeconfig}'
 ```
+
+**Write the backslash and the single quotes.** Spring expands `${...}` while loading the file, before
+Nodqora resolves anything, and its grammar is `${name:default}`. So an unescaped
+`${file:/etc/nodqora/kubeconfig}` becomes the path itself, and an unescaped `${env:KAFKA_PASSWORD}`
+becomes the literal text `KAFKA_PASSWORD`, with no startup error. `\${` tells Spring to leave the
+reference alone, and single quotes because YAML rejects `\$` inside double quotes. This is
+[#111](https://github.com/nodqora/nodqora/issues/111); the escape stops being needed once it is fixed.
 
 This is how the product deploys — a ConfigMap plus a mounted Secret — and Vault or a cloud secrets
 manager slots in behind the same syntax without touching a plugin.
