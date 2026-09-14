@@ -50,6 +50,15 @@ services:
       # Optional — an operator observing only Kubernetes and Kafka never mounts it. Read-only
       # because ADR-0064 makes the directory an authored artifact Nodqora only ever reads.
       - ./topology:/etc/nodqora/topology:ro
+      # A kubeconfig, if an environment declares the `kubernetes` plugin and Nodqora is not running
+      # inside that cluster. This container cannot see your `~/.kube/config`, and without a
+      # kubeconfig every namespace fails to list. Write a self-contained one beside this file with
+      # `kubectl config view --minify --flatten > kubeconfig`, change its `server:` away from
+      # 127.0.0.1 — which inside this container is the container — uncomment the line below, add
+      # `kubeconfig: "${file:/etc/nodqora/kubeconfig}"` beside `namespaces`, and `docker compose up
+      # -d`. Commented out because Docker turns a missing bind-mount source into a directory.
+      # https://github.com/nodqora/nodqora/blob/main/docs/install.md#kubernetes-needs-a-kubeconfig-in-the-container
+      # - ./kubeconfig:/etc/nodqora/kubeconfig:ro
 
   postgres:
     # The version the integration tests already run, so the shipped path and the tested path are the

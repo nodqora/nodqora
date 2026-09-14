@@ -77,6 +77,59 @@ If you declare the `yaml` plugin, its topology is a second mount: one directory 
 under `./topology/<environment>/`, read-only, matching ADR-0061's path. An operator observing only
 Kubernetes and Kafka never creates it.
 
+### Kubernetes needs a kubeconfig in the container
+
+Nodqora runs in a container, and the container cannot see `~/.kube/config`. With no `kubeconfig`
+key, the plugin assumes it is running *inside* the cluster, and every namespace fails:
+
+> Kubernetes could not read discovery for this environment — namespace n8n could not be listed:
+> listing namespace n8n failed: Operation: [list] for kind: [Deployment] with name: [null] in
+> namespace: [n8n] failed.
+
+`kubectl` and `k9s` working on the same machine prove nothing here; they read a file the container
+does not have. Unless Nodqora runs inside the cluster it observes, it takes three changes.
+
+**1. Write a self-contained kubeconfig beside `compose.yaml`.** `--minify` keeps only the current
+context, and `--flatten` inlines the certificates — a kubeconfig naming
+`client-certificate: /home/you/...` points at a path that does not exist in the container:
+
+```bash
+kubectl config view --minify --flatten > kubeconfig
+```
+
+**2. Change its `server:` to an address the container can reach.** k3s, kind, minikube and Docker
+Desktop write `https://127.0.0.1:<port>`, and inside the container `127.0.0.1` is the container.
+
+| the cluster runs | `server:` |
+|---|---|
+| on another machine | that machine's LAN address, e.g. `https://192.168.1.50:6443` |
+| on this machine, under Docker Desktop | `https://host.docker.internal:6443` |
+
+The address must also be one the API server's certificate names, or the call fails on the TLS
+hostname. k3s's certificate covers the node's own addresses; for `host.docker.internal` or any other
+name, start k3s with `--tls-san <name>`.
+
+**3. Mount it and reference it.** Under the `nodqora` service's `volumes:` in `compose.yaml` (newer
+compose files carry this line commented out):
+
+```yaml
+      - ./kubeconfig:/etc/nodqora/kubeconfig:ro
+```
+
+and beside `namespaces` — the value is the file's *contents*, which `${file:...}` reads (ADR-0014):
+
+```yaml
+        kubernetes:
+          namespaces: [n8n, monitoring, actual]
+          kubeconfig: "${file:/etc/nodqora/kubeconfig}"
+```
+
+The file is a credential: keep it out of any repository that directory lives in. On Linux the
+container reads it as uid `10001`, so a `0600` file you own is unreadable to it;
+`sudo chown 10001 kubeconfig` keeps it private and readable. A kubeconfig whose credentials come
+from an `exec` plugin (`aws eks get-token`, `gke-gcloud-auth-plugin`) needs that binary in the image,
+which ADR-0154 keeps out — use a long-lived ServiceAccount token instead.
+
 **[Running against your own cluster](running-against-your-own-cluster.md) is the full grammar** —
 which plugin knows what, how a declared node joins an observed workload, and the annotations that let
 your manifests carry the same facts. For a complete worked example, the repository's
@@ -91,6 +144,9 @@ docker compose restart nodqora
 
 Configuration is read at startup. Within one discovery cadence — five minutes by default — the canvas
 fills in.
+
+If you added a mount — the kubeconfig above — run `docker compose up -d` instead. `restart` reuses the
+existing container, and the new mount is not in it.
 
 ---
 
@@ -175,6 +231,12 @@ minutes than a crash-loop diagnosable only by `docker logs`.
 That is a different state and Nodqora will say so rather than claim your config is empty — an
 unreachable server and an unconfigured one are never reported as the same thing (ADR-0156). Check
 `docker compose ps` and `docker compose logs nodqora`.
+
+**Every namespace fails with `Operation: [list] for kind: [Deployment] … failed`, and `kubectl` works.**
+The container has no kubeconfig, or has one whose `server:` is `127.0.0.1`. See
+[Kubernetes needs a kubeconfig in the container](#kubernetes-needs-a-kubeconfig-in-the-container).
+`docker compose exec nodqora grep server: /etc/nodqora/kubeconfig` shows what the container has; no
+such file means the mount is missing or `docker compose up -d` has not run since it was added.
 
 **`docker compose up` fails on the image tag.**
 You are running the repository's `compose.yaml` rather than the release asset — it names `@VERSION@`

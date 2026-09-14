@@ -81,14 +81,20 @@ Everything else is optional:
 | `links` | URL templates, composed here rather than stored, so one manifest renders correctly in every environment (ADR-0032) |
 
 **In a container there is no ambient kubeconfig**, so unless Nodqora is running *inside* the cluster
-it observes, this key is required. Mount the file and reference it — the value is the kubeconfig's
-contents, and `${file:...}` has already read the mount by the time config is bound
+it observes, this key is required — without it every namespace fails with `Operation: [list] for
+kind: [Deployment] … failed`, however well `kubectl` works on the host. Write a self-contained copy,
+mount it and reference it — the value is the kubeconfig's contents, and `${file:...}` has already
+read the mount by the time config is bound
 ([ADR-0014](adr/0014-file-declared-plugin-config.md)):
+
+```bash
+kubectl config view --minify --flatten > kubeconfig   # beside compose.yaml; certificates inlined
+```
 
 ```yaml
 # compose.yaml, on the `nodqora` service
 volumes:
-  - ~/.kube/config:/etc/nodqora/kubeconfig:ro
+  - ./kubeconfig:/etc/nodqora/kubeconfig:ro
 ```
 
 ```yaml
@@ -98,9 +104,12 @@ kubernetes:
   kubeconfig: "${file:/etc/nodqora/kubeconfig}"
 ```
 
-Two things that mount does not solve. A kubeconfig naming `127.0.0.1` or `localhost` points at the
-*container*, so the server address has to be one the container can reach — a LAN address, or
-`host.docker.internal` on Docker Desktop. And a config whose credentials are an `exec` plugin (`aws
+`--flatten` matters: a kubeconfig naming certificate *files* names host paths the container does not
+have. Two things the mount does not solve. A kubeconfig naming `127.0.0.1` or `localhost` points at
+the *container*, so the server address has to be one the container can reach — a LAN address, or
+`host.docker.internal` on Docker Desktop — and one the API server's certificate names (k3s:
+`--tls-san`). [docs/install.md](install.md#kubernetes-needs-a-kubeconfig-in-the-container) has the
+table. And a config whose credentials are an `exec` plugin (`aws
 eks get-token`, `gke-gcloud-auth-plugin`) needs that binary in the image, which
 [ADR-0154](adr/0154-third-party-covers-what-the-build-adds-and-the-base-image-attributes-itself.md)
 keeps out of it; use a long-lived ServiceAccount token instead.
