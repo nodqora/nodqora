@@ -11,6 +11,13 @@ printf "kafka bootstrap  %s:9094\n" "$(ip market-kafka-external-bootstrap)"
 printf "connect REST     http://%s:8083\n" "$(ip kafka-connect-lb)"
 printf "opensearch       http://%s:9200\n" "$(ip opensearch-lb)"
 printf "kafka console    http://%s\n" "$(ip kafka-ui)"
+printf "prometheus       http://%s:9090\n" "$(ip prometheus)"
+
+echo
+echo "== scrape targets =="
+curl -s "http://$(ip prometheus):9090/api/v1/targets?state=active" \
+  | jq -r '.data.activeTargets[] | "\(.health)\t\(.labels.job)\t\(.labels.pod // .scrapeUrl)"' 2>/dev/null \
+  || echo "prometheus not reachable yet"
 
 echo
 echo "== workloads =="

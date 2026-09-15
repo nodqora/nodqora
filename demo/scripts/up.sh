@@ -28,9 +28,11 @@ kubectl apply -f "$here/k8s/20-mongodb.yaml"
 kubectl apply -f "$here/k8s/21-opensearch.yaml"
 kubectl apply -f "$here/k8s/30-kafka-connect.yaml"
 kubectl apply -f "$here/k8s/50-kafka-ui.yaml"
+kubectl apply -f "$here/k8s/60-prometheus.yaml"
 
 echo "==> waiting for Connect to load its three plugins"
 kubectl -n "$ns" rollout status deployment/kafka-connect --timeout=10m
+kubectl -n "$ns" rollout status deployment/prometheus --timeout=5m
 kubectl -n "$ns" rollout status deployment/mongodb --timeout=5m
 kubectl -n "$ns" rollout status deployment/opensearch --timeout=10m
 

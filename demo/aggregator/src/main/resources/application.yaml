@@ -27,7 +27,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # `prometheus` is scraped by demo/k8s/60-prometheus.yaml. No common tags are added: the
+        # series carry what Micrometer and pod discovery give them, and nothing tuned for Nodqora.
+        include: health,info,prometheus
   endpoint:
     health:
       probes:

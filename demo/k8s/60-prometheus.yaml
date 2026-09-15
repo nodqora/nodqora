@@ -1,0 +1,139 @@
+# A Prometheus of the demo's own, so the Tier 1 plugin has real series to bind to.
+#
+# Plain Deployment, no operator, for the same reason Connect is one: the demo asks a cluster for a
+# LoadBalancer and a StorageClass and nothing else. A cluster that already runs the Prometheus
+# Operator could scrape this namespace with a PodMonitor instead, but the demo would then only come
+# up on clusters that have one.
+#
+# Discovery is scoped to `market-demo` with a Role, not a ClusterRole, and the `kubernetes-pods` job
+# below is the one in Prometheus's own reference configuration — opt in per pod with
+# `prometheus.io/scrape`, keep every pod label. The series it produces carry what a workload's series
+# carry in most clusters, which is the point: nothing here is tuned to make a binding easy.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: market-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus
+  namespace: market-demo
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, endpoints]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus
+  namespace: market-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: market-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus
+  namespace: market-demo
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: [localhost:9090]
+
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+            # A Role can only list pods in its own namespace, so naming it is required, not tidy.
+            namespaces:
+              names: [market-demo]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
+            action: replace
+            regex: (\d+);(.+)
+            replacement: $2:$1
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: market-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: prometheus }
+  template:
+    metadata:
+      labels: { app: prometheus }
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          # 3.5 is the LTS line.
+          image: quay.io/prometheus/prometheus:v3.5.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            # An emptyDir and two days: this is something to query, not a record to keep.
+            - --storage.tsdb.retention.time=2d
+          ports:
+            - { containerPort: 9090, name: web }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          readinessProbe:
+            httpGet: { path: /-/ready, port: 9090 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /-/healthy, port: 9090 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus }
+            - { name: data, mountPath: /prometheus }
+      volumes:
+        - name: config
+          configMap: { name: prometheus }
+        - name: data
+          emptyDir: {}
+---
+# Nodqora runs off-cluster, so the query API needs a LAN address like every other endpoint here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: market-demo
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.0.218
+spec:
+  type: LoadBalancer
+  selector: { app: prometheus }
+  ports: [{ port: 9090, targetPort: 9090 }]

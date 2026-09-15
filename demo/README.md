@@ -36,7 +36,7 @@ plugin can see.
 ## What it costs
 
 Two nodes' worth of homelab: roughly 3 CPU and 6 GiB across Kafka, Connect, OpenSearch, MongoDB,
-the console and two replicas of the aggregator. The Coinbase endpoints are public and unauthenticated;
+the console, Prometheus with the Kafka Exporter, and two replicas of the aggregator. The Coinbase endpoints are public and unauthenticated;
 two connectors polling every five seconds is about 0.4 requests a second, well inside the public rate
 limit.
 
@@ -59,6 +59,7 @@ The LAN addresses are pinned in the manifests so they survive a rebuild, because
 | Connect REST | `http://192.168.0.214:8083` |
 | OpenSearch | `http://192.168.0.213:9200` |
 | Kafka console | `http://192.168.0.215` |
+| Prometheus | `http://192.168.0.218:9090` |
 
 Change them in `demo/k8s/*.yaml` (the `metallb.io/loadBalancerIPs` annotations) and in
 `demo/nodqora/local.yaml` together.
@@ -156,13 +157,15 @@ curl -X PUT http://192.168.0.214:8083/connectors/market-source-eth/resume
 ## The parts
 
 ```text
-k8s/10-kafka.yaml         Strimzi 1.2 KafkaNodePool + Kafka, KRaft, v1 CRDs, LoadBalancer listener
+k8s/10-kafka.yaml         Strimzi 1.2 KafkaNodePool + Kafka, KRaft, v1 CRDs, LoadBalancer listener,
+                          Kafka Exporter for topic offsets and group lag
 k8s/11-topics.yaml        three KafkaTopics, 3 partitions each
 k8s/20-mongodb.yaml       MongoDB 8 + PVC
 k8s/21-opensearch.yaml    OpenSearch 2.19, security plugin off, vm.max_map_count via initContainer
 k8s/30-kafka-connect.yaml Connect 3.9 as a plain Deployment; an initContainer downloads the plugins
 k8s/40-aggregator.yaml    the Streams service and its topology.io annotations; a template, see below
 k8s/50-kafka-ui.yaml      kafbat console — what Nodqora's link templates point at
+k8s/60-prometheus.yaml    Prometheus 3.5, namespace-scoped pod discovery, opt-in by annotation
 connectors/*.json         four connector configs, applied with PUT /config so re-running is safe
 aggregator/               Spring Boot + Kafka Streams, its own Gradle build, outside the root one
 nodqora/local.yaml        the config overlay adding the `homelab` environment
