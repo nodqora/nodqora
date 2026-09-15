@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Meta } from '../api/types'
+import { docUrl } from '../docs/link'
 
 /**
  * ADR-0156: **an install whose roster is empty renders a first-run screen that replaces the shell,
@@ -49,11 +50,4 @@ export const VERSION: string | null = __NODQORA_VERSION__
  */
 export const CONFIGURING_DOC = 'docs/running-against-your-own-cluster.md'
 
-export function configuringDocUrl(version: string | null): string {
-  // A snapshot is not a release, so there is no tag to point at and `main` is the only honest ref.
-  // ADR-0143 makes a published version immutable; `v0.1.0-SNAPSHOT` names nothing that will ever
-  // exist, and a link to nothing is the 404 this constant exists to avoid.
-  const released = version !== null && !version.endsWith('-SNAPSHOT')
-  const ref = released ? `v${version}` : 'main'
-  return `https://github.com/nodqora/nodqora/blob/${ref}/${CONFIGURING_DOC}`
-}
+export const configuringDocUrl = (version: string | null): string => docUrl(CONFIGURING_DOC, version)

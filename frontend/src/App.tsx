@@ -4,6 +4,8 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { api } from './api/client'
 import { sameKey } from './api/keys'
 import { Canvas } from './canvas/Canvas'
+import { EdgelessHint } from './canvas/EdgelessHint'
+import { isEdgelessByRoster } from './canvas/edgeless'
 import { EmptyCanvas } from './canvas/EmptyCanvas'
 import { FirstRun } from './firstrun/FirstRun'
 import { isFirstRun } from './firstrun/unconfigured'
@@ -269,19 +271,23 @@ export function App() {
             // false statement during a cold read, and a subline does not retract a headline.
             <EmptyCanvas state={emptyStateOf(graph.plugins)} environmentDisplayName={graph.environment.displayName} />
           ) : (
-            <ReactFlowProvider key={graph.environment.key}>
-              <Canvas
-                graph={graph}
-                state={state}
-                selectedKey={selectedNode?.key ?? null}
-                onSelect={select}
-                showMetrics={showMetrics}
-                rosters={rosters}
-                registry={meta?.plugins ?? []}
-                label={label}
-                colorMode={theme}
-              />
-            </ReactFlowProvider>
+            <>
+              {/* ADR-0166: beside the graph, not instead of it — the canvas is not empty. */}
+              {isEdgelessByRoster(graph) && <EdgelessHint environmentDisplayName={graph.environment.displayName} />}
+              <ReactFlowProvider key={graph.environment.key}>
+                <Canvas
+                  graph={graph}
+                  state={state}
+                  selectedKey={selectedNode?.key ?? null}
+                  onSelect={select}
+                  showMetrics={showMetrics}
+                  rosters={rosters}
+                  registry={meta?.plugins ?? []}
+                  label={label}
+                  colorMode={theme}
+                />
+              </ReactFlowProvider>
+            </>
           )}
         </div>
 

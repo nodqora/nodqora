@@ -939,6 +939,12 @@ in `production`*. **None promises a time** — `refresh.graphSeconds` is a minim
 over cadences (ADR-0059), so a countdown built on it would be the same dishonest
 threshold ADR-0084 refused for staleness.
 
+A canvas that **has** nodes but no edges, in an environment where no plugin can
+produce an edge (`yaml`, `kafka`, `connect`), is not an empty state. It renders
+the graph with one sentence above it saying edges come from a topology file,
+linking to install step 5 (ADR-0166). The condition checks the roster, not only
+the edge count, so declaring `yaml` with no edges written yet does not show it.
+
 Mixed-cold — some plugins reported, some not — is the dangerous one, because the
 canvas draws a graph that looks whole. It raises a banner naming the plugin and
 capability, with no count and no cause, because neither exists (ADR-0088).
