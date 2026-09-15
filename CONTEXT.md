@@ -366,6 +366,10 @@ nothing else: it discovers nothing, declares **Health only**, and observes the
 nodes someone stamped for it — the mirror of `yaml`, which declares Discovery
 only (ADR-0164).
 
+Prometheus is that plugin, and it **never votes**: every contribution is
+`UNKNOWN` carrying a closed vocabulary of two metrics, `rate` and `latency`.
+Consumer lag is not one of them — `kafka` owns it (ADR-0165).
+
 ### Routed group
 
 A consumer group that some node carries as a backing — declared by an
@@ -756,12 +760,17 @@ abstentions first.
 Keyed by `node_id` rather than node key so a node that leaves and returns reads
 `UNKNOWN` rather than re-inheriting stale contributions (ADR-0050).
 
-**An abstention is an omission** (ADR-0104). A plugin that could not read a node
-omits it, and an `UNKNOWN` contribution never reaches the store — so there is
-exactly one way for a node to be `UNKNOWN`, which is having no row at all, and
-ADR-0028's join produces all four of its values by arithmetic. The alternative
-gave the fast half two `UNKNOWN`s that differed only in `observedAt`, one of
-which reported a freshness for an observation nobody made.
+**An empty abstention is an omission** (ADR-0104, ADR-0165). A plugin that could
+not read a node omits it, and an `UNKNOWN` contribution with no metrics never
+reaches the store — so a node nobody measured has no row at all, and ADR-0028's
+join produces all four of its values by arithmetic. The alternative gave the
+fast half two `UNKNOWN`s that differed only in `observedAt`, one of which
+reported a freshness for an observation nobody made.
+
+An `UNKNOWN` contribution **carrying metrics** is stored: it is a measurement
+without a vote. ADR-0024 discards it from the collapse and the metrics union
+keeps it, so a node only such a plugin observes reads `UNKNOWN` with metrics and
+an `observedAt` that dates them. `rawSignal` alone is not enough to keep it.
 
 A contribution is not a NodeState. Only the state engine writes NodeState.
 
