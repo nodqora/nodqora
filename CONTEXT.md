@@ -370,6 +370,14 @@ Prometheus is that plugin, and it **never votes**: every contribution is
 `UNKNOWN` carrying a closed vocabulary of two metrics, `rate` and `latency`.
 Consumer lag is not one of them — `kafka` owns it (ADR-0165).
 
+A `prometheus` backing's `kind` is a **recipe** and its `reference` is a
+**selector** (ADR-0167). The **recipe** belongs to the plugin and says which
+series answer `rate` and `latency` for one kind of instrumentation —
+`kafka-streams`, `micrometer-http`. The **selector** belongs to whoever bound the
+node and says which of those series are this node's: label equalities, AND-ed,
+never a pattern. Selection is closed; binding is open. When two recipes both
+find series, the more specific one speaks for the node and the other is silent.
+
 ### Routed group
 
 A consumer group that some node carries as a backing — declared by an
