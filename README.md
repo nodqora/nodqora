@@ -77,7 +77,7 @@ nodqora:
 
 The container cannot see your `~/.kube/config`, so `kubectl` working on the same machine does not
 mean Nodqora can list anything. Unless it runs inside the cluster it observes, give it a kubeconfig
-of its own or every namespace fails with `Operation: [list] for kind: [Deployment] … failed`:
+of its own or every namespace fails with `no kubeconfig is configured and Nodqora is not running inside a cluster`:
 
 ```bash
 kubectl config view --minify --flatten > kubeconfig   # then change server: away from 127.0.0.1

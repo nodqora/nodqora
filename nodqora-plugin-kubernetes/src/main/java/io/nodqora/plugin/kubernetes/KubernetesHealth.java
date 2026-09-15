@@ -108,7 +108,7 @@ class KubernetesHealth {
                 pods.addAll(objects.pods());
             } catch (RuntimeException e) {
                 unreachable++;
-                reasons.add("namespace %s could not be listed: %s".formatted(namespace, message(e)));
+                reasons.add(ListingFailure.reason(namespace, e));
             }
         }
 
@@ -319,9 +319,5 @@ class KubernetesHealth {
         metrics.put(
                 READY_REPLICAS, replicated.stream().mapToInt(Readiness::ready).sum());
         return metrics;
-    }
-
-    private static String message(RuntimeException e) {
-        return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
     }
 }

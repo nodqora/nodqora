@@ -3,15 +3,22 @@ package io.nodqora.plugin.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.fabric8.kubernetes.api.model.Status;
+import io.fabric8.kubernetes.api.model.StatusBuilder;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.nodqora.plugin.api.Backing;
 import io.nodqora.plugin.api.DiscoveredNode;
 import io.nodqora.plugin.api.DiscoveryRequest;
 import io.nodqora.plugin.api.DiscoveryResult;
 import io.nodqora.plugin.api.Link;
 import io.nodqora.plugin.api.OutcomeStatus;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import javax.net.ssl.SSLHandshakeException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -451,6 +458,92 @@ class KubernetesDiscoveryTest {
                 .containsExactly("namespace payments-prod produced no node-producing workload");
     }
 
+    // ---------------------------------------------------------------- why a namespace could not be listed
+
+    @Test
+    void an_unresolvable_api_server_is_named_after_the_operation() {
+        // The chain fabric8 6.13 really builds when there is no kubeconfig outside a cluster: its own
+        // operation line, then an IOException repeating the root, then the root.
+        RuntimeException failure = listingFailed(new IOException(
+                "kubernetes.default.svc: nodename nor servname provided, or not known",
+                new UnknownHostException("kubernetes.default.svc: nodename nor servname provided, or not known")));
+
+        assertThat(reason(failure))
+                .isEqualTo("namespace payments-prod could not be listed: listing deployments failed: "
+                        + "UnknownHostException: kubernetes.default.svc: nodename nor servname provided, or not known");
+    }
+
+    @Test
+    void a_refused_connection_keeps_both_the_address_and_the_refusal() {
+        RuntimeException failure = listingFailed(new IOException(
+                "Failed to connect to /127.0.0.1:6443",
+                new ConnectException("Failed to connect to /127.0.0.1:6443")
+                        .initCause(new ConnectException("Connection refused"))));
+
+        assertThat(reason(failure))
+                .endsWith("listing deployments failed: ConnectException: Failed to connect to /127.0.0.1:6443: "
+                        + "Connection refused");
+    }
+
+    @Test
+    void a_tls_failure_says_what_the_handshake_rejected() {
+        RuntimeException failure = listingFailed(new IOException(
+                "wrapped", new SSLHandshakeException("PKIX path building failed: unable to find valid certification path")));
+
+        assertThat(reason(failure))
+                .endsWith("listing deployments failed: SSLHandshakeException: PKIX path building failed: "
+                        + "unable to find valid certification path");
+    }
+
+    @Test
+    void an_http_status_the_api_server_returned_is_said_outright() {
+        Status forbidden = new StatusBuilder()
+                .withCode(403)
+                .withReason("Forbidden")
+                .withMessage("deployments.apps is forbidden: User \"system:serviceaccount:default:nodqora\" "
+                        + "cannot list resource \"deployments\" in API group \"apps\" in the namespace \"payments-prod\"")
+                .build();
+        // fabric8 repeats this exception as its own cause; the reason stops at the first status it meets.
+        KubernetesClientException failure = new KubernetesClientException(
+                "Failure executing: GET at: https://10.0.0.1:6443/apis/apps/v1/namespaces/payments-prod/deployments.",
+                403, forbidden, "apps", "v1", "deployments", "payments-prod");
+
+        assertThat(reason(failure))
+                .isEqualTo("namespace payments-prod could not be listed: listing deployments failed: HTTP 403 Forbidden: "
+                        + "deployments.apps is forbidden: User \"system:serviceaccount:default:nodqora\" "
+                        + "cannot list resource \"deployments\" in API group \"apps\" in the namespace \"payments-prod\"");
+    }
+
+    @Test
+    void a_credential_the_api_server_refused_keeps_its_explanation() {
+        Status unauthorized = new StatusBuilder()
+                .withCode(401)
+                .withReason("Unauthorized")
+                .withMessage("the server has asked for the client to provide credentials")
+                .build();
+
+        assertThat(reason(new KubernetesClientException(
+                        "Failure executing: GET at: https://10.0.0.1:6443/apis/apps/v1/namespaces/payments-prod/deployments.",
+                        401, unauthorized, "apps", "v1", "deployments", "payments-prod")))
+                .endsWith("listing deployments failed: HTTP 401 Unauthorized: "
+                        + "the server has asked for the client to provide credentials");
+    }
+
+    @Test
+    void a_cause_that_could_quote_the_kubeconfig_is_named_and_never_quoted() {
+        // SnakeYAML's parse error, verbatim in shape: it prints the offending line, and in a kubeconfig
+        // that line can be the token. The reason is served by the API and shown in the UI.
+        RuntimeException failure = new KubernetesApiException(
+                "the kubeconfig could not be read",
+                new IllegalStateException("while parsing a flow sequence\n in reader, line 15, column 12:\n"
+                        + "        token: [eyJhbGciOiJSUzI1NiIsImtpZCI6IlNFQ1JFVCJ9\n               ^"));
+
+        assertThat(reason(failure))
+                .isEqualTo("namespace payments-prod could not be listed: the kubeconfig could not be read: "
+                        + "IllegalStateException")
+                .doesNotContain("eyJhbGci");
+    }
+
     @Test
     void the_recorded_fixture_is_complete() {
         assertThat(recorded("payments-prod").outcome().status()).isEqualTo(OutcomeStatus.COMPLETE);
@@ -460,6 +553,22 @@ class KubernetesDiscoveryTest {
 
     private static List<String> ignoringConnect() {
         return List.of("statefulset/kafka-connect");
+    }
+
+    /** fabric8's own failure for a list call: the operation, carrying the resource it was listing. */
+    private static KubernetesClientException listingFailed(Throwable cause) {
+        return new KubernetesClientException(
+                "Operation: [list]  for kind: [Deployment]  with name: [null]  in namespace: [payments-prod]  failed.",
+                cause, "apps", "v1", "deployments", "payments-prod");
+    }
+
+    private static String reason(RuntimeException failure) {
+        KubernetesApi api = (ignored, namespace) -> {
+            throw failure;
+        };
+        DiscoveryResult result = new KubernetesPlugin(api).discover(new DiscoveryRequest<>("production", config(List.of())));
+        assertThat(result.outcome().status()).isEqualTo(OutcomeStatus.FAILED);
+        return result.outcome().reasons().getFirst();
     }
 
     private static DiscoveryResult recorded(String namespace) {

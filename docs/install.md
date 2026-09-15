@@ -84,8 +84,8 @@ Nodqora runs in a container, and the container cannot see `~/.kube/config`. With
 key, the plugin assumes it is running *inside* the cluster, and every namespace fails:
 
 > Kubernetes could not read discovery for this environment — namespace n8n could not be listed:
-> listing namespace n8n failed: Operation: [list] for kind: [Deployment] with name: [null] in
-> namespace: [n8n] failed.
+> no kubeconfig is configured and Nodqora is not running inside a cluster: listing deployments
+> failed: UnknownHostException: kubernetes.default.svc
 
 `kubectl` and `k9s` working on the same machine prove nothing here; they read a file the container
 does not have. Unless Nodqora runs inside the cluster it observes, it takes three changes.
@@ -128,7 +128,7 @@ and beside `namespaces` — the value is the file's *contents*, which `${file:..
 **Keep the backslash and the single quotes.** Spring expands `${...}` while it loads the file and reads
 `${file:/etc/nodqora/kubeconfig}` as a property named `file` with the path as its default, so without
 the escape the plugin receives the path instead of the contents and every namespace fails with
-`Cannot construct instance of io.fabric8.kubernetes.api.model.Config`. The backslash stops Spring
+`the kubeconfig could not be read: MismatchedInputException`. The backslash stops Spring
 expanding it; YAML rejects `\$` inside double quotes, hence the single ones. This is
 [#111](https://github.com/nodqora/nodqora/issues/111), and the escape stops being needed when it is
 fixed.
@@ -308,11 +308,24 @@ That is a different state and Nodqora will say so rather than claim your config 
 unreachable server and an unconfigured one are never reported as the same thing (ADR-0156). Check
 `docker compose ps` and `docker compose logs nodqora`.
 
-**Every namespace fails with `Operation: [list] for kind: [Deployment] … failed`, and `kubectl` works.**
-The container has no kubeconfig, or has one whose `server:` is `127.0.0.1`. See
-[Kubernetes needs a kubeconfig in the container](#kubernetes-needs-a-kubeconfig-in-the-container).
+**Every namespace fails with "could not be listed", and `kubectl` works.**
+The end of the reason names the cause:
+
+| the reason ends with | fix |
+|---|---|
+| `no kubeconfig is configured and Nodqora is not running inside a cluster` | [give the container a kubeconfig](#kubernetes-needs-a-kubeconfig-in-the-container) |
+| `ConnectException: Failed to connect to /127.0.0.1:…` | the kubeconfig's `server:` is the container itself — [change it](#kubernetes-needs-a-kubeconfig-in-the-container) |
+| `UnknownHostException: <host>` | the container cannot resolve `server:`; use an IP address |
+| `SSLPeerUnverifiedException: Hostname … not verified` | the API server's certificate does not name that address — `--tls-san` |
+| `SSLHandshakeException: PKIX path building failed` | the kubeconfig's CA is not the one that signed the API server's certificate |
+| `HTTP 401 Unauthorized` | the credential is expired or wrong |
+| `HTTP 403 Forbidden: …` | the credential works but may not list that namespace; the message names the user and the resource |
+| `the kubeconfig could not be read: …` | the value is not a kubeconfig — see the backslash note above |
+
 `docker compose exec nodqora grep server: /etc/nodqora/kubeconfig` shows what the container has; no
-such file means the mount is missing or `docker compose up -d` has not run since it was added.
+such file means the mount is missing or `docker compose up -d` has not run since it was added. A
+cause Nodqora cannot vouch for is named by its class alone, never quoted, because a parse error
+can print a kubeconfig line and the reason is shown in the UI.
 
 **`docker compose up` fails on the image tag.**
 You are running the repository's `compose.yaml` rather than the release asset — it names `@VERSION@`

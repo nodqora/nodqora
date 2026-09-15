@@ -74,7 +74,7 @@ class KubernetesDiscovery {
                 objects = api.list(config, namespace);
             } catch (RuntimeException e) {
                 unreachable++;
-                reasons.add("namespace %s could not be listed: %s".formatted(namespace, message(e)));
+                reasons.add(ListingFailure.reason(namespace, e));
                 continue;
             }
 
@@ -271,9 +271,5 @@ class KubernetesDiscovery {
     /** ADR-0020: keys are compared case-folded, so the plugin's own contest detection folds too. */
     private static String folded(String key) {
         return key.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static String message(RuntimeException e) {
-        return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
     }
 }
