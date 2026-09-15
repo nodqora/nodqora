@@ -372,6 +372,10 @@ body {
 /* ADR-0087: a headline and nothing else. No countdown and no "back in about five minutes" — a
    promise built on ADR-0059's *minimum* cadence is a threshold nobody can keep. */
 .canvas-empty-headline, .not-found-headline { margin: 0; font-size: 15px; color: var(--ink-quiet); }
+/* ADR-0166: the edgeless sentence sits above a graph that is on screen, so it is a quiet line in
+   the canvas column rather than a centred headline or an outcome banner — nothing failed. */
+.canvas-hint { margin: 0; padding: 10px 14px 0; color: var(--ink-quiet); font-size: 13px; }
+.canvas-hint a { color: var(--accent); }
 .not-found-roster { margin: 0; color: var(--ink-quiet); font-size: 13px; }
 .not-found-roster button {
   padding: 0; border: none; background: none; cursor: pointer; color: var(--accent); font: inherit;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { configuringDocUrl, VERSION } from './unconfigured'
+import { VERSION } from '../docs/link'
+import { configuringDocUrl } from './unconfigured'
 
 /**
  * ADR-0156: the screen an unconfigured install shows, **replacing the shell rather than emptying
