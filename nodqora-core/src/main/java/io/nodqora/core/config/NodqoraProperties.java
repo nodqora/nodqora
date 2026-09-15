@@ -35,9 +35,9 @@ public record NodqoraProperties(Plugins plugins, Refresh refresh, Map<String, En
      * placeholder resolver hands every reference over intact and leaves ADR-0014's resolver the only
      * one. The orders and cadences keep Spring's resolution; they hold no secrets.
      */
-    public static NodqoraProperties from(org.springframework.core.env.Environment spring) {
-        Binder resolving = Binder.get(spring);
-        Binder literal = new Binder(ConfigurationPropertySources.get(spring));
+    public static NodqoraProperties from(org.springframework.core.env.Environment springEnvironment) {
+        Binder resolving = Binder.get(springEnvironment);
+        Binder literal = new Binder(ConfigurationPropertySources.get(springEnvironment));
         return new NodqoraProperties(
                 resolving.bind("nodqora.plugins", Plugins.class).orElse(null),
                 resolving.bind("nodqora.refresh", Refresh.class).orElse(null),

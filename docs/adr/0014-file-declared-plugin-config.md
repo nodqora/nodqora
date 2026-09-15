@@ -1,6 +1,6 @@
 # ADR-0014: Plugin configuration is file-declared; secrets are references only
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0165](0165-plugin-slices-bind-literally-and-secret-references-are-the-only-resolver.md)
 - **Date**: 2026-09-01
 - **Ticket**: [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6)
 

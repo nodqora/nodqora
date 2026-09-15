@@ -310,7 +310,7 @@ The end of the reason names the cause:
 | `SSLHandshakeException: PKIX path building failed` | the kubeconfig's CA is not the one that signed the API server's certificate |
 | `HTTP 401 Unauthorized` | the credential is expired or wrong |
 | `HTTP 403 Forbidden: …` | the credential works but may not list that namespace; the message names the user and the resource |
-| `the kubeconfig could not be read: …` | the value is not a kubeconfig — see the backslash note above |
+| `the kubeconfig could not be read: …` | the value is not a kubeconfig — `kubeconfig:` takes the contents, so write `"${file:/etc/nodqora/kubeconfig}"`, not the bare path |
 
 `docker compose exec nodqora grep server: /etc/nodqora/kubeconfig` shows what the container has; no
 such file means the mount is missing or `docker compose up -d` has not run since it was added. A

@@ -32,11 +32,20 @@ plugin ids and durations, never secrets.
 unescaped forms do, permanently, so an install written against the interim docs keeps working
 across the upgrade. The docs go back to the unescaped form ADR-0014 decided.
 
+**Rejected: a Spring placeholder resolver that skips `env:` and `file:`.** It would keep Spring
+resolution for `displayName` and every other value in an environment, but it means two resolvers
+reading one string and agreeing on who owns which prefix. That agreement is exactly what broke
+here, and a third scheme (Vault, per ADR-0014) would have to be taught to both.
+
 ## Consequences
 
 - A Spring placeholder anywhere under an environment, including `displayName`, is now literal text.
-  ADR-0152 already rules out environment variables as a way to shape an environment, and one
-  resolver per tree is the thing that stops this recurring.
+  Nothing in an environment is shaped by the process environment except through a reference, which
+  is ADR-0152's position on environment variables carried over to placeholders.
+- A single backslash immediately before a reference is read as the escape and dropped, so
+  `DOMAIN\${env:USER}` resolves to `DOMAINuser`. Through a real file that was already true before
+  this change, because Spring consumed the same backslash; write `DOMAIN\\${env:USER}` for a literal
+  one.
 - `NodqoraProperties` is no longer `@ConfigurationProperties`, so it gets no Boot metadata. Nothing
   consumed any.
 - A value that genuinely needs a literal `${env:` in a plugin slice cannot be written. No plugin

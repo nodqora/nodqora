@@ -120,9 +120,11 @@ class SecretReferencesInAConfigFileTest {
                       plugins:
                         probe:
                           escaped: '\\${file:%s}'
+                          path: '\\${env:PATH}'
                 """.formatted(kubeconfig));
 
         assertThat(config.escaped()).isEqualTo("apiVersion: v1");
+        assertThat(config.path()).isEqualTo(System.getenv("PATH"));
     }
 
     private ProbeConfig boundFrom(String yaml) throws IOException {
