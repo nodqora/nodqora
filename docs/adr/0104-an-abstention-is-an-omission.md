@@ -1,9 +1,16 @@
 # ADR-0104: An abstention is an omission — `UNKNOWN` never reaches the contribution store
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0165](0165-prometheus-contributes-metrics-and-never-votes.md)
 - **Date**: 2026-09-05
 - **Ticket**: [Slice 3 — Health end-to-end: the contribution store, `/state`, the collapse](https://github.com/fredskor/nodqora/issues/24)
 - **Amends**: ADR-0072
+
+> **Amendment (ADR-0165).** Only an *empty* abstention is an omission. An
+> `UNKNOWN` contribution carrying non-empty `metrics` is stored, is discarded from
+> the vote by ADR-0024's step 1, and joins the metrics union — the channel a
+> plugin that never votes, Prometheus, uses. `rawSignal` alone does not keep it,
+> and the CHECK below admits `UNKNOWN` again. A node observed only that way has a
+> row reading `UNKNOWN`, whose `observedAt` dates the metrics reading.
 
 ## Context
 

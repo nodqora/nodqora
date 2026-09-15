@@ -33,6 +33,9 @@ across many teams or over time is Enterprise.
 user asks of the graph in front of them is observation, and observation is
 Community. The same question evaluated on a schedule, watched for change and
 reported when it changes, is continuous monitoring, and that is Enterprise.
+**The canvas is not monitoring** (ADR-0165): a verdict painted for someone who is
+looking is observation however often it refreshes; keeping it to tell someone
+about a change is not.
 
 **Anything not listed here is Community by default** (ADR-0108), except four
 categories that are Enterprise by standing rule:
@@ -55,6 +58,7 @@ Everything an engineer needs to see the truth of their system.
 | Interactive canvas, node inspector, search, filters, links | §49 phase 1, MVP | Seeing the truth of your system |
 | YAML topology, environments, deep links | §49 phase 1, MVP | As above |
 | Health, freshness, plugin outcome | §49 phases 2–3, MVP | As above |
+| **Health derived from thresholds, and live metrics on the graph** — lag over a threshold, Prometheus `rate` and `latency`, alerts Prometheus already evaluated shown on a node | §13, §14, §12 | Painted on a canvas someone is looking at; the canvas is not monitoring (ADR-0165) |
 | **Every discovery plugin, tiers 1–6** — Kubernetes, Kafka, Connect, data destinations, workflow, GitOps, observability, **cloud providers and commercial APM included** | §49 phases 2–7, §12 | Technology is an accident of stack, not a property of the buyer; §5.2 (ADR-0112) |
 | Automatic relationship discovery | §49 phase 7 | Reduces map maintenance for the team that owns the map |
 | **Upstream, downstream, shortest path, all paths, dependency depth** | §49 phase 8, §16 | Traversal is observation (ADR-0107) |
@@ -79,7 +83,7 @@ What an organization needs to run Nodqora across many teams, or over time.
 | **View-scoping / RBAC** — roles and per-environment, per-type, per-owner, per-team visibility in one install | §43, §49 phase 12 | The API is read-only, so authorization here *is* view-scoping, and that is organizational (ADR-0109) |
 | **The journal** — durable topology history, time-travel, deployment and configuration history, GitOps events | §49 phase 9 | Storage the product otherwise does not keep (ADR-0110) |
 | **Incident timeline** and change correlation | §49 phase 10 (part) | The journal by another name (ADR-0110) |
-| **Continuous monitoring** — blast-radius alerting, environment drift detection, standing analysis | §43, standing rule | The standing query (ADR-0107, ADR-0108) |
+| **Continuous monitoring** — blast-radius alerting, environment drift detection, standing analysis, alert rules evaluated inside Nodqora, alerts forwarded anywhere | §43, standing rule | The standing query (ADR-0107, ADR-0108, ADR-0165) |
 | **Audit aggregation** — search, retention policy, export, cross-install collection | §43 | Fleet collection (ADR-0111, ADR-0108) |
 | **Policy engine** — enforcing conventions such as "every service has an owner" | §43 | Governance *and* a standing query; both rules agree |
 | **AI assistant** — architecture explanation, likely-failure identification, incident summarisation, troubleshooting guidance | §49 phase 11 | **Placed by §5.5 "useful without AI", not by the buyer rule** (ADR-0113) |
