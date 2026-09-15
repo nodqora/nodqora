@@ -102,6 +102,24 @@ today.
 
 ---
 
+## When Enterprise opens
+
+**Enterprise opens at the first commit to the private repository, and not
+before two things are true** (ADR-0169). Designing it, editing this page and
+answering an enquiry are all allowed sooner.
+
+| | |
+|---|---|
+| **The floor** | The Community release that closes Tier 1 with Prometheus, **and** Community authentication (OIDC or SAML) in a tagged release. Not `1.0`, and none of phases 5–10 |
+| **The gate** | **One enquiry** from an organisation running Community for a capability placed in Enterprise above, **or** issues from **three distinct outside organisations** plainly running Community. Stars and image pulls never count |
+| **The clock** | Six months from the Tier 1 release. When it runs out nothing opens: an ADR either opens Enterprise anyway and says why, or reopens this ledger and starts a fresh six months |
+
+An enquiry for something Community already ships does not open the gate; it is
+the first revisit trigger below. Whichever route opens Enterprise, an ADR records
+it and links the evidence.
+
+---
+
 ## How Enterprise is sold
 
 **A flat annual subscription per installation** (ADR-0123). No price is
@@ -361,3 +379,6 @@ than a single row.
 - A week in which the one-business-day commitment is missed for reasons of
   volume rather than circumstance — the commitment has outgrown the headcount
   (ADR-0136).
+- Six months from the Tier 1 release with the gate unmet, and every six months
+  after a reopened ledger — a recorded decision falls due, to open Enterprise
+  or to reopen this ledger (ADR-0169).
