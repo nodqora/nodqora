@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
+ * ADR-0156: the version this bundle was built from, baked in at build time.
+ *
+ * `/api/meta` carries `environments`, `plugins` and `refresh` and no version, so this is the first
+ * place the running version is expressible in the UI. Putting it on the wire is the better
+ * architecture and was rejected as the wrong ticket — it is a property of the running server rather
+ * than of the bundle, and moving it later changes this screen not at all.
+ *
+ * A working tree has no build argument and falls back to `main`, which is correct for a working
+ * tree and wrong only in the case the argument exists to fix.
+ */
+export const VERSION: string | null = __NODQORA_VERSION__
+
+/**
  * ADR-0156: **a link into the repository's documentation is pinned to the tag this build was cut
  * from.**
  *

@@ -941,7 +941,7 @@ threshold ADR-0084 refused for staleness.
 
 A canvas that **has** nodes but no edges, in an environment where no plugin can
 produce an edge (`yaml`, `kafka`, `connect`), is not an empty state. It renders
-the graph with one sentence above it saying edges come from a topology file,
+the graph with one sentence above it saying edges come from the topology directory,
 linking to install step 5 (ADR-0166). The condition checks the roster, not only
 the edge count, so declaring `yaml` with no edges written yet does not show it.
 

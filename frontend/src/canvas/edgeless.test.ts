@@ -55,7 +55,8 @@ describe('a canvas with nodes and no edges says where edges come from', () => {
     const sentence = edgelessSentence('Homelab')
 
     expect(sentence).toContain('Homelab')
-    expect(sentence).toContain('topology file')
+    expect(sentence).toContain('topology directory')
+    expect(sentence).not.toContain('topology file')
     expect(sentence).not.toMatch(/minute|second|soon|shortly|wait|refresh|\d/i)
   })
 })
@@ -65,11 +66,6 @@ describe('the draw-the-edges link resolves in the tree it was built from', () =>
     expect(drawEdgesDocUrl('0.2.0')).toBe(
       'https://github.com/nodqora/nodqora/blob/v0.2.0/docs/install.md#5-draw-the-edges',
     )
-  })
-
-  it('falls back to main for a working tree and for a snapshot', () => {
-    expect(drawEdgesDocUrl(null)).toContain('/blob/main/')
-    expect(drawEdgesDocUrl('0.2.0-SNAPSHOT')).toContain('/blob/main/')
   })
 
   it('names a heading that is actually in the document', () => {

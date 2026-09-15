@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { VERSION } from '../firstrun/unconfigured'
+import { VERSION } from '../docs/link'
 import { drawEdgesDocUrl, edgelessSentence } from './edgeless'
 
 /**

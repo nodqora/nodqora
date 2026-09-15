@@ -25,8 +25,11 @@ docs, and [#114](https://github.com/nodqora/nodqora/pull/114) has since added
 an edge (`yaml`, `kafka`, `connect`), the canvas shows one sentence above the graph
 and links to step 5:**
 
-> The plugins reading `Homelab` report nodes, not what connects them. Edges come
-> from a topology file. *Draw the edges*
+> No plugin reading `Homelab` reports what connects its nodes. Edges come from
+> the environment's topology directory. *Draw the edges*
+
+It says *topology directory*, not *topology file*, following the glossary: the
+directory is many files read as one snapshot (ADR-0061, ADR-0064).
 
 The link is pinned to the tag the build was cut from, using ADR-0156's rule, which
 is now shared in `frontend/src/docs/link.ts`.
@@ -51,6 +54,10 @@ is now shared in `frontend/src/docs/link.ts`.
   the same tree, and the link is pinned to that tree's tag. A test reads
   `## 5. Draw the edges` out of `docs/install.md`, so renaming the step fails the
   build and does not leave a dead anchor.
+- **A `/blob/` URL is right here, though ADR-0161 turned one down.** That link
+  was an inert label that had to survive being read and retyped, and it pointed
+  at a vendor page. This one is a normal link into install docs that change
+  between versions, which is ADR-0156's case, so it is pinned to the build's tag.
 - **Cost:** the frontend now hard-codes which plugins produce edges. `PluginRef`
   carries capabilities and says nothing about edges. A new plugin that emits edges
   must be added to `EDGE_PRODUCERS`, or it will get the sentence while its edges
