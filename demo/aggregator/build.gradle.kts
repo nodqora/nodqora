@@ -19,6 +19,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.apache.kafka:kafka-streams")
+    // /actuator/prometheus. With a MeterRegistry present, Boot binds the Streams client's own
+    // metrics to the StreamsBuilderFactoryBean that @EnableKafkaStreams creates — no code here.
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {

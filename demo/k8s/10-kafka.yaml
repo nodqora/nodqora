@@ -68,3 +68,16 @@ spec:
   entityOperator:
     topicOperator: {}
     userOperator: {}
+  # Topic offsets and consumer-group lag as Prometheus series, from a `market-kafka-exporter`
+  # Deployment. The broker's own JMX metrics (`kafka.metricsConfig`) are left off: they need a
+  # rules ConfigMap, and nothing in the Prometheus work asks for broker internals yet.
+  kafkaExporter:
+    topicRegex: "market\\..*"
+    groupRegex: "market-aggregator"
+    template:
+      pod:
+        metadata:
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "9404"
+            prometheus.io/path: /metrics
