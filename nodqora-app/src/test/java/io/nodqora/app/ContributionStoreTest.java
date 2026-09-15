@@ -123,18 +123,41 @@ class ContributionStoreTest extends NodqoraIntegrationTest {
     }
 
     @Test
-    void an_abstention_never_reaches_the_store_and_so_leaves_no_row() {
+    void an_empty_abstention_never_reaches_the_store_and_so_leaves_no_row() {
         record(Health.DEGRADED, "3 desired / 2 ready", Outcome.complete());
 
-        // ADR-0104: an abstention is an omission. Storing UNKNOWN would give the fast half two ways
-        // to be UNKNOWN that disagree — one where the composed row does not exist, one where it
-        // exists carrying an `observedAt` for an observation nobody made — and ADR-0024 discards it
-        // one step later regardless.
+        // ADR-0104, as ADR-0165 narrowed it: an abstention with no metrics is an omission. Storing
+        // it would give the fast half two ways to be UNKNOWN that disagree — one where the composed
+        // row does not exist, one where it exists carrying an `observedAt` for an observation nobody
+        // made. A `rawSignal` does not make it a measurement, so this one is dropped, and under
+        // COMPLETE the DEGRADED reading it replaces is deleted with it.
         record(Health.UNKNOWN, "could not read", Outcome.complete());
 
         assertThat(health(NODE)).isEqualTo("UNKNOWN");
         assertThat(rawSignalIsNull(NODE)).isTrue();
         assertThat(storedContributions()).isZero();
+    }
+
+    @Test
+    void an_abstention_carrying_metrics_is_stored_and_its_node_reads_unknown_with_them() {
+        // ADR-0165: a measurement without a vote. The plugin id is immaterial to the store, which is
+        // why this can be a hand-built contribution rather than a Prometheus plugin that does not
+        // exist yet. The CHECK on `health_contribution.health` must admit UNKNOWN for it to land.
+        contributions.record(
+                "production",
+                PLUGIN,
+                new HealthResult(
+                        Map.of(NODE, new StateContribution(Health.UNKNOWN, null, Map.of("rate", 38))),
+                        Outcome.complete()),
+                now());
+        folds.run("production");
+
+        assertThat(storedContributions()).isOne();
+        // The row exists, which is the difference from an empty abstention: it reads UNKNOWN because
+        // nobody voted, and it carries an `observedAt` because somebody did measure.
+        assertThat(rowExists(NODE)).isTrue();
+        assertThat(health(NODE)).isEqualTo("UNKNOWN");
+        assertThat(metric(NODE, PLUGIN, "rate")).isEqualTo("38");
     }
 
     @Test
@@ -196,6 +219,30 @@ class ContributionStoreTest extends NodqoraIntegrationTest {
                 where n.environment_key = 'production' and lower(btrim(n.key)) = ?
                 """,
                 String.class,
+                nodeKey);
+    }
+
+    private boolean rowExists(String nodeKey) {
+        return jdbc.queryForObject(
+                """
+                select s.node_id is not null from node n
+                left join node_state s on s.node_id = n.id
+                where n.environment_key = 'production' and lower(btrim(n.key)) = ?
+                """,
+                Boolean.class,
+                nodeKey);
+    }
+
+    private String metric(String nodeKey, String plugin, String key) {
+        return jdbc.queryForObject(
+                """
+                select s.metrics -> ? ->> ? from node n
+                left join node_state s on s.node_id = n.id
+                where n.environment_key = 'production' and lower(btrim(n.key)) = ?
+                """,
+                String.class,
+                plugin,
+                key,
                 nodeKey);
     }
 

@@ -37,12 +37,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>The header is written on every poll whatever the outcome, which is what keeps "nobody has ever
  * polled this pair" distinguishable from "we tried and could not look" (ADR-0086).
  *
- * <p><b>An abstention is an omission (ADR-0104).</b> An {@code UNKNOWN} contribution is dropped here
- * rather than stored, so it is deleted under {@code COMPLETE} exactly as a genuinely absent key
- * would be. That is enforced at this one point rather than asked of four plugins: a stored
- * abstention would give the fast half two ways to be {@code UNKNOWN} — one where the composed row
- * does not exist, one where it exists carrying a freshness for an observation nobody made — and
- * ADR-0024 discards it a step later regardless.
+ * <p><b>An empty abstention is an omission (ADR-0104, ADR-0165).</b> An {@code UNKNOWN} contribution
+ * with no metrics is dropped here rather than stored, so it is deleted under {@code COMPLETE} exactly
+ * as a genuinely absent key would be. That is enforced at this one point rather than asked of every
+ * plugin: a stored empty abstention would carry a freshness for an observation nobody made, and
+ * ADR-0024 discards it a step later regardless. A {@code rawSignal} does not rescue it.
+ *
+ * <p>An {@code UNKNOWN} contribution <em>carrying metrics</em> is stored. It is a measurement from a
+ * plugin that does not vote, and its {@code observedAt} dates something real.
  */
 @Component
 public class HealthStore {
@@ -73,7 +75,7 @@ public class HealthStore {
         List<String> present = new ArrayList<>();
         for (Map.Entry<String, StateContribution> observed : result.contributions().entrySet()) {
             StateContribution contribution = observed.getValue();
-            if (contribution.health() == Health.UNKNOWN) {
+            if (contribution.health() == Health.UNKNOWN && contribution.metrics().isEmpty()) {
                 continue;
             }
             upsert(environmentKey, pluginId, observed.getKey(), contribution, observedAt);

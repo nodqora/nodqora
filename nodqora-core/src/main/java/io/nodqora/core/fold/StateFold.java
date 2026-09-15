@@ -27,22 +27,25 @@ import java.util.stream.Collectors;
  * {@code DISABLED} — ADR-0034 emits it from {@code spec.replicas: 0}, and scaling back up would need
  * the old contribution found and cleared by hand rather than simply replaced.
  *
- * <p>Abstentions are discarded before anything else happens, and a node with nothing left has
- * <b>no row</b> (ADR-0104). That is ADR-0024's step 1 with its consequence carried all the way out:
- * there is exactly one way for a node to be {@code UNKNOWN}, which is having no row, so the value
- * always arrives by ADR-0028's outer join and never by a stored one carrying a freshness for an
- * observation nobody made.
+ * <p>Empty abstentions are discarded before anything else happens, and a node with nothing left has
+ * <b>no row</b> (ADR-0104). An abstention <em>carrying metrics</em> is not empty: it is a
+ * measurement without a vote (ADR-0165), so a node only such a plugin observes gets a row reading
+ * {@code UNKNOWN} with those metrics and an {@code observedAt} that dates them. The two ways to be
+ * {@code UNKNOWN} now differ in something real, and the one without a measurement still arrives by
+ * ADR-0028's outer join.
  *
  * <p>Composition splits three ways and only one of them was ever hard:
  *
  * <ul>
- *   <li><b>{@code health}</b> — ADR-0024's collapse, which lives on {@link Health} because the same
- *       three steps also run inside a plugin.
- *   <li><b>{@code rawSignal}</b> — joined in <em>registry</em> order with {@code "; "} (ADR-0028),
- *       which is why {@code PluginOrder} carries two orders rather than one: precedence settles a
- *       contested scalar on the slow side, and it is a different question from what reads well.
- *   <li><b>{@code metrics}</b> — a union namespaced by plugin id (ADR-0006), so no plugin can write
- *       into another's map and the allow-listed key names never collide.
+ *   <li><b>{@code health}</b> — ADR-0024's collapse over the voters, which lives on {@link Health}
+ *       because the same three steps also run inside a plugin.
+ *   <li><b>{@code rawSignal}</b> — the voters' signals joined in <em>registry</em> order with
+ *       {@code "; "} (ADR-0028), which is why {@code PluginOrder} carries two orders rather than one:
+ *       precedence settles a contested scalar on the slow side, and it is a different question from
+ *       what reads well.
+ *   <li><b>{@code metrics}</b> — a union over everything measured, namespaced by plugin id
+ *       (ADR-0006), so no plugin can write into another's map and the allow-listed key names never
+ *       collide.
  * </ul>
  */
 public class StateFold {
@@ -60,28 +63,34 @@ public class StateFold {
 
         List<FoldedNodeState> states = new ArrayList<>(byNode.size());
         byNode.forEach((nodeId, carried) -> {
-            List<ContributionView> byRegistry = carried.stream()
-                    // An abstention is an omission (ADR-0104), so it is dropped here as well as at
-                    // the store. Both points, deliberately: the store is where it is enforced for
-                    // every plugin, and this is where the fold stays correct as a function of its
-                    // own inputs rather than of what happened to be written upstream.
-                    .filter(contribution -> contribution.health() != Health.UNKNOWN)
+            List<ContributionView> measured = carried.stream()
+                    // An empty abstention is an omission (ADR-0104, ADR-0165), so it is dropped here
+                    // as well as at the store. Both points, deliberately: the store is where it is
+                    // enforced for every plugin, and this is where the fold stays correct as a
+                    // function of its own inputs rather than of what happened to be written upstream.
+                    .filter(contribution ->
+                            contribution.health() != Health.UNKNOWN || !contribution.metrics().isEmpty())
                     .sorted(Comparator.comparingInt(
                                     (ContributionView contribution) -> order.registryRank(contribution.pluginId()))
                             .thenComparing(ContributionView::pluginId))
                     .toList();
-            if (byRegistry.isEmpty()) {
+            if (measured.isEmpty()) {
                 // No row at all, rather than a row reading UNKNOWN. ADR-0028's outer join
                 // synthesizes UNKNOWN / null / {} / null on the way out, and a row here would carry
                 // an `observedAt` for an observation nobody made.
                 return;
             }
+            // What is left may still include a measurement without a vote. ADR-0024 step 1 keeps it
+            // out of the verdict, and the verdict's gist follows the verdict.
+            List<ContributionView> voters = measured.stream()
+                    .filter(contribution -> contribution.health() != Health.UNKNOWN)
+                    .toList();
             states.add(new FoldedNodeState(
                     nodeId,
-                    Health.collapse(byRegistry.stream().map(ContributionView::health).toList()),
-                    rawSignal(byRegistry),
-                    metrics(byRegistry),
-                    observedAt(byRegistry)));
+                    Health.collapse(voters.stream().map(ContributionView::health).toList()),
+                    rawSignal(voters),
+                    metrics(measured),
+                    observedAt(measured)));
         });
 
         return states.stream()
