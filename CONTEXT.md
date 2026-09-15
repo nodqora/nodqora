@@ -351,6 +351,21 @@ YAML. The `kafka` plugin attributes nothing: it emits exactly **one** backing,
 `{ plugin: kafka, kind: topic, reference: <topic name> }`, on the node whose key
 is that topic's name (ADR-0040).
 
+**A plugin may stamp at scale from a template, and an annotation corrects it.**
+Where the reference is configuration rather than something anyone discovers, the
+discovering plugin's own config carries a template and stamps the backing onto
+every node it discovers; a per-node annotation naming the same domain
+**replaces** that stamp rather than unioning with it, because the template is a
+guess about one fact and the annotation is that guess corrected (ADR-0164). No
+template configured means no stamp, which is the per-environment opt-in. This is
+the only exception to backings unioning on `(plugin, kind, reference)`; two
+humans declaring two different objects still union, as they always did.
+
+A plugin that owns no technology domain is routed by exactly this and needs
+nothing else: it discovers nothing, declares **Health only**, and observes the
+nodes someone stamped for it — the mirror of `yaml`, which declares Discovery
+only (ADR-0164).
+
 ### Routed group
 
 A consumer group that some node carries as a backing — declared by an
