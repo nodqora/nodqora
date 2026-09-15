@@ -81,8 +81,9 @@ Everything else is optional:
 | `links` | URL templates, composed here rather than stored, so one manifest renders correctly in every environment (ADR-0032) |
 
 **In a container there is no ambient kubeconfig**, so unless Nodqora is running *inside* the cluster
-it observes, this key is required — without it every namespace fails with `Operation: [list] for
-kind: [Deployment] … failed`, however well `kubectl` works on the host. Write a self-contained copy,
+it observes, this key is required — without it every namespace fails with `no kubeconfig is
+configured and Nodqora is not running inside a cluster`, however well `kubectl` works on the
+host. Write a self-contained copy,
 mount it and reference it — the value is the kubeconfig's contents, and `${file:...}` has already
 read the mount by the time config is bound
 ([ADR-0014](adr/0014-file-declared-plugin-config.md)):

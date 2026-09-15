@@ -3,6 +3,7 @@ package io.nodqora.plugin.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.nodqora.plugin.api.Backing;
 import io.nodqora.plugin.api.Health;
 import io.nodqora.plugin.api.HealthCapability.HealthRequest;
@@ -10,6 +11,7 @@ import io.nodqora.plugin.api.HealthCapability.HealthResult;
 import io.nodqora.plugin.api.HealthCapability.ObservableNode;
 import io.nodqora.plugin.api.OutcomeStatus;
 import io.nodqora.plugin.api.StateContribution;
+import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -321,6 +323,26 @@ class KubernetesHealthTest {
         assertThat(partial.outcome().status()).isEqualTo(OutcomeStatus.PARTIAL);
         // A PARTIAL still carries what it did see: the reachable namespace's node keeps its verdict.
         assertThat(partial.contributions().get("api").health()).isEqualTo(Health.HEALTHY);
+    }
+
+    @Test
+    void health_names_the_cause_of_a_failed_listing_the_same_way_discovery_does() {
+        ObservableNode node = new ObservableNode(
+                "api", List.of(new Backing("kubernetes", "deployment", NAMESPACE + "/api")));
+
+        HealthResult result = observe(node, config(), namespace -> {
+            throw new KubernetesClientException(
+                    "Operation: [list]  for kind: [Pod]  with name: [null]  in namespace: [" + namespace + "]  failed.",
+                    new UnknownHostException("kubernetes.default.svc"),
+                    "",
+                    "v1",
+                    "pods",
+                    namespace);
+        });
+
+        assertThat(result.outcome().reasons())
+                .containsExactly("namespace %s could not be listed: listing pods failed: UnknownHostException: kubernetes.default.svc"
+                        .formatted(NAMESPACE));
     }
 
     @Test

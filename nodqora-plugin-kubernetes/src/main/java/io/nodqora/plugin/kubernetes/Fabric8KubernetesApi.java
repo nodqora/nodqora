@@ -33,7 +33,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * The one class that talks to a cluster, and the only place a fabric8 type appears.
+ * The one class that talks to a cluster. Besides {@link ListingFailure}, which reads the exceptions
+ * this class lets through, it is the only place a fabric8 type appears.
  *
  * <p><b>No test exercises this.</b> ADR-0099 records at {@link KubernetesApi} instead, and names the
  * gap rather than hiding it: the MVP never proves it can talk to a real cluster, and first contact
@@ -54,10 +55,14 @@ class Fabric8KubernetesApi implements KubernetesApi {
 
     private static final Logger log = LoggerFactory.getLogger(Fabric8KubernetesApi.class);
 
+    /** fabric8's master when nothing configures one, and a name only cluster DNS resolves. */
+    private static final String IN_CLUSTER_FALLBACK = "kubernetes.default.svc";
+
     @Override
     public NamespaceObjects list(KubernetesConfig config, String namespace) {
+        Config resolved = configure(config);
         try (KubernetesClient client = new KubernetesClientBuilder()
-                .withConfig(configure(config))
+                .withConfig(resolved)
                 .build()) {
             List<ObservedWorkload> workloads = new ArrayList<>();
             client.apps().deployments().inNamespace(namespace).list().getItems().forEach(deployment -> workloads.add(
@@ -103,7 +108,13 @@ class Fabric8KubernetesApi implements KubernetesApi {
 
             return new NamespaceObjects(workloads, services, ingresses, pods);
         } catch (RuntimeException e) {
-            throw new KubernetesApiException("listing namespace %s failed: %s".formatted(namespace, e.getMessage()), e);
+            // fabric8's own exception goes through as the cause and is never folded into a message
+            // here: ListingFailure decides which parts of it are safe to show.
+            if (outsideAnyCluster(config, resolved)) {
+                throw new KubernetesApiException(
+                        "no kubeconfig is configured and Nodqora is not running inside a cluster", e);
+            }
+            throw e;
         }
     }
 
@@ -111,11 +122,32 @@ class Fabric8KubernetesApi implements KubernetesApi {
      * ADR-0035: {@code kubeconfig} is optional and absent means in-cluster. It holds the kubeconfig
      * <em>contents</em>, not a path — ADR-0014's {@code ${file:...}} reference has already read the
      * mounted file by the time configuration is bound.
+     *
+     * <p>A kubeconfig that does not parse says only that. The parser's message quotes the offending
+     * line, and in a kubeconfig that line can be the token.
      */
     private static Config configure(KubernetesConfig config) {
+        if (config.kubeconfig() == null) {
+            return Config.autoConfigure(config.context());
+        }
+        try {
+            return Config.fromKubeconfig(config.context(), config.kubeconfig(), null);
+        } catch (RuntimeException e) {
+            throw new KubernetesApiException("the kubeconfig could not be read", e);
+        }
+    }
+
+    /**
+     * The most common failure from a container install, said outright: no {@code kubeconfig} key, no
+     * ambient kubeconfig file for {@code autoConfigure} to find, and nothing else naming a server — so
+     * the client fell back to {@code kubernetes.default.svc}, which resolves only inside a cluster.
+     * Inside one, {@code KUBERNETES_SERVICE_HOST} gives the master an address instead of that name.
+     */
+    private static boolean outsideAnyCluster(KubernetesConfig config, Config resolved) {
         return config.kubeconfig() == null
-                ? Config.autoConfigure(config.context())
-                : Config.fromKubeconfig(config.context(), config.kubeconfig(), null);
+                && resolved.getFile() == null
+                && resolved.getMasterUrl() != null
+                && resolved.getMasterUrl().contains("://" + IN_CLUSTER_FALLBACK);
     }
 
     /**
