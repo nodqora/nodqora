@@ -13,9 +13,10 @@ import java.util.Map;
  * for up to one fast-loop interval rather than instantly re-inheriting a verdict about a previous
  * incarnation.
  *
- * <p>There is no {@code UNKNOWN} row. A node whose contributions all abstained has no row at all,
- * and ADR-0028's outer join synthesizes {@code UNKNOWN} / {@code null} / <code>{}</code> /
- * {@code null} — the same four values, by arithmetic rather than by a second code path (ADR-0104).
+ * <p>A node whose contributions all abstained with nothing to show has no row at all, and ADR-0028's
+ * outer join synthesizes {@code UNKNOWN} / {@code null} / <code>{}</code> / {@code null} — the same
+ * four values, by arithmetic rather than by a second code path (ADR-0104). The one {@code UNKNOWN}
+ * row is a node measured without a vote: it carries metrics and an {@code observedAt} (ADR-0165).
  */
 public record FoldedNodeState(
         long nodeId, Health health, String rawSignal, Map<String, Object> metrics, Instant observedAt) {}

@@ -116,6 +116,57 @@ class StateFoldTest {
     }
 
     @Test
+    void a_node_only_measured_without_a_vote_gets_a_row_reading_unknown_with_its_metrics() {
+        // ADR-0165: only an *empty* abstention is an omission. A contribution carrying metrics is a
+        // measurement, so the row exists — UNKNOWN because nobody voted, with an `observedAt` that
+        // dates the numbers. That is ADR-0104's second UNKNOWN, back on purpose and now honest.
+        List<FoldedNodeState> folded =
+                fold.fold(List.of(from("prometheus", Health.UNKNOWN, null, Map.of("rate", 38), EARLY)));
+
+        assertThat(folded).hasSize(1);
+        assertThat(folded.getFirst().health()).isEqualTo(Health.UNKNOWN);
+        assertThat(folded.getFirst().metrics()).isEqualTo(Map.of("prometheus", Map.of("rate", 38)));
+        assertThat(folded.getFirst().observedAt()).isEqualTo(EARLY);
+        assertThat(folded.getFirst().rawSignal()).isNull();
+    }
+
+    @Test
+    void a_measurement_without_a_vote_joins_the_metrics_and_the_freshness_but_never_the_verdict() {
+        // ADR-0024 step 1 still discards it from the collapse, so kubernetes alone decides the
+        // colour. The metrics union keeps it under its own namespace (ADR-0006), and `min` includes
+        // it, because a stale measurement on the card is as much a reading as a stale verdict.
+        //
+        // Its `rawSignal` stays out of the line. ADR-0028's line is the gist of the verdict, and a
+        // plugin that did not vote has no part of the verdict to explain.
+        List<FoldedNodeState> folded = fold.fold(List.of(
+                from("prometheus", Health.UNKNOWN, "38/s", Map.of("rate", 38), EARLY),
+                from("kubernetes", Health.HEALTHY, "3 desired / 3 ready", Map.of("readyReplicas", 3), LATE)));
+
+        assertThat(folded).hasSize(1);
+        assertThat(folded.getFirst().health()).isEqualTo(Health.HEALTHY);
+        assertThat(folded.getFirst().rawSignal()).isEqualTo("3 desired / 3 ready");
+        assertThat(folded.getFirst().metrics())
+                .containsOnlyKeys("kubernetes", "prometheus")
+                .containsEntry("prometheus", Map.of("rate", 38));
+        assertThat(folded.getFirst().observedAt()).isEqualTo(EARLY);
+    }
+
+    @Test
+    void an_empty_abstention_beside_a_measurement_still_does_not_drag_the_freshness() {
+        // The narrowing cuts one way only. The empty abstention is still an omission, so EARLY —
+        // an observation that did not happen — must not become the row's age.
+        List<FoldedNodeState> folded = fold.fold(List.of(
+                from("kubernetes", Health.UNKNOWN, "object has gone", Map.of(), EARLY),
+                from("prometheus", Health.UNKNOWN, null, Map.of("rate", 38), LATE)));
+
+        assertThat(folded).hasSize(1);
+        assertThat(folded.getFirst().health()).isEqualTo(Health.UNKNOWN);
+        assertThat(folded.getFirst().rawSignal()).isNull();
+        assertThat(folded.getFirst().metrics()).containsOnlyKeys("prometheus");
+        assertThat(folded.getFirst().observedAt()).isEqualTo(LATE);
+    }
+
+    @Test
     void an_environment_with_no_contributions_folds_to_no_rows_at_all() {
         // Not "folds to a page of UNKNOWN rows". A node nobody observes has no row, and ADR-0028's
         // outer join synthesizes the four values on the way out — which is why /state needs no

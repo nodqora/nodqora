@@ -51,6 +51,19 @@ class ReferencePipelineStateTest extends NodqoraIntegrationTest {
     }
 
     @Test
+    void no_shipped_plugin_stores_an_abstention_now_that_the_store_would_take_one() {
+        // ADR-0165 re-admitted UNKNOWN to the contribution store, for a contribution carrying
+        // metrics. `connect`, `kafka` and `kubernetes` each omit a node whose collapse is UNKNOWN
+        // before it leaves the plugin, so the amendment changes nothing any of them does. The schema
+        // no longer says so, which is why this does — over both environments, after a real poll.
+        assertThat(jdbc.queryForObject("select count(*) from health_contribution", Integer.class))
+                .isPositive();
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from health_contribution where health = 'UNKNOWN'", Integer.class))
+                .isZero();
+    }
+
+    @Test
     void readiness_arithmetic_is_all_some_none_and_not_status_conditions() {
         JsonNode state = state("production");
 

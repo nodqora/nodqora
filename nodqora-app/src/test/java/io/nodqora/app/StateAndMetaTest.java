@@ -4,7 +4,15 @@ package io.nodqora.app;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.nodqora.core.fold.StateFoldRunner;
+import io.nodqora.core.store.HealthStore;
+import io.nodqora.plugin.api.Health;
+import io.nodqora.plugin.api.HealthCapability.HealthResult;
+import io.nodqora.plugin.api.Outcome;
+import io.nodqora.plugin.api.StateContribution;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -17,6 +25,12 @@ class StateAndMetaTest extends NodqoraIntegrationTest {
 
     @Autowired
     TestRestTemplate http;
+
+    @Autowired
+    HealthStore contributions;
+
+    @Autowired
+    StateFoldRunner folds;
 
     @Test
     void a_node_no_plugin_can_observe_is_unknown_and_that_is_the_honest_answer() {
@@ -34,6 +48,29 @@ class StateAndMetaTest extends NodqoraIntegrationTest {
         assertThat(declared.get("rawSignal").isNull()).isTrue();
         assertThat(declared.get("metrics")).isEmpty();
         assertThat(declared.get("observedAt").isNull()).isTrue();
+    }
+
+    @Test
+    void a_node_measured_without_a_vote_is_unknown_and_still_carries_its_metrics_and_their_age() {
+        // ADR-0165: the second way to be UNKNOWN, which differs from the first in something real. A
+        // hand-built contribution stands in for Prometheus; it replaces kubernetes' own reading of
+        // payments-api, the one production node with a single observer.
+        contributions.record(
+                "production",
+                "kubernetes",
+                new HealthResult(
+                        Map.of("payments-api", new StateContribution(Health.UNKNOWN, null, Map.of("rate", 38))),
+                        Outcome.complete()),
+                Instant.parse("2026-09-05T09:00:00Z"));
+        folds.run("production");
+
+        JsonNode state = http.getForObject("/api/environments/production/state", JsonNode.class);
+        JsonNode measured = ReferencePipelineStateTest.node(state, "payments-api");
+
+        assertThat(measured.get("health").asText()).isEqualTo("UNKNOWN");
+        assertThat(measured.get("rawSignal").isNull()).isTrue();
+        assertThat(measured.get("metrics").get("kubernetes").get("rate").asInt()).isEqualTo(38);
+        assertThat(measured.get("observedAt").asText()).isEqualTo("2026-09-05T09:00:00Z");
     }
 
     @Test

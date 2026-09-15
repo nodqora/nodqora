@@ -21,7 +21,9 @@ import org.springframework.stereotype.Component;
  * {@code UNKNOWN} / {@code rawSignal: null} / {@code metrics: {}} / {@code observedAt: null}. That is
  * arithmetic rather than a rule anyone wrote, and it is why this query needs no branch for the six
  * production fixture nodes that are permanently {@code UNKNOWN} — nor for a node every observer
- * abstained on, which reaches the same absence by the same route (ADR-0104).
+ * abstained on with nothing to show, which reaches the same absence by the same route (ADR-0104). A
+ * node measured without a vote has a real row reading {@code UNKNOWN} (ADR-0165), and needs no
+ * branch either.
  *
  * <p>Unlike {@link GraphStore} there is no ADR-0050 diff here, and its absence is the point:
  * {@code updatedAt} means <em>the topology changed</em> and lives on the slow side. This table is
