@@ -1,6 +1,6 @@
 # ADR-0010: A Plugin is a first-class entity with exactly two capabilities
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0164](0164-a-plugin-observes-what-someone-stamped-for-it.md)
 - **Date**: 2026-09-01
 - **Ticket**: [Plugin/adapter contract for the MVP](https://github.com/fredskor/nodqora/issues/6)
 

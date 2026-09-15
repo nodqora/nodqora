@@ -1,6 +1,6 @@
 # ADR-0022: A physical object is attributed by the plugin that knows the node, not the one that owns the technology
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0164](0164-a-plugin-observes-what-someone-stamped-for-it.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Identity-resolution rules for the MVP](https://github.com/fredskor/nodqora/issues/8)
 

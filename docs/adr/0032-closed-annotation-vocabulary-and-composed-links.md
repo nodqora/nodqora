@@ -1,6 +1,6 @@
 # ADR-0032: The `topology.io/*` vocabulary is closed; annotations hold ids and links are composed per environment
 
-- **Status**: Amended by [ADR-0091](0091-kubernetes-emits-no-type-default.md)
+- **Status**: Amended by [ADR-0091](0091-kubernetes-emits-no-type-default.md), [ADR-0164](0164-a-plugin-observes-what-someone-stamped-for-it.md)
 - **Date**: 2026-09-02
 - **Ticket**: [Kubernetes discovery scope and annotation convention](https://github.com/fredskor/nodqora/issues/10)
 
