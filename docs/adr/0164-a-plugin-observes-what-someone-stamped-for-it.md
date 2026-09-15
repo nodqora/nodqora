@@ -1,6 +1,6 @@
 # ADR-0164: A plugin observes what someone stamped for it; a template stamps at scale and an annotation corrects it
 
-- **Status**: Accepted
+- **Status**: Accepted; amended by [ADR-0167](0167-a-recipe-picks-the-series-and-a-selector-binds-them.md) — the template is a map keyed by recipe, and `topology.io/prometheus` separates bindings with `;`
 - **Date**: 2026-09-12
 - **Ticket**: [How a plugin observes nodes it did not discover](https://github.com/nodqora/nodqora/issues/103)
 - **Amends**: [ADR-0032](0032-closed-annotation-vocabulary-and-composed-links.md) — a tenth key and a second template family. [ADR-0022](0022-attribution-by-the-knowing-plugin.md) — its union rule gains one stated exception. [ADR-0010](0010-plugin-entity-two-capabilities.md) — the plugin list is no longer four.
