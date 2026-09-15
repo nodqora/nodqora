@@ -1,6 +1,6 @@
 # ADR-0018: MVP canvas feature scope
 
-- **Status**: Accepted
+- **Status**: Accepted; amended by [ADR-0168](0168-a-card-shows-three-figures-and-counts-the-rest.md) — the metric line is a strip of at most three figures, and the rest are counted
 - **Date**: 2026-09-01
 - **Ticket**: [Canvas and node-inspector prototype](https://github.com/fredskor/nodqora/issues/7)
 
