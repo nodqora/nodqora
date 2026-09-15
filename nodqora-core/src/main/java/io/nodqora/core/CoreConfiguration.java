@@ -6,20 +6,25 @@ import io.nodqora.core.config.NodqoraProperties;
 import io.nodqora.core.fold.GraphFold;
 import io.nodqora.core.fold.StateFold;
 import java.time.Clock;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /** Wiring for the core. It names no plugin, and nothing here knows a plugin's shape (ADR-0015). */
 @Configuration
-@EnableConfigurationProperties(NodqoraProperties.class)
 @EnableTransactionManagement
 public class CoreConfiguration {
 
     @Bean
     public Clock clock() {
         return Clock.systemUTC();
+    }
+
+    /** ADR-0165: bound by hand, so Spring's placeholders never touch a secret reference. */
+    @Bean
+    public NodqoraProperties nodqoraProperties(Environment environment) {
+        return NodqoraProperties.from(environment);
     }
 
     @Bean
