@@ -122,16 +122,8 @@ and beside `namespaces` — the value is the file's *contents*, which `${file:..
 ```yaml
         kubernetes:
           namespaces: [n8n, monitoring, actual]
-          kubeconfig: '\${file:/etc/nodqora/kubeconfig}'
+          kubeconfig: "${file:/etc/nodqora/kubeconfig}"
 ```
-
-**Keep the backslash and the single quotes.** Spring expands `${...}` while it loads the file and reads
-`${file:/etc/nodqora/kubeconfig}` as a property named `file` with the path as its default, so without
-the escape the plugin receives the path instead of the contents and every namespace fails with
-`the kubeconfig could not be read: MismatchedInputException`. The backslash stops Spring
-expanding it; YAML rejects `\$` inside double quotes, hence the single ones. This is
-[#111](https://github.com/nodqora/nodqora/issues/111), and the escape stops being needed when it is
-fixed.
 
 The file is a credential: keep it out of any repository that directory lives in. On Linux the
 container reads it as uid `10001`, so a `0600` file you own is unreadable to it;
@@ -239,10 +231,8 @@ environment:
 That triple is the whole database surface. Environment variables are **not** a way to declare an
 environment: `KafkaConfig` holds dotted client keys like `security.protocol`, and Boot's environment
 source maps `_` to `.`, so those keys are not expressible as variables at all. Credentials inside
-your `application.yaml` stay out of the file as references — `'\${env:...}'` and `'\${file:...}'`,
-resolved at use time and never persisted (ADR-0014). Write them escaped and single-quoted until
-[#111](https://github.com/nodqora/nodqora/issues/111) is fixed; an unescaped `${env:X}` silently
-becomes the text `X`.
+your `application.yaml` stay out of the file as references — `${env:...}` and `${file:...}`, resolved
+at use time and never persisted (ADR-0014).
 
 ## Upgrading
 

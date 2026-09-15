@@ -24,10 +24,15 @@ import java.util.regex.Pattern;
  * <p>These are file config's native habitat and how the product actually deploys — a ConfigMap plus
  * a mounted Secret. Vault, AWS Secrets Manager and Key Vault slot in behind the same syntax later
  * without touching a plugin.
+ *
+ * <p>A reference may also be written {@code \${env:...}}. That is Spring's placeholder escape, and
+ * the docs prescribed it while #111 had Spring expanding references before they got here. The
+ * config is now bound literally, so the backslash arrives with the reference, and it is accepted
+ * as the same reference so that no install written in that form breaks (ADR-0165).
  */
 public final class SecretReferences {
 
-    private static final Pattern REFERENCE = Pattern.compile("\\$\\{(env|file):([^}]+)}");
+    private static final Pattern REFERENCE = Pattern.compile("\\\\?\\$\\{(env|file):([^}]+)}");
 
     private final Function<String, String> environment;
 
