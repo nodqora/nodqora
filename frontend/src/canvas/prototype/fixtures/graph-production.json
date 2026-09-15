@@ -1,0 +1,684 @@
+{
+  "environment": {
+    "key": "production",
+    "displayName": "Production"
+  },
+  "nodes": [
+    {
+      "key": "analytics.payments_events",
+      "type": "iceberg-table",
+      "displayName": "analytics.payments_events",
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-api",
+      "type": "service",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/payments-api"
+        },
+        {
+          "rel": "runbook",
+          "label": "Runbook",
+          "url": "https://wiki/runbooks/payments-api"
+        },
+        {
+          "rel": "docs",
+          "label": "Docs",
+          "url": "https://docs.acme.io/payments-api"
+        },
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana.acme.io/d/payments-api-overview"
+        },
+        {
+          "rel": "gitops",
+          "label": "Argo CD",
+          "url": "https://argocd.acme.io/applications/payments-api"
+        },
+        {
+          "rel": "workload",
+          "label": "Workload",
+          "url": "https://k8s.acme.io/payments-prod/deployment/payments-api"
+        },
+        {
+          "rel": "pods",
+          "label": "Pods",
+          "url": "https://k8s.acme.io/payments-prod/deployment/payments-api/pods"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana.acme.io/explore?ns=payments-prod&app=payments-api"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kubernetes",
+          "kind": "deployment",
+          "reference": "payments-prod/payments-api"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "ingress",
+          "reference": "payments-prod/payments-api"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "service",
+          "reference": "payments-prod/payments-api"
+        }
+      ],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kubernetes",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-enricher",
+      "type": "service",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/payments-enricher"
+        },
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana.acme.io/d/payments-enricher-overview"
+        },
+        {
+          "rel": "workload",
+          "label": "Workload",
+          "url": "https://k8s.acme.io/payments-prod/deployment/enricher-v2"
+        },
+        {
+          "rel": "pods",
+          "label": "Pods",
+          "url": "https://k8s.acme.io/payments-prod/deployment/enricher-v2/pods"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana.acme.io/explore?ns=payments-prod&app=enricher-v2"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "consumer-group",
+          "reference": "enrich-consumer-prod"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "deployment",
+          "reference": "payments-prod/enricher-v2"
+        }
+      ],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kubernetes",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-es-sink",
+      "type": "connect-connector",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/connect-config"
+        },
+        {
+          "rel": "runbook",
+          "label": "Runbook",
+          "url": "https://wiki/runbooks/connect-sinks"
+        },
+        {
+          "rel": "connector",
+          "label": "Connect UI",
+          "url": "https://connect-ui.acme.io/prod/payments-es-sink"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana.acme.io/explore?connector=payments-es-sink"
+        },
+        {
+          "rel": "config",
+          "label": "Config",
+          "url": "https://connect-ui.acme.io/prod/payments-es-sink/config"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "connect",
+          "kind": "connector",
+          "reference": "payments-es-sink"
+        },
+        {
+          "plugin": "kafka",
+          "kind": "consumer-group",
+          "reference": "connect-payments-es-sink"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "statefulset",
+          "reference": "payments-prod/kafka-connect"
+        }
+      ],
+      "metadata": {
+        "connect": {
+          "type": "sink",
+          "class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+          "tasksMax": "3"
+        }
+      },
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "connect",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-events-v1",
+      "type": "elasticsearch-index",
+      "displayName": "payments-events-v1",
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Kibana",
+          "url": "https://kibana.acme.io/app/discover#/?_a=(index:'payments-events-v1')"
+        }
+      ],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments-iceberg-sink",
+      "type": "connect-connector",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [
+        {
+          "rel": "repository",
+          "label": "Repository",
+          "url": "https://github.com/acme/connect-config"
+        },
+        {
+          "rel": "runbook",
+          "label": "Runbook",
+          "url": "https://wiki/runbooks/connect-sinks"
+        },
+        {
+          "rel": "connector",
+          "label": "Connect UI",
+          "url": "https://connect-ui.acme.io/prod/payments-iceberg-sink"
+        },
+        {
+          "rel": "logs",
+          "label": "Logs",
+          "url": "https://grafana.acme.io/explore?connector=payments-iceberg-sink"
+        },
+        {
+          "rel": "config",
+          "label": "Config",
+          "url": "https://connect-ui.acme.io/prod/payments-iceberg-sink/config"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "connect",
+          "kind": "connector",
+          "reference": "payments-iceberg-sink"
+        },
+        {
+          "plugin": "kafka",
+          "kind": "consumer-group",
+          "reference": "connect-payments-iceberg-sink"
+        },
+        {
+          "plugin": "kubernetes",
+          "kind": "statefulset",
+          "reference": "payments-prod/kafka-connect"
+        }
+      ],
+      "metadata": {
+        "connect": {
+          "type": "sink",
+          "class": "org.apache.iceberg.connect.IcebergSinkConnector",
+          "tasksMax": "3"
+        }
+      },
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "connect",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments.events.enriched.v1",
+      "type": "kafka-topic",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana.acme.io/d/kafka-topic?var-topic=payments.events.enriched.v1"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "topic",
+          "reference": "payments.events.enriched.v1"
+        }
+      ],
+      "metadata": {
+        "kafka": {
+          "partitions": 12,
+          "retentionMs": 2592000000,
+          "cleanupPolicy": "delete",
+          "replicationFactor": 3
+        }
+      },
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kafka",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "connect",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "payments.events.raw.v1",
+      "type": "kafka-topic",
+      "displayName": null,
+      "description": null,
+      "ownerKey": "payments-platform",
+      "links": [
+        {
+          "rel": "dashboard",
+          "label": "Grafana",
+          "url": "https://grafana.acme.io/d/kafka-topic?var-topic=payments.events.raw.v1"
+        }
+      ],
+      "backings": [
+        {
+          "plugin": "kafka",
+          "kind": "topic",
+          "reference": "payments.events.raw.v1"
+        }
+      ],
+      "metadata": {
+        "kafka": {
+          "partitions": 12,
+          "retentionMs": 604800000,
+          "cleanupPolicy": "delete",
+          "replicationFactor": 3
+        }
+      },
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        },
+        {
+          "plugin": "kafka",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "stripe-webhooks",
+      "type": "external-api",
+      "displayName": "Stripe Webhooks",
+      "description": null,
+      "ownerKey": null,
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "key": "trino-analytics",
+      "type": "query-engine",
+      "displayName": "analytics (Trino)",
+      "description": null,
+      "ownerKey": "data-platform",
+      "links": [],
+      "backings": [],
+      "metadata": {},
+      "sources": [
+        {
+          "plugin": "yaml",
+          "confirmedAt": "<timestamp>"
+        }
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    }
+  ],
+  "edges": [
+    {
+      "fromKey": "analytics.payments_events",
+      "toKey": "trino-analytics",
+      "relation": "QUERIES",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-api",
+      "toKey": "payments.events.raw.v1",
+      "relation": "PRODUCES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-enricher",
+      "toKey": "payments.events.enriched.v1",
+      "relation": "PRODUCES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-es-sink",
+      "toKey": "payments-events-v1",
+      "relation": "WRITES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments-iceberg-sink",
+      "toKey": "analytics.payments_events",
+      "relation": "WRITES_TO",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments.events.enriched.v1",
+      "toKey": "payments-es-sink",
+      "relation": "SOURCES_FROM",
+      "metadata": {},
+      "sources": [
+        "connect"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments.events.enriched.v1",
+      "toKey": "payments-iceberg-sink",
+      "relation": "SOURCES_FROM",
+      "metadata": {},
+      "sources": [
+        "connect"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "payments.events.raw.v1",
+      "toKey": "payments-enricher",
+      "relation": "CONSUMES_FROM",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    },
+    {
+      "fromKey": "stripe-webhooks",
+      "toKey": "payments-api",
+      "relation": "CALLS",
+      "metadata": {},
+      "sources": [
+        "yaml"
+      ],
+      "discoveredAt": "<timestamp>",
+      "updatedAt": "<timestamp>"
+    }
+  ],
+  "owners": [
+    {
+      "key": "data-platform",
+      "displayName": "Data Platform",
+      "channel": "#data-platform",
+      "onCall": "Data Platform SRE"
+    },
+    {
+      "key": "payments-platform",
+      "displayName": "Payments Platform",
+      "channel": "#payments-oncall",
+      "onCall": "Payments SRE"
+    }
+  ],
+  "typeDescriptors": [
+    {
+      "type": "connect-connector",
+      "label": "Connect Connector",
+      "category": "integration",
+      "icon": "connector",
+      "source": "connect"
+    },
+    {
+      "type": "elasticsearch-index",
+      "label": "Elasticsearch Index",
+      "category": "datastore",
+      "icon": "search",
+      "source": "yaml"
+    },
+    {
+      "type": "external-api",
+      "label": "External API",
+      "category": "external",
+      "icon": "cloud",
+      "source": "yaml"
+    },
+    {
+      "type": "iceberg-table",
+      "label": "Iceberg Table",
+      "category": "datastore",
+      "icon": "table",
+      "source": "yaml"
+    },
+    {
+      "type": "kafka-topic",
+      "label": "Kafka Topic",
+      "category": "messaging",
+      "icon": "stream",
+      "source": "kafka"
+    },
+    {
+      "type": "query-engine",
+      "label": "Query Engine",
+      "category": "compute",
+      "icon": "terminal",
+      "source": "yaml"
+    },
+    {
+      "type": "service",
+      "label": "Service",
+      "category": "compute",
+      "icon": "service",
+      "source": "yaml"
+    }
+  ],
+  "relationDescriptors": [
+    {
+      "relation": "CALLS",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "calls",
+      "reversePhrasing": "is called by"
+    },
+    {
+      "relation": "PRODUCES_TO",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "produces to",
+      "reversePhrasing": "is produced by"
+    },
+    {
+      "relation": "CONSUMES_FROM",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "delivers to",
+      "reversePhrasing": "consumes from"
+    },
+    {
+      "relation": "SOURCES_FROM",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "feeds",
+      "reversePhrasing": "sources from"
+    },
+    {
+      "relation": "WRITES_TO",
+      "orientation": "FORWARD",
+      "forwardPhrasing": "writes to",
+      "reversePhrasing": "is written by"
+    },
+    {
+      "relation": "QUERIES",
+      "orientation": "REVERSED",
+      "forwardPhrasing": "is queried by",
+      "reversePhrasing": "queries"
+    }
+  ],
+  "plugins": [
+    {
+      "plugin": "yaml",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "kubernetes",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "kafka",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    },
+    {
+      "plugin": "connect",
+      "capability": "DISCOVERY",
+      "outcome": "COMPLETE",
+      "reasons": [],
+      "recordedAt": "<timestamp>"
+    }
+  ]
+}

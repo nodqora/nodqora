@@ -22,6 +22,7 @@ import { foldKey } from '../api/keys'
 import { crossesTeams, ownersByNodeKey } from './crossTeam'
 import { edgeIsStalled, stalledEdges } from './stalled'
 import { summarizeMetrics } from './metrics'
+import { metricHeight, useVariant } from './prototype/MetricVariants'
 import { marksOf } from '../outcome/marks'
 import type { Rosters } from '../outcome/plugins'
 import type { Graph, Health, PluginRef, State } from '../api/types'
@@ -108,6 +109,10 @@ export function Canvas({
     return byKey
   }, [state])
 
+  // PROTOTYPE (#107)
+  const variant = useVariant()
+  const nodeStates = useMemo(() => new Map((state?.nodes ?? []).map((node) => [foldKey(node.nodeKey), node])), [state])
+
   const descriptors = useMemo(
     () => new Map(graph.typeDescriptors.map((descriptor) => [descriptor.type, descriptor])),
     [graph.typeDescriptors],
@@ -134,7 +139,18 @@ export function Canvas({
         retained: marks.retained.map(label),
         blind: marks.blind.map(label),
       }
-      const metricLine = data.showMetrics && data.metricLine ? METRIC_LINE_HEIGHT : 0
+      // PROTOTYPE (#107)
+      const row = nodeStates.get(folded)
+      data.variant = variant
+      data.metrics = row?.metrics ?? {}
+      data.observedAt = row?.observedAt ?? null
+      const metricLine = !data.showMetrics
+        ? 0
+        : variant
+          ? metricHeight(variant, data.metrics, data.health, data.observedAt)
+          : data.metricLine
+            ? METRIC_LINE_HEIGHT
+            : 0
       const blindToken = data.blind.length > 0 ? BLIND_TOKEN_HEIGHT : 0
       return {
         id: node.key,
@@ -154,6 +170,8 @@ export function Canvas({
     descriptors,
     health,
     metricLines,
+    nodeStates,
+    variant,
     showMetrics,
     selectedKey,
     highlight,

@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { HealthGlyph } from './HealthGlyph'
 import { TypeIcon } from './TypeIcon'
 import type { Health, TypeDescriptor } from '../api/types'
+import { MetricBlock, type VariantKey } from './prototype/MetricVariants'
 
 /**
  * ADR-0018's node rendering: type icon, display name, type label, health, and one optional metric
@@ -41,6 +42,10 @@ export interface NodeCardData extends Record<string, unknown> {
   retained: string[]
   /** Plugin labels that back this node and did not observe it this cycle. */
   blind: string[]
+  // PROTOTYPE (#107)
+  variant?: VariantKey | null
+  metrics?: Record<string, Record<string, unknown>>
+  observedAt?: string | null
 }
 
 export function NodeCard({ data }: NodeProps) {
@@ -72,7 +77,11 @@ export function NodeCard({ data }: NodeProps) {
       {/* The line is clamped to one line in CSS, because Canvas.tsx declares the height of one and
           a node observed by three plugins composes five metrics. `title` is where the rest goes on
           the canvas; section 2 of the drawer has them all, namespaced by plugin. */}
-      {card.showMetrics && card.metricLine && (
+      {/* PROTOTYPE (#107): a variant, when one is selected, renders the block instead. */}
+      {card.showMetrics && card.variant && card.metrics && (
+        <MetricBlock variant={card.variant} metrics={card.metrics} health={card.health} observedAt={card.observedAt ?? null} />
+      )}
+      {!card.variant && card.showMetrics && card.metricLine && (
         <div className="node-card-metric" title={card.metricLine}>
           {card.metricLine}
         </div>

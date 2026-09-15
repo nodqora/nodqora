@@ -47,7 +47,17 @@ export function parseRoute(pathname: string, search: string): Route {
 
 export function formatRoute(environmentKey: string, nodeKey: string | null): string {
   const path = `/environments/${encodeURIComponent(environmentKey)}`
-  return nodeKey === null ? path : `${path}?node=${encodeURIComponent(nodeKey)}`
+  // PROTOTYPE (#107): carry the prototype's own params through navigation.
+  const params = new URLSearchParams()
+  if (nodeKey !== null) params.set('node', nodeKey)
+  if (typeof location !== 'undefined') {
+    for (const name of ['variant', 'scenario']) {
+      const value = new URLSearchParams(location.search).get(name)
+      if (value) params.set(name, value)
+    }
+  }
+  const query = params.toString()
+  return query === '' ? path : `${path}?${query}`
 }
 
 /**

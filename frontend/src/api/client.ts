@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Graph, Meta, State } from './types'
+import { fixtureApi, prototypeActive } from '../canvas/prototype/fixtureApi'
 
 /**
  * ADR-0059: polling, with the intervals published by the server rather than held as client-side
@@ -22,7 +23,8 @@ async function get<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export const api = {
+// PROTOTYPE (#107): `?variant=` serves the golden documents with a `prometheus` namespace poured in.
+export const api = prototypeActive() ? fixtureApi : {
   meta: () => get<Meta>('/api/meta'),
   graph: (environmentKey: string) => get<Graph>(`/api/environments/${encodeURIComponent(environmentKey)}/graph`),
   state: (environmentKey: string) => get<State>(`/api/environments/${encodeURIComponent(environmentKey)}/state`),

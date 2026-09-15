@@ -17,6 +17,7 @@ import { PluginsChip } from './outcome/PluginsChip'
 import { bannersOf, labeller, type Rosters } from './outcome/plugins'
 import { blindPlugins, retainedSources } from './outcome/marks'
 import { SearchBox } from './search/SearchBox'
+import { PrototypeSwitcher } from './canvas/prototype/MetricVariants'
 import { ThemePicker, useTheme } from './theme/ThemePicker'
 import {
   defaultEnvironmentKey,
@@ -311,6 +312,8 @@ export function App() {
           />
         )}
       </div>
+      {/* PROTOTYPE (#107) */}
+      <PrototypeSwitcher />
     </div>
   )
 }
