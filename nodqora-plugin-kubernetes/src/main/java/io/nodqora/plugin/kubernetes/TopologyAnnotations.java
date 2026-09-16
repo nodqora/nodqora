@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * ADR-0032's <b>closed</b> vocabulary of nine keys. An unknown {@code topology.io/*} key is ignored
+ * ADR-0032's <b>closed</b> vocabulary, ten keys since ADR-0164 added {@code prometheus}. An unknown {@code topology.io/*} key is ignored
  * and logged — never turned into a link, into metadata, or into anything else.
  *
  * <p>Closed rather than open because half the values are not URLs, so "open" could only have meant
@@ -33,9 +33,10 @@ final class TopologyAnnotations {
     static final String RUNBOOK = PREFIX + "runbook";
     static final String DOCS = PREFIX + "docs";
     static final String GRAFANA = PREFIX + "grafana";
+    static final String PROMETHEUS = PREFIX + "prometheus";
 
     static final Set<String> CLOSED =
-            Set.of(NODE, TYPE, OWNER, IGNORE, CONSUMER_GROUPS, REPOSITORY, RUNBOOK, DOCS, GRAFANA);
+            Set.of(NODE, TYPE, OWNER, IGNORE, CONSUMER_GROUPS, REPOSITORY, RUNBOOK, DOCS, GRAFANA, PROMETHEUS);
 
     /**
      * Argo CD's own label, not ours (ADR-0032). Reading it explains the fixture's deliberate

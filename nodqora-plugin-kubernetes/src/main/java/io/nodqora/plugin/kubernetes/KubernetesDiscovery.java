@@ -137,6 +137,7 @@ class KubernetesDiscovery {
 
         Attachments attachments = Attachments.of(objects, admitted);
         LinkComposer links = new LinkComposer(config.links());
+        PrometheusBindings prometheus = new PrometheusBindings(config.prometheus());
 
         // ADR-0021: an ordered exact-match cascade, first match wins, and never fuzzy. Only this
         // plugin has a problem to solve — a topic is its own key, a connector is its own key, and
@@ -147,7 +148,7 @@ class KubernetesDiscovery {
                     .add(workload);
         }
         return claims.values().stream()
-                .map(claimants -> node(claimants, attachments, links))
+                .map(claimants -> node(claimants, attachments, links, prometheus))
                 .toList();
     }
 
@@ -168,7 +169,8 @@ class KubernetesDiscovery {
      * Newest-first is stable across polls and, during a progressive rollout, names the current
      * workload.
      */
-    private DiscoveredNode node(List<ObservedWorkload> claimants, Attachments attachments, LinkComposer links) {
+    private DiscoveredNode node(
+            List<ObservedWorkload> claimants, Attachments attachments, LinkComposer links, PrometheusBindings prometheus) {
         List<ObservedWorkload> byRecency = claimants.stream()
                 .sorted(Comparator.comparing(
                                 ObservedWorkload::creationTimestamp,
@@ -184,6 +186,9 @@ class KubernetesDiscovery {
             TopologyAnnotations.consumerGroups(claimant).forEach(group ->
                     backings.add(new Backing(CONSUMER_GROUP_DOMAIN, CONSUMER_GROUP_KIND, group)));
             backings.addAll(attachments.of(claimant));
+            // ADR-0164: the same inversion as consumer groups. This plugin knows the node key and
+            // `prometheus` knows the series; the backing is how the first tells the second.
+            backings.addAll(prometheus.of(claimant));
             // ADR-0044: `links[]` is a collection, and collections are additive with an element
             // identity — `(rel, url)` here, already scheme-prepended. Only *scalars* come from the
             // newest object (ADR-0021), so a losing claimant's `topology.io/repository` stays

@@ -30,6 +30,12 @@ nodqora:
             - deployment/prometheus
           # No `links:` block. There is no Kubernetes UI on this cluster, and ADR-0032 is explicit
           # that no template means no link rather than a half-composed URL.
+          # ADR-0167: every workload is stamped a `prometheus` backing per recipe listed here. Only
+          # the aggregator has Streams series, so it is the one that reads; the rest abstain by
+          # omission. `app` equals the Deployment name by this demo's convention — no workload
+          # series carries the name otherwise, and a selector never pattern-matches `pod`.
+          prometheus:
+            kafka-streams: "namespace={namespace},app={name}"
 
         connect:
           url: http://192.168.0.214:8083

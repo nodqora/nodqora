@@ -3,8 +3,11 @@ package io.nodqora.plugin.kubernetes;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * ADR-0035, bound from the config file and validated at startup (ADR-0014).
@@ -16,6 +19,8 @@ import java.util.Locale;
  *   context: prod-cluster                            # optional
  *   ignore: [statefulset/kafka-connect]              # ADR-0031, exact kind/name
  *   links: { workload: ..., pods: ..., logs: ..., dashboard: ..., gitops: ... }
+ *   prometheus:                                      # ADR-0164, ADR-0167; absent ⇒ no stamp
+ *     kafka-streams: "namespace={namespace},app={name}"
  * </pre>
  *
  * <p><b>Namespace scope is the one narrowing knob that cannot be avoided</b> — you must say where to
@@ -33,7 +38,8 @@ public record KubernetesConfig(
         String kubeconfig,
         String context,
         List<String> ignore,
-        Links links) {
+        Links links,
+        Map<String, String> prometheus) {
 
     public KubernetesConfig {
         namespaces = namespaces == null ? List.of() : List.copyOf(namespaces);
@@ -41,6 +47,8 @@ public record KubernetesConfig(
         // looks like while the name stays an exact match — see ObservedWorkload.denyListEntry().
         ignore = ignore == null ? List.of() : ignore.stream().map(KubernetesConfig::foldKind).toList();
         links = links == null ? Links.none() : links;
+        // Insertion order is kept so backings come out in the order the operator wrote the recipes.
+        prometheus = prometheus == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(prometheus));
     }
 
     public boolean denies(ObservedWorkload workload) {
