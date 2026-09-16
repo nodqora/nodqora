@@ -621,7 +621,15 @@ nodes:
     consumesFrom: [payments.events.raw.v1]
     producesTo:   [payments.events.enriched.v1]
     consumerGroups: [enrich-consumer-prod]
+    prometheus:   [{ recipe: kafka-streams, selector: "namespace=payments-prod,app=payments-enricher" }]
 ```
+
+`consumerGroups:` and `prometheus:` are the only two backing routes, each naming
+one fixed foreign domain; there is no generic `backings:` list (ADR-0063,
+ADR-0164). A `prometheus:` selector is written literally, never interpolated,
+and one that breaks ADR-0167's grammar fails the directory like any other
+invalid key (ADR-0064), where `kubernetes` would drop the same binding from an
+annotation and log it.
 
 **Drift is written nowhere.** Staging lacks the Iceberg branch by having no
 stanza for it, which is the same absence `kubernetes` produces for a namespace

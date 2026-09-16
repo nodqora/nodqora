@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -39,7 +41,7 @@ class YamlTopologyLoader {
     static final String PLUGIN_ID = "yaml";
 
     /**
-     * ADR-0013, ADR-0022. `consumerGroups:` is the one backing route `yaml` may write, and the
+     * ADR-0013, ADR-0022. `consumerGroups:` is one of the two backing routes `yaml` may write, and the
      * object it names belongs to another plugin's technology domain — which is exactly the point:
      * the plugin that can read this group's lag is not the one that can say whose lag it is.
      * Naming a foreign domain here is fine; ADR-0015's identifier ban is on the core, not plugins.
@@ -47,6 +49,16 @@ class YamlTopologyLoader {
     private static final String CONSUMER_GROUP_DOMAIN = "kafka";
 
     private static final String CONSUMER_GROUP_KIND = "consumer-group";
+
+    /**
+     * ADR-0164, ADR-0167. `prometheus:` is the second named route, for the second foreign domain
+     * whose reader cannot say which node a series describes. Each entry is one backing
+     * {@code (prometheus, <recipe>, <selector>)}; still not a generic {@code backings:} list.
+     */
+    private static final String PROMETHEUS_DOMAIN = "prometheus";
+
+    private static final Set<String> PROMETHEUS_KEYS = Set.of("recipe", "selector");
+    private static final Pattern LABEL_NAME = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]*");
 
     private static final Set<String> TOP_LEVEL_KEYS = Set.of("environment", "owners", "types", "nodes");
     private static final Set<String> OWNER_KEYS = Set.of("key", "displayName", "channel", "onCall");
@@ -56,7 +68,7 @@ class YamlTopologyLoader {
 
     private static Set<String> nodeKeys() {
         Set<String> keys = new LinkedHashSet<>(
-                List.of("key", "type", "displayName", "description", "owner", "links", "consumerGroups"));
+                List.of("key", "type", "displayName", "description", "owner", "links", "consumerGroups", "prometheus"));
         Verb.keys().forEach(keys::add);
         return Set.copyOf(keys);
     }
@@ -261,7 +273,7 @@ class YamlTopologyLoader {
                     string(stanza.get("description")),
                     string(stanza.get("owner")),
                     links(file, stanza.get("links")),
-                    backings(file, stanza.get("consumerGroups")),
+                    backings(file, key, stanza),
                     Map.of()));
 
             for (Verb verb : Verb.values()) {
@@ -312,10 +324,66 @@ class YamlTopologyLoader {
             throw new InvalidTopologyException("%s: links must be a list of mappings".formatted(file));
         }
 
-        private static List<Backing> backings(String file, Object consumerGroups) {
-            return strings(file, consumerGroups, "consumerGroups").stream()
-                    .map(group -> new Backing(CONSUMER_GROUP_DOMAIN, CONSUMER_GROUP_KIND, group))
-                    .toList();
+        private static List<Backing> backings(String file, String node, Map<String, Object> stanza) {
+            List<Backing> result = new ArrayList<>();
+            for (String group : strings(file, stanza.get("consumerGroups"), "consumerGroups")) {
+                result.add(new Backing(CONSUMER_GROUP_DOMAIN, CONSUMER_GROUP_KIND, group));
+            }
+            Object prometheus = stanza.get("prometheus");
+            if (prometheus != null && !(prometheus instanceof List<?>)) {
+                throw new InvalidTopologyException("%s: node %s: prometheus must be a list".formatted(file, node));
+            }
+            for (Object element : prometheus == null ? List.of() : (List<?>) prometheus) {
+                if (!(element instanceof Map<?, ?> map)) {
+                    throw new InvalidTopologyException(
+                            "%s: node %s: every prometheus entry must be a mapping of recipe: and selector:"
+                                    .formatted(file, node));
+                }
+                Map<String, Object> entry = castKeys(file, map);
+                for (String unknown : entry.keySet()) {
+                    if (!PROMETHEUS_KEYS.contains(unknown)) {
+                        // Only recipe: and selector: — the domain is fixed, so this is no escape hatch.
+                        throw new InvalidTopologyException("%s: node %s: unknown prometheus key '%s'"
+                                .formatted(file, node, unknown));
+                    }
+                }
+                String recipe = string(entry.get("recipe"));
+                Object selector = entry.get("selector");
+                String canonical = selector instanceof String text ? selector(text) : null;
+                if (recipe == null || canonical == null) {
+                    throw new InvalidTopologyException(
+                            "%s: node %s: prometheus binding '%s:%s' cannot be read"
+                                    .formatted(file, node, recipe == null ? "" : recipe, selector == null ? "" : selector));
+                }
+                result.add(new Backing(PROMETHEUS_DOMAIN, recipe, canonical));
+            }
+            return result;
+        }
+
+        /**
+         * ADR-0167's selector grammar, kept in step with {@code kubernetes}' copy (ADR-0015 forbids
+         * sharing it): equality pairs sorted by label name, so the union on
+         * {@code (plugin, kind, reference)} dedupes a binding both routes write. Returns
+         * {@code null} for anything that would fail toward a matcher matching everything or nothing.
+         * Nothing is interpolated here, so a {@code {placeholder}} is a mistake, not a template.
+         */
+        private static String selector(String selector) {
+            if (selector.contains("{") || selector.contains(";")) {
+                return null;
+            }
+            TreeMap<String, String> pairs = new TreeMap<>();
+            for (String pair : selector.split(",", -1)) {
+                String[] parts = pair.split("=", -1);
+                if (parts.length != 2) {
+                    return null;
+                }
+                String label = parts[0].trim();
+                String value = parts[1].trim();
+                if (!LABEL_NAME.matcher(label).matches() || value.isEmpty() || pairs.put(label, value) != null) {
+                    return null;
+                }
+            }
+            return String.join(",", pairs.entrySet().stream().map(pair -> pair.getKey() + "=" + pair.getValue()).toList());
         }
 
         DiscoveryResult toResult() {
