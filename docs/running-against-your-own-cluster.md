@@ -276,10 +276,28 @@ metadata:
     topology.io/runbook: https://wiki/runbooks/thing
     topology.io/docs: https://docs.acme.io/thing
     topology.io/grafana: thing-overview
+    topology.io/prometheus: "micrometer-http:namespace={namespace},app={name}"   # replaces the template
     topology.io/ignore: "true"
 ```
 
 `argocd.argoproj.io/instance` is read too, with no configuration.
+
+`topology.io/prometheus` binds a workload to the series that describe it: `<recipe>:<selector>`, several
+separated by `;`, with `{name}`, `{namespace}` and `{kind}` filled from the object. To bind every
+workload at once, put a template per recipe in the plugin config instead; where the annotation is
+present, that workload gets the annotation and nothing from the template
+([ADR-0167](adr/0167-a-recipe-picks-the-series-and-a-selector-binds-them.md)):
+
+```yaml
+kubernetes:
+  prometheus:
+    kafka-streams:   "namespace={namespace},app={name}"
+    micrometer-http: "namespace={namespace},app={name}"
+```
+
+A selector is equality only, so some label on your series must equal the workload name. A binding
+that cannot be read — an unfilled `{…}`, an empty value, a value holding `,` `=` or `;` — is dropped
+with `prometheus binding '...' cannot be read` in the log.
 
 **The vocabulary is closed** (ADR-0032). Any other `topology.io/*` key is ignored, and logged as
 `carries unrecognised annotation '...'` — so a misspelling costs you a warning in the log rather than

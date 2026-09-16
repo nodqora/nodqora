@@ -68,7 +68,7 @@ class RecordedScenarioTest {
     }
 
     private static KubernetesConfig config() {
-        return new KubernetesConfig(List.of("payments-staging"), null, null, List.of(), null);
+        return new KubernetesConfig(List.of("payments-staging"), null, null, List.of(), null, null);
     }
 
     private static List<Integer> changedLines(List<String> baseline, List<String> overlay) {

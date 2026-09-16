@@ -585,12 +585,12 @@ plugins, with timeouts strictly below their interval (ADR-0035, ADR-0042).
 
 ### `topology.io/*` annotations
 
-The **closed** nine-key vocabulary the `kubernetes` plugin reads from an object
-(ADR-0032). Unknown `topology.io/*` keys are ignored and logged — never
+The **closed** ten-key vocabulary the `kubernetes` plugin reads from an object
+(ADR-0032, ADR-0164). Unknown `topology.io/*` keys are ignored and logged — never
 interpreted as links or metadata.
 
 `node` (the key, ADR-0021 tier 1) · `type` · `owner` · `ignore` ·
-`consumer-groups` · `repository` · `runbook` · `docs` · `grafana`
+`consumer-groups` · `repository` · `runbook` · `docs` · `grafana` · `prometheus`
 
 **Annotations hold ids, not URLs.** `grafana: payments-enricher-overview` is a
 dashboard id composed against a per-environment template in the plugin's config,
@@ -598,7 +598,7 @@ which is what lets one manifest render correctly in both production and staging.
 A rel with no configured template produces **no link**, never a half-composed
 one.
 
-The vocabulary stays at nine: `topology.io/consumes` and `topology.io/produces`
+The vocabulary does not grow edges: `topology.io/consumes` and `topology.io/produces`
 were considered here and **declined**, so "`kubernetes` emits no edges" stays
 literally true and `yaml` is the sole declarer of edges no plugin can observe.
 The cost is paid at the point of use: adding a consumer is two edits, the

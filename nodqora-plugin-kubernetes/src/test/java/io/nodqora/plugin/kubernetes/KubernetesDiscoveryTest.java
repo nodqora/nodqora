@@ -388,6 +388,146 @@ class KubernetesDiscoveryTest {
         assertThat(links(node)).noneMatch(link -> link.contains("example.test"));
     }
 
+    // ---------------------------------------------------------------- prometheus
+
+    private static final Map<String, String> BOTH_RECIPES = Map.of(
+            "kafka-streams", "namespace={namespace},app={name}",
+            "micrometer-http", "namespace={namespace},app={name}");
+
+    @Test
+    void no_recipe_map_means_no_prometheus_backing() {
+        DiscoveredNode node = discover(objects(workload("payments-api", Map.of())), config(List.of()))
+                .nodes()
+                .getFirst();
+
+        // ADR-0164: the map is the whole of the opt-in, exactly as no template means no link.
+        assertThat(node.backings()).noneMatch(backing -> backing.plugin().equals("prometheus"));
+    }
+
+    @Test
+    void every_workload_is_stamped_once_per_configured_recipe_with_its_selector_sorted() {
+        DiscoveredNode node = discover(objects(workload("payments-api", Map.of())), prometheus(BOTH_RECIPES))
+                .nodes()
+                .getFirst();
+
+        // ADR-0167: the recipe is the kind and the selector is the reference. Pairs are stored
+        // sorted by label name, so two routes writing the same pairs in another order union.
+        assertThat(node.backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .containsExactlyInAnyOrder(
+                        new Backing("prometheus", "kafka-streams", "app=payments-api,namespace=payments-prod"),
+                        new Backing("prometheus", "micrometer-http", "app=payments-api,namespace=payments-prod"));
+    }
+
+    @Test
+    void a_recipe_left_out_of_the_map_is_never_stamped_and_kind_interpolates_too() {
+        DiscoveredNode node = discover(
+                        objects(workload("payments-api", Map.of())),
+                        prometheus(Map.of("micrometer-http", " workload = {kind}/{name} ")))
+                .nodes()
+                .getFirst();
+
+        assertThat(node.backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .containsExactly(new Backing("prometheus", "micrometer-http", "workload=deployment/payments-api"));
+    }
+
+    @Test
+    void the_annotation_replaces_the_template_for_its_own_workload_only() {
+        DiscoveryResult result = discover(
+                objects(
+                        workload(
+                                "payments-api",
+                                Map.of(TopologyAnnotations.PROMETHEUS,
+                                        "micrometer-http: app={name}-http , namespace={namespace} ; kafka-streams:job=api")),
+                        workload("payments-enricher", Map.of())),
+                prometheus(BOTH_RECIPES));
+
+        // ADR-0164's one exception to the union rule: the template is a guess about a single fact
+        // and the annotation is that guess corrected, so the guess is not kept beside it.
+        assertThat(node(result, "payments-api").backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .containsExactly(
+                        new Backing("prometheus", "micrometer-http", "app=payments-api-http,namespace=payments-prod"),
+                        new Backing("prometheus", "kafka-streams", "job=api"));
+        assertThat(node(result, "payments-enricher").backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .hasSize(2);
+    }
+
+    @Test
+    void the_annotation_stamps_without_any_template() {
+        DiscoveredNode node = discover(
+                        objects(workload("payments-api", Map.of(TopologyAnnotations.PROMETHEUS, "kafka-streams:app={name}"))),
+                        config(List.of()))
+                .nodes()
+                .getFirst();
+
+        assertThat(node.backings())
+                .contains(new Backing("prometheus", "kafka-streams", "app=payments-api"));
+    }
+
+    @Test
+    void a_binding_that_cannot_be_read_is_dropped_whole_and_its_siblings_survive() {
+        String bindings = String.join(";",
+                "kafka-streams:app={cluster}",          // unresolved placeholder
+                "kafka-streams:app=a=b",                // `=` inside a value
+                "kafka-streams:app=",                   // empty value would match series lacking the label
+                "kafka-streams:",                       // empty selector is never every series
+                "kafka-streams:1app=x",                 // not a Prometheus label name
+                "kafka-streams:app=x,app=y",            // one label twice can match nothing
+                ":app=x",                               // no recipe
+                "no-colon-at-all",
+                "",
+                "micrometer-http:app={name}");
+        DiscoveredNode node = discover(
+                        objects(workload("payments-api", Map.of(TopologyAnnotations.PROMETHEUS, bindings))),
+                        config(List.of()))
+                .nodes()
+                .getFirst();
+
+        // ADR-0167: never partly applied, and failing toward no series rather than toward a matcher
+        // that matches everything.
+        assertThat(node.backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .containsExactly(new Backing("prometheus", "micrometer-http", "app=payments-api"));
+    }
+
+    @Test
+    void a_template_that_cannot_be_read_stamps_nothing_for_that_recipe() {
+        DiscoveredNode node = discover(
+                        objects(workload("payments-api", Map.of())),
+                        prometheus(Map.of(
+                                "kafka-streams", "cluster={cluster},app={name}",
+                                "micrometer-http", "app={name}")))
+                .nodes()
+                .getFirst();
+
+        assertThat(node.backings())
+                .filteredOn(backing -> backing.plugin().equals("prometheus"))
+                .containsExactly(new Backing("prometheus", "micrometer-http", "app=payments-api"));
+    }
+
+    @Test
+    void an_annotation_whose_every_binding_is_dropped_still_replaces_the_template() {
+        DiscoveredNode node = discover(
+                        objects(workload("payments-api", Map.of(TopologyAnnotations.PROMETHEUS, "kafka-streams:app="))),
+                        prometheus(BOTH_RECIPES))
+                .nodes()
+                .getFirst();
+
+        // The annotation is a correction, and a malformed correction is not permission to fall back
+        // to the guess it corrected: that would read series someone has already said are wrong.
+        assertThat(node.backings()).noneMatch(backing -> backing.plugin().equals("prometheus"));
+    }
+
+    @Test
+    void the_prometheus_annotation_is_the_vocabularys_tenth_key() {
+        assertThat(TopologyAnnotations.CLOSED).hasSize(10).contains("topology.io/prometheus");
+        assertThat(TopologyAnnotations.unknownKeys(workload("payments-api", Map.of(TopologyAnnotations.PROMETHEUS, "x:y=z"))))
+                .isEmpty();
+    }
+
     // ---------------------------------------------------------------- selectors
 
     @Test
@@ -427,7 +567,7 @@ class KubernetesDiscoveryTest {
                 .discover(new DiscoveryRequest<>(
                         "production",
                         new KubernetesConfig(
-                                List.of("payments-prod", "gone"), null, null, ignoringConnect(), null)));
+                                List.of("payments-prod", "gone"), null, null, ignoringConnect(), null, null)));
 
         // ADR-0026, ADR-0046: PARTIAL retains what it cannot see rather than deleting it, so one
         // blind namespace never empties the graph.
@@ -440,7 +580,7 @@ class KubernetesDiscoveryTest {
     void every_namespace_unreachable_is_failed_and_changes_nothing_in_the_store() {
         DiscoveryResult result = new KubernetesPlugin(new RecordedKubernetesApi())
                 .discover(new DiscoveryRequest<>(
-                        "production", new KubernetesConfig(List.of("gone"), null, null, List.of(), null)));
+                        "production", new KubernetesConfig(List.of("gone"), null, null, List.of(), null, null)));
 
         assertThat(result.outcome().status()).isEqualTo(OutcomeStatus.FAILED);
         assertThat(result.nodes()).isEmpty();
@@ -573,7 +713,7 @@ class KubernetesDiscoveryTest {
 
     private static DiscoveryResult recorded(String namespace) {
         return discover(recording(namespace), new KubernetesConfig(
-                List.of(namespace), null, null, ignoringConnect(), null));
+                List.of(namespace), null, null, ignoringConnect(), null, null));
     }
 
     private static NamespaceObjects recording(String namespace) {
@@ -590,7 +730,15 @@ class KubernetesDiscoveryTest {
     }
 
     private static KubernetesConfig config(List<String> ignore, KubernetesConfig.Links links) {
-        return new KubernetesConfig(List.of("payments-prod"), null, null, ignore, links);
+        return new KubernetesConfig(List.of("payments-prod"), null, null, ignore, links, null);
+    }
+
+    private static KubernetesConfig prometheus(Map<String, String> recipes) {
+        return new KubernetesConfig(List.of("payments-prod"), null, null, List.of(), null, recipes);
+    }
+
+    private static NamespaceObjects objects(ObservedWorkload... workloads) {
+        return new NamespaceObjects(List.of(workloads), List.of(), List.of());
     }
 
     private static ObservedWorkload workload(String name, Map<String, String> annotations) {

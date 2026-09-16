@@ -300,7 +300,7 @@ class KubernetesHealthTest {
     @Test
     void every_namespace_unreachable_is_failed_and_some_is_partial() {
         KubernetesConfig config =
-                new KubernetesConfig(List.of(NAMESPACE, "second-namespace"), null, null, List.of(), null);
+                new KubernetesConfig(List.of(NAMESPACE, "second-namespace"), null, null, List.of(), null, null);
         ObservableNode node = new ObservableNode(
                 "api", List.of(new Backing("kubernetes", "deployment", NAMESPACE + "/api")));
 
@@ -377,7 +377,7 @@ class KubernetesHealthTest {
     // ---------------------------------------------------------------- helpers
 
     private static KubernetesConfig config() {
-        return new KubernetesConfig(List.of(NAMESPACE), null, null, List.of(), null);
+        return new KubernetesConfig(List.of(NAMESPACE), null, null, List.of(), null, null);
     }
 
     private static KubernetesApi unreachable() {
