@@ -14,6 +14,8 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class YamlTopologyLoaderTest {
 
@@ -132,6 +134,28 @@ class YamlTopologyLoaderTest {
             assertThat(loader.load("production", dir).nodes().getFirst().backings())
                     .containsExactly(new Backing("kafka", "consumer-group", "enrich-consumer-prod"));
         }
+
+        @Test
+        void prometheus_entries_become_one_prometheus_backing_each() throws IOException {
+            write("a.yaml", """
+                    environment: production
+                    nodes:
+                      - key: payments-enricher
+                        consumerGroups: [enrich-consumer-prod]
+                        prometheus:
+                          - { recipe: kafka-streams, selector: "namespace=payments-prod,app=payments-enricher" }
+                          - recipe: micrometer-http
+                            selector: " job = enricher "
+                    """);
+
+            // ADR-0164, ADR-0167: the selector is stored sorted by label name, so the same pairs the
+            // `kubernetes` template stamps in another order union into one backing (ADR-0022).
+            assertThat(loader.load("production", dir).nodes().getFirst().backings())
+                    .containsExactly(
+                            new Backing("kafka", "consumer-group", "enrich-consumer-prod"),
+                            new Backing("prometheus", "kafka-streams", "app=payments-enricher,namespace=payments-prod"),
+                            new Backing("prometheus", "micrometer-http", "job=enricher"));
+        }
     }
 
     @Nested
@@ -230,6 +254,38 @@ class YamlTopologyLoaderTest {
                     .satisfies(outcome -> {
                         assertThat(outcome.status()).isEqualTo(OutcomeStatus.FAILED);
                         assertThat(outcome.reasons().getFirst()).contains("metadata");
+                    });
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "{ recipe: kafka-streams, selector: \"app={name}\" }",           // not interpolated here
+                "{ recipe: kafka-streams, selector: \"app=a=b\" }",              // `=` inside a value
+                "{ recipe: kafka-streams, selector: \"app=a;b\" }",              // `;` inside a value
+                "{ recipe: kafka-streams, selector: \"app=\" }",                 // empty value
+                "{ recipe: kafka-streams, selector: \"\" }",                     // empty selector
+                "{ recipe: kafka-streams, selector: \"1app=x\" }",               // not a label name
+                "{ recipe: kafka-streams, selector: \"app=x,app=y\" }",          // a label twice
+                "{ recipe: kafka-streams, selector: \"app=x,\" }",               // a trailing comma
+                "{ selector: \"app=x\" }",                                       // no recipe
+                "{ recipe: kafka-streams }",                                     // no selector
+                "{ recipe: kafka-streams, selector: \"app=x\", plugin: kafka }", // not an escape hatch
+                "kafka-streams:app=x"                                            // not a mapping
+        })
+        void a_prometheus_entry_that_cannot_be_read_fails_the_directory(String entry) throws IOException {
+            write("a.yaml", """
+                    environment: production
+                    nodes:
+                      - key: payments-api
+                        prometheus: [%s]
+                    """.formatted(entry));
+
+            // ADR-0064: an authored file is not an observed object. `kubernetes` drops a bad
+            // annotation binding and keeps going; here the same selector is a typo to be fixed.
+            assertThat(loader.load("production", dir).outcome())
+                    .satisfies(outcome -> {
+                        assertThat(outcome.status()).isEqualTo(OutcomeStatus.FAILED);
+                        assertThat(outcome.reasons().getFirst()).contains("a.yaml").contains("payments-api");
                     });
         }
 
