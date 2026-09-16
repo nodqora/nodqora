@@ -85,6 +85,7 @@ COPY nodqora-plugin-yaml/build.gradle.kts nodqora-plugin-yaml/
 COPY nodqora-plugin-kubernetes/build.gradle.kts nodqora-plugin-kubernetes/
 COPY nodqora-plugin-connect/build.gradle.kts nodqora-plugin-connect/
 COPY nodqora-plugin-kafka/build.gradle.kts nodqora-plugin-kafka/
+COPY nodqora-plugin-prometheus/build.gradle.kts nodqora-plugin-prometheus/
 COPY nodqora-app/build.gradle.kts nodqora-app/
 # ADR-0157: a knob for networks that drop Gradle's parallel fetches, not a change to the build.
 # Empty by default, so the substitution below expands to nothing and Gradle picks its own worker

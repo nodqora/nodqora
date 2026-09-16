@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":nodqora-plugin-kubernetes"))
     implementation(project(":nodqora-plugin-connect"))
     implementation(project(":nodqora-plugin-kafka"))
+    implementation(project(":nodqora-plugin-prometheus"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
 

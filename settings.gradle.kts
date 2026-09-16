@@ -13,5 +13,6 @@ include(
     "nodqora-plugin-kubernetes",
     "nodqora-plugin-connect",
     "nodqora-plugin-kafka",
+    "nodqora-plugin-prometheus",
     "nodqora-app",
 )

@@ -81,3 +81,8 @@ nodqora:
             default: 1000
           links:
             dashboard: "http://192.168.0.215/ui/clusters/market/all-topics/{name}"
+
+        # The demo's own Prometheus (demo/k8s/60-prometheus.yaml). It reads only what `kubernetes`
+        # stamped above, so the aggregator gets its Streams rate and latency and nothing else asks.
+        prometheus:
+          url: http://192.168.0.218:9090

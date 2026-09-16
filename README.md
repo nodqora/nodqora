@@ -120,6 +120,7 @@ nodqora-plugin-yaml/     →  declared topology: the edges and ownership nothing
 nodqora-plugin-kubernetes/  workloads, Service and Ingress backings, readiness. Emits no edges.
 nodqora-plugin-kafka/       topics and consumer-group lag against a threshold you choose.
 nodqora-plugin-connect/     connectors and their tasks.
+nodqora-plugin-prometheus/  rate and latency for nodes another plugin bound. Discovers nothing, never votes.
 nodqora-app/             →  the deployable: core plus the plugins, wired together.
 frontend/                   Vite + React + XYFlow.
 fixtures/
