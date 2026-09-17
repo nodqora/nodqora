@@ -1,6 +1,6 @@
 # ADR-0126: There is no free Enterprise tier, at any threshold
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0172](0172-community-authentication-is-oidc-and-saml-waits-to-be-asked-for.md)
 - **Date**: 2026-09-05
 - **Ticket**: [Pricing unit and trial](https://github.com/fredskor/nodqora/issues/45)
 
@@ -43,7 +43,7 @@ Rejected, and why:
 - **Community is already the answer for small**, and lavishly: every discovery
   plugin across all six tiers, the whole canvas, health, search, links, all of
   phase 8 including blast radius, drift, one-shot comparison, the incident view,
-  OIDC and SAML authentication, and complete audit capture. A ten-person team
+  OIDC authentication, and complete audit capture. A ten-person team
   lacks nothing.
 - **If small organisations do turn out to need Enterprise, the fix is ADR-0107,
   not a discount.** A free tier would be a way of not noticing that the ledger's

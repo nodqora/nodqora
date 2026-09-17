@@ -1,6 +1,6 @@
 # ADR-0109: Authentication is Community; group synchronisation and view-scoping are Enterprise
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0172](0172-community-authentication-is-oidc-and-saml-waits-to-be-asked-for.md)
 - **Date**: 2026-09-05
 - **Ticket**: [The Community/Enterprise feature ledger](https://github.com/fredskor/nodqora/issues/42)
 
@@ -37,9 +37,9 @@ plainly rather than discovering.
 **Authentication is Community. Everything built on top of identity is
 Enterprise.**
 
-- **Community**: OIDC and SAML bind authentication against the customer's own
-  identity provider. Anyone who authenticates sees every environment in that
-  install.
+- **Community**: OIDC bind authentication against the customer's own identity
+  provider. Anyone who authenticates sees every environment in that install.
+  SAML is not built until asked for, and is Community if it ever is (ADR-0172).
 - **Enterprise**: group synchronisation, roles, and per-environment,
   per-node-type, per-owner and per-team visibility scoping within one install.
 

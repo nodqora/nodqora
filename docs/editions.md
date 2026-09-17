@@ -66,7 +66,7 @@ Everything an engineer needs to see the truth of their system.
 | **Drift against the previous fold** — what appeared, vanished or changed health since the last refresh | §49 phase 9 (part) | The fold already recomputes wholesale; no storage that grows (ADR-0110) |
 | **One-shot comparison** between environments in the same install | §43 (part) | A single-team debugging question (ADR-0107) |
 | **Incident view** — filter to unhealthy, related alerts, walk the impact | §49 phase 10 (part) | Composed of parts already free (ADR-0107) |
-| **Authentication** — OIDC and SAML bind against your own identity provider | §49 phase 12 (part) | The category convention; contradicts §43 deliberately (ADR-0109) |
+| **Authentication** — OIDC binds against your own identity provider; a SAML-only provider is brokered through one that speaks OIDC | §49 phase 12 (part) | The category convention; contradicts §43 deliberately (ADR-0109, ADR-0172) |
 | **Audit capture** — complete structured events to stdout, file or Kafka | §43 (part) | You already own the disk (ADR-0111) |
 
 A Community install is a **shared view**: everyone who authenticates sees every
@@ -110,7 +110,7 @@ answering an enquiry are all allowed sooner.
 
 | | |
 |---|---|
-| **The floor** | The Community release that closes Tier 1 with Prometheus, **and** Community authentication (OIDC or SAML) in a tagged release. Not `1.0`, and none of phases 5–10 |
+| **The floor** | The Community release that closes Tier 1 with Prometheus, **and** Community authentication (OIDC) in a tagged release. Not `1.0`, and none of phases 5–10 |
 | **The gate** | **One enquiry** from an organisation running Community for a capability placed in Enterprise above, **or** issues from **three distinct outside organisations** plainly running Community. Stars and image pulls never count |
 | **The clock** | Six months from the Tier 1 release. When it runs out nothing opens: an ADR either opens Enterprise anyway and says why, or reopens this ledger and starts a fresh six months |
 
@@ -361,6 +361,9 @@ than a single row.
   line is short of the need (ADR-0110).
 - Natural-language querying becoming table stakes in the category — §5.5 is
   falsified and ADR-0113 falls with it.
+- An outside organisation that cannot sign in because its identity provider
+  speaks only SAML, and for whom brokering through an OIDC provider is not an
+  option — SAML is then built, in Community (ADR-0109, ADR-0172).
 - A middle tier being asked for. That is a redraw of the map's destination and
   returns as a fresh effort, not an amendment here.
 - A customer whose Enterprise value plainly scales with something *inside* one
