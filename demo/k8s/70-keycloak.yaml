@@ -1,0 +1,73 @@
+# An identity provider of the demo's own, so sign-in has something real to redirect to.
+#
+# Keycloak rather than Dex because it advertises `end_session_endpoint`, and ADR-0175's sign-out
+# takes its RP-initiated branch only when a provider does. Dex advertises none, so against Dex the
+# demo could only ever show the local-only branch. Keycloak is also what ADR-0172 names first as a
+# broker for a SAML-only estate.
+#
+# `start-dev` on an emptyDir: the realm is imported on every start, so a restarted pod is the
+# same realm with the same users, and nothing here is worth a PVC. Dev mode serves plain HTTP, which
+# is what the rest of the demo speaks.
+#
+# The realm — one confidential client, three users — is demo/keycloak/nodqora-realm.json, and
+# scripts/up.sh turns it into the `keycloak-realm` ConfigMap this Deployment mounts, as it does with
+# the connector configs. Everything secret in it is a demo value committed on purpose, like
+# OpenSearch running with its security plugin off. The realm is reachable from the LAN only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: market-demo
+spec:
+  replicas: 1
+  # Not a rolling update. Each dev-mode pod keeps its own sessions, and for the length of a rollout
+  # the Service splits a sign-in across the old pod and the new one: the login page comes from one,
+  # the form post lands on the other, and Keycloak answers "We are sorry…" (`invalid_code`).
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: keycloak }
+  template:
+    metadata:
+      labels: { app: keycloak }
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.4
+          args: [start-dev, --import-realm]
+          env:
+            # The issuer is built from this, and it has to be one URL for the browser and for
+            # Nodqora's back channel alike: the LAN address, never the in-cluster Service name.
+            - { name: KC_HOSTNAME, value: "http://192.168.0.222:8080" }
+            - { name: KC_HEALTH_ENABLED, value: "true" }
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - { name: KC_BOOTSTRAP_ADMIN_PASSWORD, value: admin }
+          ports:
+            - { containerPort: 8080, name: http }
+            - { containerPort: 9000, name: management }
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { memory: 1Gi }
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 9000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: 9000 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import }
+      volumes:
+        - name: realm
+          configMap: { name: keycloak-realm }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: market-demo
+  annotations:
+    metallb.io/loadBalancerIPs: 192.168.0.222
+spec:
+  type: LoadBalancer
+  selector: { app: keycloak }
+  ports: [{ port: 8080, targetPort: 8080 }]

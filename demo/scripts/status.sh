@@ -12,6 +12,7 @@ printf "connect REST     http://%s:8083\n" "$(ip kafka-connect-lb)"
 printf "opensearch       http://%s:9200\n" "$(ip opensearch-lb)"
 printf "kafka console    http://%s\n" "$(ip kafka-ui)"
 printf "prometheus       http://%s:9090\n" "$(ip prometheus)"
+printf "keycloak issuer  http://%s:8080/realms/nodqora\n" "$(ip keycloak)"
 
 echo
 echo "== scrape targets =="

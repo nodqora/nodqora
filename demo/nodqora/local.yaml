@@ -19,8 +19,9 @@ nodqora:
           namespaces: [market-demo]
           # ADR-0031: exact `kind/name`, no globs. `kafka-connect` hosts both sink connectors and
           # is not itself a node — suppression removes node emission only, so `connect` can still
-          # stamp it as a backing on all four. The rest are operators, a console and the metrics
-          # stack: real workloads in this namespace that are not part of the pipeline.
+          # stamp it as a backing on all four. The rest are operators, a console, the metrics stack
+          # and the identity provider: real workloads in this namespace that are not part of the
+          # pipeline.
           ignore:
             - deployment/kafka-connect
             - deployment/strimzi-cluster-operator
@@ -28,6 +29,7 @@ nodqora:
             - deployment/kafka-ui
             - deployment/market-kafka-exporter
             - deployment/prometheus
+            - deployment/keycloak
           # No `links:` block. There is no Kubernetes UI on this cluster, and ADR-0032 is explicit
           # that no template means no link rather than a half-composed URL.
           # ADR-0167: every workload is stamped a `prometheus` backing per recipe listed here. Only
