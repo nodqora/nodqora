@@ -974,6 +974,22 @@ Mixed-cold — some plugins reported, some not — is the dangerous one, because
 canvas draws a graph that looks whole. It raises a banner naming the plugin and
 capability, with no count and no cause, because neither exists (ADR-0088).
 
+### Sign-in not configured / Open install
+
+Whether the read API answers at all is decided before any of the above. Besides
+a configured identity provider, an install can be in one of two states
+(ADR-0173):
+
+- **Sign-in not configured** — no identity provider and no `none` declared. The
+  install is **closed**: it boots, the read API serves nothing, and a first-run
+  screen names the one key to write. Omission never opens an install.
+- **Open install** — `none` declared. Everything is served without sign-in, and
+  the shell says so where a signed-in name would sit.
+
+Anyone who signs in sees every environment (ADR-0109), so what is withheld before
+sign-in is the whole read API — including `/api/meta`, because the roster is
+itself a description of what an organisation runs.
+
 ## The URL
 
 The browser URL carries **two facts and no others** (ADR-0092):
@@ -1095,3 +1111,5 @@ ADR-0096's two halves, so changing either costs it (ADR-0096).
 | a shareable search / the search URL | the URL holds **scope and node only** | a query and a selection are exclusive under ADR-0069, so `?q=` would express a state the UI cannot produce (ADR-0092) |
 | a broken / dead link | the key is **not in the loaded graph** | that absence is drift, deletion, or a plugin that has not reported — three different sentences, and one of them is a lie in the others' situation (ADR-0095) |
 | the deep link jumps to the node | it **fits, then pans** | zooming to the target hides the upstream/downstream highlight that selection exists to draw (ADR-0018, ADR-0097) |
+| unconfigured install (of sign-in) | **sign-in not configured** | "unconfigured install" already means an empty roster, and the two screens are different states that can both be true (ADR-0156, ADR-0173) |
+| auth disabled / unauthenticated mode | **open install** | nothing is disabled by leaving a key out — omission closes an install; open is only ever declared (ADR-0173) |
