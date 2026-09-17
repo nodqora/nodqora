@@ -82,11 +82,13 @@ mention, ever, overriding the control-path rule where they collide:
 - the **outcome marks** on node cards — retained and blind (ADR-0083)
 - the **three canvas empty states** (ADR-0087)
 - the **first-run screen** of an unconfigured install (ADR-0156)
+- the **no-identity-provider screen** of an install without sign-in configured (ADR-0173)
 
 Enumerated rather than left as a principle, so the carve-out survives the
 components being rewritten. ADR-0087 and ADR-0089 both exist because a principle
 was not specific enough about a surface, and the enumeration costs one noun
-apiece — a fifth was added by ADR-0156 on exactly that reasoning.
+apiece — a fifth was added by ADR-0156 on exactly that reasoning, and a sixth
+by ADR-0173.
 
 The reason is [ADR-0026](0026-health-observation-declares-its-outcome.md)'s. ADR-0081's
 chip exists so *"is everything actually being watched?"* is answerable on a good
