@@ -23,7 +23,7 @@ The facts that bore on it, verified in the tree:
 
 - **Docker is already a test dependency.** `NodqoraIntegrationTest` starts a
   Postgres Testcontainer.
-  [ADR-0099](0099-the-reference-fixture-splits-into-inputs-assertions-and-prose.md)'s
+  [ADR-0099](0099-the-fixture-becomes-golden-documents.md)'s
   refusal of Testcontainers covers plugin inputs, not Nodqora's own dependencies.
 - **No workflow runs tests on a pull request.** `release.yml` is the only
   workflow, and the release depends on every subproject's `build`. The suite runs
