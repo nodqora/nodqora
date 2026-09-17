@@ -21,7 +21,7 @@ import { edgeIsHighlighted, highlightFrom } from './highlight'
 import { foldKey } from '../api/keys'
 import { crossesTeams, ownersByNodeKey } from './crossTeam'
 import { edgeIsStalled, stalledEdges } from './stalled'
-import { summarizeMetrics } from './metrics'
+import { summarizeMetrics, type FigureStrip } from './metrics'
 import { marksOf } from '../outcome/marks'
 import type { Rosters } from '../outcome/plugins'
 import type { Graph, Health, PluginRef, State } from '../api/types'
@@ -33,7 +33,8 @@ const ROW_HEIGHT = 132
 // whole graph unscaled in a corner on a cold load. Stating the size removes the race entirely.
 const CARD_WIDTH = 236
 const CARD_HEIGHT = 62
-const METRIC_LINE_HEIGHT = 22
+// ADR-0168: one height whether the strip holds one figure or three.
+const FIGURE_STRIP_HEIGHT = 42
 // ADR-0083's footer token is a line like any other, so it has to be declared for the same reason.
 const BLIND_TOKEN_HEIGHT = 18
 const NODE_TYPES = { card: NodeCard }
@@ -54,7 +55,7 @@ const STALLED_HEAD = {
 } as const
 
 /**
- * ADR-0018's MVP canvas: pan, zoom, fit-to-screen, node rendering, an optional metric line behind a
+ * ADR-0018's MVP canvas: pan, zoom, fit-to-screen, node rendering, an optional figure strip behind a
  * canvas-level toggle, upstream/downstream highlighting on selection.
  *
  * Deliberately absent: minimap, filter by type, filter by health, collapse/expand, path highlighting,
@@ -102,9 +103,9 @@ export function Canvas({
     return byKey
   }, [state])
 
-  const metricLines = useMemo(() => {
-    const byKey = new Map<string, string | null>()
-    state?.nodes.forEach((node) => byKey.set(foldKey(node.nodeKey), summarizeMetrics(node.metrics)))
+  const strips = useMemo(() => {
+    const byKey = new Map<string, FigureStrip | null>()
+    state?.nodes.forEach((node) => byKey.set(foldKey(node.nodeKey), summarizeMetrics(node)))
     return byKey
   }, [state])
 
@@ -128,13 +129,13 @@ export function Canvas({
         // A node with no state entry cannot happen — /state carries every key (ADR-0057) — but the
         // canvas must still render before the first /state response lands.
         health: health.get(folded) ?? 'UNKNOWN',
-        metricLine: metricLines.get(folded) ?? null,
+        strip: strips.get(folded) ?? null,
         showMetrics,
         emphasis: emphasisOf(folded, selectedKey, highlight),
         retained: marks.retained.map(label),
         blind: marks.blind.map(label),
       }
-      const metricLine = data.showMetrics && data.metricLine ? METRIC_LINE_HEIGHT : 0
+      const strip = data.showMetrics && data.strip ? FIGURE_STRIP_HEIGHT : 0
       const blindToken = data.blind.length > 0 ? BLIND_TOKEN_HEIGHT : 0
       return {
         id: node.key,
@@ -143,7 +144,7 @@ export function Canvas({
         // constraint the drawer spends a fifth of the width against (ADR-0016, ADR-0019).
         position: { x: (placement?.column ?? 0) * COLUMN_WIDTH, y: (placement?.row ?? 0) * ROW_HEIGHT },
         width: CARD_WIDTH,
-        height: CARD_HEIGHT + metricLine + blindToken,
+        height: CARD_HEIGHT + strip + blindToken,
         data,
         draggable: false,
       }
@@ -153,7 +154,7 @@ export function Canvas({
     graph.edges,
     descriptors,
     health,
-    metricLines,
+    strips,
     showMetrics,
     selectedKey,
     highlight,
