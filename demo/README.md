@@ -35,8 +35,8 @@ plugin can see.
 
 ## What it costs
 
-Two nodes' worth of homelab: roughly 3 CPU and 6 GiB across Kafka, Connect, OpenSearch, MongoDB,
-the console, Prometheus with the Kafka Exporter, and two replicas of the aggregator. The Coinbase endpoints are public and unauthenticated;
+Two nodes' worth of homelab: roughly 3.5 CPU and 7 GiB across Kafka, Connect, OpenSearch, MongoDB,
+the console, Prometheus with the Kafka Exporter, Keycloak, and two replicas of the aggregator. The Coinbase endpoints are public and unauthenticated;
 two connectors polling every five seconds is about 0.4 requests a second, well inside the public rate
 limit.
 
@@ -60,6 +60,7 @@ The LAN addresses are pinned in the manifests so they survive a rebuild, because
 | OpenSearch | `http://192.168.0.213:9200` |
 | Kafka console | `http://192.168.0.215` |
 | Prometheus | `http://192.168.0.218:9090` |
+| Keycloak issuer | `http://192.168.0.222:8080/realms/nodqora` |
 
 Change them in `demo/k8s/*.yaml` (the `metallb.io/loadBalancerIPs` annotations) and in
 `demo/nodqora/local.yaml` together.
@@ -125,6 +126,30 @@ A **source** connector has no `topics` key — this one writes to `kafka.topic`,
 no key in any connector config names a third-party HTTP API. That is ADR-0063 in one screen:
 `demo/nodqora/topology/homelab/market-demo.yaml` writes down thirteen facts and nothing else.
 
+## Signing in against it
+
+`70-keycloak.yaml` is an identity provider for Nodqora's sign-in to redirect to. Until sign-in ships
+nothing in Nodqora points at it, and `local.yaml` carries no `nodqora.authentication` block; what it
+offers is recorded here so that block has something real to be written against.
+
+| | |
+|---|---|
+| Issuer | `http://192.168.0.222:8080/realms/nodqora` |
+| Client | `nodqora`, confidential, secret `nodqora-demo-client-secret`, authorization code flow only |
+| Redirect and post-logout URIs | `http://localhost:8080/*` |
+| Users (password = username) | `ada`, `grace` — full profile · `nameless` — username only |
+| Admin console | `http://192.168.0.222:8080/admin`, `admin` / `admin` |
+
+`nameless` is there because a real directory has users like it: its ID token carries `sub` and
+`preferred_username` and no `name` or `email`, so whatever Nodqora displays has to fall back to
+something. Keycloak would otherwise not let it sign in at all — its user profile makes email and
+both names required, and it stops the user at a `VERIFY_PROFILE` form before issuing a code — so the realm
+makes all three optional.
+
+The realm is re-imported whenever the pod starts and lives on an `emptyDir`. User ids are pinned in
+`nodqora-realm.json`, so `sub` survives a restart; the signing key does not, and neither do sessions
+at the provider. Restarting Keycloak is therefore also the way to see a key rotation.
+
 ## Making it say something other than green
 
 ```bash
@@ -166,6 +191,8 @@ k8s/30-kafka-connect.yaml Connect 3.9 as a plain Deployment; an initContainer do
 k8s/40-aggregator.yaml    the Streams service and its topology.io annotations; a template, see below
 k8s/50-kafka-ui.yaml      kafbat console — what Nodqora's link templates point at
 k8s/60-prometheus.yaml    Prometheus 3.5, namespace-scoped pod discovery, opt-in by annotation
+k8s/70-keycloak.yaml      Keycloak 26.7 in dev mode, the identity provider sign-in redirects to
+keycloak/                 the `nodqora` realm it imports: one client, three users
 connectors/*.json         four connector configs, applied with PUT /config so re-running is safe
 aggregator/               Spring Boot + Kafka Streams, its own Gradle build, outside the root one
 nodqora/local.yaml        the config overlay adding the `homelab` environment
