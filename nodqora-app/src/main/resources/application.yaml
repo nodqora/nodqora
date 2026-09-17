@@ -48,11 +48,15 @@ nodqora:
   # `kafka` sits last because a topic's key is all it is sure of, and every scalar it could contest
   # is one another writer knows better. They are genuinely different orders.
   #
+  # `prometheus` is last in both and could sit anywhere. It discovers nothing, so it is in no
+  # `sources[]` and contests no scalar, and it never votes, so its rawSignal never reaches the line
+  # (ADR-0165). It is listed because the check below admits no exceptions.
+  #
   # Both lists must name exactly the registered plugins, checked at startup: a misspelled id would
   # otherwise sort last in silence and the graph would go on being folded with the wrong precedence.
   plugins:
-    registry-order: [yaml, kubernetes, kafka, connect]
-    precedence: [yaml, connect, kubernetes, kafka]
+    registry-order: [yaml, kubernetes, kafka, connect, prometheus]
+    precedence: [yaml, connect, kubernetes, kafka, prometheus]
 
   # ADR-0035, ADR-0042. Timeouts sit strictly below their interval (see DiscoveryEngine).
   refresh:

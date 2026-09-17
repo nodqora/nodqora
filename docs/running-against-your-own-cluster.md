@@ -309,6 +309,30 @@ What annotations **cannot** give you is edges. Those come from `yaml`, or from `
 observing real topics and connectors. A cluster-only environment is a grid of disconnected cards —
 correct, and not very useful.
 
+## Rate and latency, from Prometheus
+
+A `prometheus` block gives a bound workload two numbers on its card: `rate`, per second, and
+`latency`, the mean in milliseconds. It never changes a node's colour
+([ADR-0165](adr/0165-prometheus-contributes-metrics-and-never-votes.md)).
+
+```yaml
+prometheus:
+  url: http://prometheus.monitoring:9090
+  # the proxy in front of it, if any: one or the other
+  auth: { username: nodqora, password: "${env:PROMETHEUS_PASSWORD}" }
+  bearerToken: "${file:/etc/nodqora/prometheus-token}"
+```
+
+It reads only nodes someone bound — the `kubernetes` template or annotation above, or `prometheus:`
+in a topology file — and asks for nothing else. Two recipes ship: `kafka-streams`, from
+`kafka_stream_thread_process_*`, and `micrometer-http`, from `http_server_requests_seconds_*` with
+`/actuator` excluded. Where both find series on one node, `kafka-streams` supplies both numbers.
+
+A card with no numbers is usually one of three things, in this order. No label on the series equals
+the value the selector names — check with `count by (app) (kafka_stream_thread_process_rate)`. The
+instrumentation is neither recipe, and there is no third yet. Or the binding was unreadable, which
+logs `prometheus binding '...'` in either the discovering plugin or this one.
+
 ## What you should see
 
 Within one discovery cadence:
