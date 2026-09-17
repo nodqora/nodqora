@@ -119,7 +119,7 @@ and proves the loop guard with fake timers. There is no browser runner.
 the homelab Keycloak:
 
 1. an unauthenticated deep link reaches the provider and lands back on that link;
-2. `ada` shows her name, and `nameless` shows `nameless`;
+2. `ada` shows the full name from the `name` claim, and `nameless` shows `nameless`;
 3. *Sign out* ends at `/`, and a reload asks for a password;
 4. with `session.idle: 1m`, an idle tab re-navigates once and does not loop;
 5. with Keycloak scaled to zero, a signed-in tab keeps reading and a new private
