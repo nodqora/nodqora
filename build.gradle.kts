@@ -226,8 +226,9 @@ fun ghcrCredential(config: File): GhcrCredential? {
 /**
  * Asks ghcr.io for a token scoped to [actions] on [repository], anonymously unless a [credential]
  * is given. One call, two readers: act 4 asks anonymously for `pull` and reads a refusal as *this
- * package is not public*; the gate asks with the credential for `pull,push` and reads the answer
- * as *what this machine may do*. What a non-200 means is therefore left to the caller.
+ * package is not public*; the gate asks with the credential for `pull,push` and presents what comes
+ * back at an upload, because the token itself no longer says what was granted (ADR-0171). What a
+ * non-200 means is therefore left to the caller.
  */
 fun ghcrTokenResponse(
     repository: String,
@@ -250,66 +251,74 @@ fun ghcrTokenIn(body: String): String? = runCatching {
     (JsonSlurper().parseText(body) as Map<String, Any?>)["token"] as? String
 }.getOrNull()
 
-/**
- * What ghcr.io says this credential may actually do to [repository] — the gate's whole question,
- * asked of the registry instead of inferred from a file.
- *
- * A registry does not refuse an over-broad scope request; it answers 200 and *narrows* what it
- * grants, so the answer is in the token's `access` claim and never in the status code. A failure
- * is returned rather than thrown so that the gate owns the wording of its own refusal.
- */
-fun ghcrGrantedActions(credential: GhcrCredential, repository: String): Result<Set<String>> {
-    val response = runCatching { ghcrTokenResponse(repository, "pull,push", credential) }
-        .getOrElse { return Result.failure(it) }
-
-    // A refusal to issue the token at all is an answer, not an outage: this credential gets
-    // nothing on this repository, which is the same verdict as a token granting nothing.
-    if (response.statusCode() == 401 || response.statusCode() == 403) {
-        return Result.success(emptySet())
-    }
-    if (response.statusCode() != 200) {
-        return Result.failure(
-            IllegalStateException(
-                "HTTP ${response.statusCode()} from ghcr.io/token — ${response.body().trim()}",
-            ),
-        )
-    }
-
-    val token = ghcrTokenIn(response.body()) ?: return Result.failure(
-        IllegalStateException("ghcr.io returned no token in ${response.body().trim()}"),
-    )
-    return registryTokenActions(token, repository)
-}
+/** What the gate learned by opening an upload: whether it may push, and what became of the session. */
+data class GhcrPushProbe(val mayPush: Boolean, val answer: String, val leftToExpire: String? = null)
 
 /**
- * The actions a registry token's `access` claim names for [repository] — what was granted, which
- * is not what was asked for.
+ * Whether this credential may push [repository], asked by opening a blob upload — the first write
+ * `buildx --push` makes — and cancelling it.
  *
- * The middle segment of a JWT is its claims, base64url and unpadded. They are read, not verified:
- * the signature is the registry's business, and this claim is only ever used to refuse early. A
- * token naming no access at all is a token that grants nothing, not a malformed one — but a token
- * that is not a JWT is a failure, because then nothing here has been measured.
+ * ADR-0171: the token endpoint stopped deciding anything. Given a credential it answers 200 for any
+ * scope on any repository, one that does not exist included, and the "token" is the credential
+ * itself in base64, so there is no grant in it to read. The refusal now happens at the write, and
+ * so the question is put there. A session that is opened and never completed makes no tag, no
+ * manifest and no package version: nothing a stranger can see.
+ *
+ * `202` is a yes. `401` or `403` — at the token exchange or at the upload — is a no. Anything else
+ * is a failure, returned rather than thrown so that the gate owns the wording of its refusal. A
+ * cancel that does not land does not change the answer; it is reported, because the session is
+ * then left for the registry to expire.
  */
-fun registryTokenActions(token: String, repository: String): Result<Set<String>> {
-    @Suppress("UNCHECKED_CAST")
-    val claims = runCatching {
-        JsonSlurper().parseText(
-            String(Base64.getUrlDecoder().decode(token.split(".")[1])),
-        ) as Map<String, Any?>
-    }.getOrElse {
-        return Result.failure(
-            IllegalStateException("ghcr.io's token is not a JWT this can read the `access` claim of"),
-        )
+fun ghcrMayPush(credential: GhcrCredential, repository: String): Result<GhcrPushProbe> = runCatching {
+    val exchange = ghcrTokenResponse(repository, "pull,push", credential)
+    if (exchange.statusCode() == 401 || exchange.statusCode() == 403) {
+        return@runCatching GhcrPushProbe(false, "HTTP ${exchange.statusCode()} from ghcr.io/token")
+    }
+    check(exchange.statusCode() == 200) {
+        "HTTP ${exchange.statusCode()} from ghcr.io/token — ${exchange.body().trim()}"
+    }
+    val token = checkNotNull(ghcrTokenIn(exchange.body())) {
+        "ghcr.io/token answered 200 with no token in it"
     }
 
-    val access = claims["access"] as? List<*> ?: return Result.success(emptySet())
-    return Result.success(
-        access.filterIsInstance<Map<*, *>>()
-            .filter { it["type"] == "repository" && it["name"] == repository }
-            .flatMap { (it["actions"] as? List<*>).orEmpty() }
-            .map { it.toString() }
-            .toSet(),
+    val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+    val uploads = URI.create("https://ghcr.io/v2/$repository/blobs/uploads/")
+    val opened = client.send(
+        HttpRequest.newBuilder(uploads)
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .header("Authorization", "Bearer $token")
+            .build(),
+        HttpResponse.BodyHandlers.ofString(),
     )
+    when (opened.statusCode()) {
+        202 -> Unit
+        401, 403 -> return@runCatching GhcrPushProbe(
+            false,
+            "HTTP ${opened.statusCode()} opening an upload — ${opened.body().trim()}",
+        )
+        else -> error("HTTP ${opened.statusCode()} opening an upload — ${opened.body().trim()}")
+    }
+
+    val location = opened.headers().firstValue("Location").orElse(null)
+        ?: return@runCatching GhcrPushProbe(
+            true,
+            "HTTP 202 opening an upload",
+            leftToExpire = "ghcr.io named no Location to cancel",
+        )
+    val cancelled = runCatching {
+        client.send(
+            HttpRequest.newBuilder(uploads.resolve(location))
+                .DELETE()
+                .header("Authorization", "Bearer $token")
+                .build(),
+            HttpResponse.BodyHandlers.discarding(),
+        ).statusCode()
+    }
+    val leftToExpire = cancelled.fold(
+        onSuccess = { if (it in 200..299) null else "HTTP $it cancelling it" },
+        onFailure = { "cancelling it failed: ${it.javaClass.simpleName}" },
+    )
+    GhcrPushProbe(true, "HTTP 202 opening an upload", leftToExpire)
 }
 
 /** The RFC 3339 instant both image builds label themselves with. Written by the gate, read twice. */
@@ -418,6 +427,7 @@ val releasePreflight = tasks.register("releasePreflight") {
         // makes those immutable — an auth failure there costs the version number, not a retry.
         //
         // ADR-0163: the question is whether the credential may *push*, and it is put to ghcr.io
+        // (ADR-0171: at the upload, since the token endpoint stopped deciding anything)
         // rather than inferred from the file. Presence of the key was the test until 0.1.2, and
         // presence was only ever a proxy: on a laptop the sole way a ghcr.io entry appeared was a
         // `docker login` with a PAT scoped write:packages, so it held. ADR-0159 moved the release
@@ -437,25 +447,24 @@ val releasePreflight = tasks.register("releasePreflight") {
                     "    docker login ghcr.io -u <your github username> --password-stdin",
             )
         }
-        val granted = ghcrGrantedActions(credential, imageRepository).getOrElse { failure ->
+        val probe = ghcrMayPush(credential, imageRepository).getOrElse { failure ->
             error(
-                "The release could not ask ghcr.io what its credential may do to " +
+                "The release could not ask ghcr.io whether its credential may push " +
                     "$imageRepository:\n\n" +
                     "  ${failure.message}\n\n" +
                     "The gate refuses rather than assuming, because assuming is what cost 0.1.2: " +
                     "act 3 pushes after act 2 has published coordinates ADR-0143 makes immutable.\n\n" +
                     "If ghcr.io is simply unreachable from here, the release cannot be cut from " +
-                    "here and nothing is wrong with this machine. If the token no longer carries " +
-                    "a readable `access` claim, the probe has stopped measuring anything and " +
-                    "ADR-0163 names that as its revisit trigger — fix the gate rather than " +
-                    "removing it, because act 3 has no second chance.",
+                    "here and nothing is wrong with this machine. If ghcr.io has started answering " +
+                    "an upload with something other than 202, 401 or 403, the probe has stopped " +
+                    "measuring anything and ADR-0171 names that as its revisit trigger — fix the " +
+                    "gate rather than removing it, because act 3 has no second chance.",
             )
         }
-        if ("push" !in granted) {
+        if (!probe.mayPush) {
             error(
-                "The ghcr.io credential may not push $imageRepository. ghcr.io grants it " +
-                    (if (granted.isEmpty()) "nothing" else granted.sorted().joinToString(", ")) +
-                    ", and act 3 pushes the image with `buildx --push`.\n\n" +
+                "The ghcr.io credential may not push $imageRepository (${probe.answer}), and act 3 " +
+                    "pushes the image with `buildx --push`.\n\n" +
                     "This is gated here rather than discovered at act 3, because by then the " +
                     "Maven coordinates for $releaseVersion are published and ADR-0143 makes them " +
                     "immutable — the failure would cost the version, not a retry. 0.1.2 paid " +
@@ -469,6 +478,13 @@ val releasePreflight = tasks.register("releasePreflight") {
                     "that can write this package:\n\n" +
                     "  echo <the token> | \\\n" +
                     "    docker login ghcr.io -u <your github username> --password-stdin",
+            )
+        }
+
+        probe.leftToExpire?.let {
+            logger.lifecycle(
+                "ghcr.io may be pushed to; the upload the gate opened to find out was not cancelled " +
+                    "($it) and is left for the registry to expire. It carries no tag or manifest.",
             )
         }
 

@@ -1,6 +1,6 @@
 # ADR-0163: The release gate asks the registry what the credential may do, and never infers it from a file
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0171](0171-the-release-gate-opens-an-upload-because-the-token-no-longer-says.md)
 - **Date**: 2026-09-12
 - **Ticket**: [The release gate tests for a ghcr.io credential's presence, not its authority — and 0.1.2 paid for the difference](https://github.com/nodqora/nodqora/issues/95)
 - **Amends**: [ADR-0159](0159-the-release-runs-on-a-runner-and-the-trigger-is-not-a-tag.md) — its `GITHUB_TOKEN` sentence, which holds for packages the workflow created and not for one that predates it. [ADR-0155](0155-the-release-is-one-gradle-command-and-the-tag-is-the-last-act.md)'s ordering and its gate keep their places; what changes is the question the gate asks.
