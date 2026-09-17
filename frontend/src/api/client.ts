@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/// <reference types="vite/client" />
 import type { Graph, Meta, State } from './types'
+import { stubApi } from '../prototype/sessionStub'
 
 /**
  * ADR-0059: polling, with the intervals published by the server rather than held as client-side
@@ -22,8 +24,11 @@ async function get<T>(path: string): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export const api = {
+const realApi = {
   meta: () => get<Meta>('/api/meta'),
   graph: (environmentKey: string) => get<Graph>(`/api/environments/${encodeURIComponent(environmentKey)}/graph`),
   state: (environmentKey: string) => get<State>(`/api/environments/${encodeURIComponent(environmentKey)}/state`),
 }
+
+// PROTOTYPE (nodqora#149): dev builds read the golden documents behind a stubbed session.
+export const api = import.meta.env.DEV ? stubApi : realApi

@@ -27,6 +27,17 @@ import {
 } from './routing/route'
 import { needsCanonicalizing, resolveNode, unresolvedStateOf } from './routing/resolve'
 import type { Graph, Meta, PluginOutcome, State } from './api/types'
+import { Unauthorized, currentSession, currentVariant, sessionState, signedOut } from './prototype/sessionStub'
+import {
+  FakeIdentityProvider,
+  FakeProviderDown,
+  NoIdentityProvider,
+  PrototypeBar,
+  Renavigating,
+  SessionAreaA,
+  SessionAreaB,
+  SessionAreaC,
+} from './prototype/SessionPrototype'
 
 /**
  * The mark and the wordmark. `alt=""` because the word beside it says the same thing, and a reader
@@ -42,6 +53,18 @@ function Brand() {
 }
 
 export function App() {
+  // PROTOTYPE (nodqora#149): which page the browser would be on, and how it got there.
+  const [page, setPage] = useState<'shell' | 'renavigating' | 'no-idp'>('shell')
+  const [log, setLog] = useState<string[]>([])
+  const note = useCallback((line: string) => setLog((lines) => [...lines, line]), [])
+  const session = useMemo(() => sessionState(), [])
+  const variant = currentVariant()
+  const shell = (children: JSX.Element) => (
+    <>
+      {children}
+      <PrototypeBar log={log} />
+    </>
+  )
   const [meta, setMeta] = useState<Meta | null>(null)
   const [graph, setGraph] = useState<Graph | null>(null)
   const [state, setState] = useState<State | null>(null)
@@ -49,6 +72,32 @@ export function App() {
   const [showMetrics, setShowMetrics] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [theme, chooseTheme] = useTheme()
+
+  /**
+   * PROTOTYPE: a 401 from any of the three GETs consults the session state once, and only then acts.
+   * NOT_CONFIGURED → the first-run screen, in place, no navigation (that is what stops the loop).
+   * SIGNED_OUT → a top-level navigation to the current URL; the server sends it to the provider.
+   * Anything else (OPEN, SIGNED_IN) is a server contradiction and stays an error in the bar.
+   */
+  const fail = useCallback(
+    (cause: Error) => {
+      if (!(cause instanceof Unauthorized)) return setError(cause.message)
+      setPage((current) => {
+        if (current !== 'shell') return current
+        const now = sessionState()
+        note(`GET /api/… → 401`)
+        note(`GET /session → ${now.state}`)
+        if (now.state === 'NOT_CONFIGURED') return 'no-idp'
+        if (now.state === 'SIGNED_OUT') {
+          note('location.assign(location.href)')
+          return 'renavigating'
+        }
+        setError(cause.message)
+        return current
+      })
+    },
+    [note],
+  )
 
   /**
    * ADR-0092: the URL is the state. There are exactly two pieces of it — the environment as a path
@@ -82,7 +131,7 @@ export function App() {
     api
       .meta()
       .then(setMeta)
-      .catch((cause: Error) => setError(cause.message))
+      .catch(fail)
   }, [])
 
   // ADR-0093: bare `/` redirects to the first configured environment, so the root's ambiguity lasts
@@ -114,7 +163,7 @@ export function App() {
       setGraph(await api.graph(environmentKey))
     }, [environmentKey]),
     meta ? meta.refresh.graphSeconds * 1000 : null,
-    setError,
+    fail,
   )
 
   usePoll(
@@ -123,7 +172,7 @@ export function App() {
       setState(await api.state(environmentKey))
     }, [environmentKey]),
     meta ? meta.refresh.stateSeconds * 1000 : null,
-    setError,
+    fail,
   )
 
   /**
@@ -220,6 +269,20 @@ export function App() {
    * writes their config, restarts, reloads, and it resolves. A carried `?node=` is a deliberate
    * no-op, not a dropped input.
    */
+  // PROTOTYPE: pages the server would have served instead of the SPA.
+  if (currentSession() === 'idp-down') return shell(<FakeProviderDown />)
+  if (session.state === 'SIGNED_OUT' || (signedOut() && session.state !== 'OPEN')) return shell(<FakeIdentityProvider />)
+  if (session.state === 'NOT_CONFIGURED' || page === 'no-idp') return shell(<NoIdentityProvider />)
+  if (page === 'renavigating')
+    return shell(
+      <Renavigating
+        onDone={() => {
+          sessionStorage.setItem('proto-expired', '1')
+          location.reload()
+        }}
+      />,
+    )
+
   if (isFirstRun(meta)) {
     return <FirstRun />
   }
@@ -228,7 +291,7 @@ export function App() {
     return <UnknownEnvironment meta={meta} attempted={route.environmentKey} onPick={switchEnvironment} />
   }
 
-  return (
+  return shell(
     <div className="app">
       <header className="top-bar">
         <Brand />
@@ -258,7 +321,12 @@ export function App() {
           Metrics
         </label>
         {error && <span className="error">{error}</span>}
-        <ThemePicker choice={theme} onChoose={chooseTheme} />
+        {variant === 'B' ? (
+          <SessionAreaB session={session} settings={<ThemePicker choice={theme} onChoose={chooseTheme} />} />
+        ) : (
+          <ThemePicker choice={theme} onChoose={chooseTheme} />
+        )}
+        {variant === 'A' && <SessionAreaA session={session} />}
       </header>
 
       <div className="workspace">
@@ -311,7 +379,8 @@ export function App() {
           />
         )}
       </div>
-    </div>
+      {variant === 'C' && <SessionAreaC session={session} />}
+    </div>,
   )
 }
 
@@ -359,13 +428,13 @@ function UnknownEnvironment({
 }
 
 /** Polls immediately, then on the server's own interval. */
-function usePoll(fetcher: () => Promise<void>, intervalMs: number | null, onError: (message: string) => void) {
+function usePoll(fetcher: () => Promise<void>, intervalMs: number | null, onError: (cause: Error) => void) {
   useEffect(() => {
     if (intervalMs === null) return
     let live = true
     const run = () => {
       fetcher().catch((cause: Error) => {
-        if (live) onError(cause.message)
+        if (live) onError(cause)
       })
     }
     run()
