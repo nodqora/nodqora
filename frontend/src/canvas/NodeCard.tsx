@@ -2,11 +2,12 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { HealthGlyph } from './HealthGlyph'
 import { TypeIcon } from './TypeIcon'
+import { ageOf, type FigureStrip } from './metrics'
 import type { Health, TypeDescriptor } from '../api/types'
 
 /**
- * ADR-0018's node rendering: type icon, display name, type label, health, and one optional metric
- * line behind a canvas-level toggle.
+ * ADR-0018's node rendering: type icon, display name, type label, health, and one optional figure
+ * strip behind a canvas-level toggle (ADR-0168).
  *
  * No per-type template. The core never branches on `type` (ADR-0001) and neither does this — a Kafka
  * topic and a service differ only in which descriptor they resolve to.
@@ -34,7 +35,7 @@ export interface NodeCardData extends Record<string, unknown> {
   displayName: string | null
   descriptor: TypeDescriptor | undefined
   health: Health
-  metricLine: string | null
+  strip: FigureStrip | null
   showMetrics: boolean
   emphasis: 'none' | 'selected' | 'upstream' | 'downstream' | 'dimmed'
   /** Plugin labels whose view of this node's topology was carried forward rather than confirmed. */
@@ -69,12 +70,27 @@ export function NodeCard({ data }: NodeProps) {
         {/* An unregistered type resolves to the fallback descriptor and still renders. */}
         {card.descriptor?.label ?? card.descriptor?.type ?? 'Unknown type'}
       </div>
-      {/* The line is clamped to one line in CSS, because Canvas.tsx declares the height of one and
-          a node observed by three plugins composes five metrics. `title` is where the rest goes on
-          the canvas; section 2 of the drawer has them all, namespaced by plugin. */}
-      {card.showMetrics && card.metricLine && (
-        <div className="node-card-metric" title={card.metricLine}>
-          {card.metricLine}
+      {/* ADR-0168: at most three figures, and a count of the rest. `title` holds every figure on the
+          canvas; section 2 of the drawer has them all, namespaced by plugin. */}
+      {card.showMetrics && card.strip && (
+        <div className="node-card-strip" title={card.strip.title}>
+          {card.strip.figures.map((figure) => (
+            <div className="node-card-figure" key={figure.caption}>
+              <span className="node-card-figure-value">{figure.value}</span>
+              <span className="node-card-figure-caption">{figure.caption}</span>
+            </div>
+          ))}
+          {card.strip.more > 0 && (
+            <div className="node-card-figure node-card-figure-faint">
+              <span className="node-card-figure-value">+{card.strip.more}</span>
+              <span className="node-card-figure-caption">more</span>
+            </div>
+          )}
+          {/* ADR-0165's measured-only node. Trailing and faint, never beside the glyph, so it cannot
+              read as the age of an `Unknown`. Computed at render, so it ages between polls. */}
+          {card.strip.measuredAt && (
+            <span className="node-card-figure-age">measured {ageOf(card.strip.measuredAt, Date.now())} ago</span>
+          )}
         </div>
       )}
       {/* ADR-0083: during trouble, which plugin went blind is worth more than which plugins
