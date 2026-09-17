@@ -1,6 +1,6 @@
 # ADR-0169: Enterprise opens on a floor and evidence, and the clock forces a decision
 
-- **Status**: Accepted
+- **Status**: Amended by [ADR-0172](0172-community-authentication-is-oidc-and-saml-waits-to-be-asked-for.md)
 - **Date**: 2026-09-15
 - **Ticket**: [What must be true of Community before Enterprise opens](https://github.com/nodqora/nodqora/issues/108)
 
@@ -47,7 +47,7 @@ makes a trial a key to a private artifact that does not yet exist.
 ### The floor
 
 1. **This map's tag** — the Community release in which Prometheus closes Tier 1.
-2. **Community authentication** — OIDC or SAML against the user's own identity
+2. **Community authentication** — OIDC against the user's own identity
    provider, shipped in a tagged release.
 
 Nothing else. `1.0` is a promise to self-hosters, and Enterprise consumes the
