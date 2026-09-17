@@ -16,7 +16,7 @@ plugins {
 
 allprojects {
     group = "io.nodqora"
-    version = "0.1.3"
+    version = "0.2.0"
 
     repositories {
         mavenCentral()
@@ -50,11 +50,11 @@ subprojects {
 // ADR-0145 and ADR-0155: publishing, and the release.
 // =============================================================================================
 
-// ADR-0114 makes `nodqora-app` the Community *assembly* rather than a library: it reaches its
-// audience as ADR-0150's public image and never as a Maven coordinate. ADR-0153 then put it in
-// ADR-0142's version lockstep, which is why one number spans seven artifacts while only these six
-// are published here. Seven versions, six coordinates — the discrepancy is the decision, not a
-// gap in this list.
+// ADR-0170: every plugin module is published, and the assembly is not. ADR-0114 makes `nodqora-app`
+// the Community *assembly* rather than a library: it reaches its audience as ADR-0150's public image
+// and never as a Maven coordinate. ADR-0153 still puts it in ADR-0142's version lockstep, which is
+// why one number spans every module while the assembly is absent here — the discrepancy is the
+// decision, not a gap in this list. A new plugin module belongs in it.
 val publishedModules = setOf(
     "nodqora-plugin-api",
     "nodqora-core",
@@ -62,6 +62,7 @@ val publishedModules = setOf(
     "nodqora-plugin-kubernetes",
     "nodqora-plugin-connect",
     "nodqora-plugin-kafka",
+    "nodqora-plugin-prometheus",
 )
 
 // ADR-0150 fixes this name and ADR-0155 hardcodes the token scope built from it. It is one string
