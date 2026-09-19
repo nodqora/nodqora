@@ -470,6 +470,12 @@ Not keyed by `rel` alone: a node can carry two `workload` links from `kubernetes
 alone (ADR-0032, ADR-0021). Two writers with one `rel` and different URLs produce
 two visible links (ADR-0044).
 
+A link's `url` is **`http` or `https`, or it is not opened**. Some URLs are written
+by whoever may annotate a workload, which is a lower bar than operating Nodqora,
+and a `javascript:` href is script in the viewer's session. `kubernetes` composes
+no link from such a URL, and the drawer — the one place every plugin's links
+pass — shows any other as text rather than as an anchor.
+
 ### Metadata
 
 Plugin-namespaced opaque JSON on a Node, Edge or Backing, keyed by plugin id:

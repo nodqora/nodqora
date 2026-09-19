@@ -324,6 +324,41 @@ class KubernetesDiscoveryTest {
     }
 
     @Test
+    void an_annotation_naming_any_scheme_but_http_or_https_is_no_link() {
+        // An annotation is written by whoever may edit a Deployment, which is a lower bar than
+        // operating Nodqora, and its URL ends up as an `href` in somebody else's browser. A
+        // `javascript:` URL there is script in the viewer's session, so the only schemes that make a
+        // link are the two a browser navigates to. `javascript://%0a…` is the spelling that matters:
+        // it carries `://`, which is all the old check asked for.
+        DiscoveredNode node = node(
+                discover(
+                        objects(workload("payments-api", Map.of(
+                                TopologyAnnotations.NODE, "payments-api",
+                                TopologyAnnotations.REPOSITORY, "javascript://%0aalert(document.domain)",
+                                TopologyAnnotations.RUNBOOK, "VBScript://alert(1)",
+                                TopologyAnnotations.DOCS, "HTTPS://docs.acme.io/payments-api"))),
+                        config(List.of())),
+                "payments-api");
+
+        assertThat(links(node)).containsExactly("docs HTTPS://docs.acme.io/payments-api");
+    }
+
+    @Test
+    void a_template_composing_any_scheme_but_http_or_https_is_no_link() {
+        // `{value}` is the annotation's half of the URL. A template that opens with it hands the
+        // scheme to the annotation author too, so the composed URL is held to the same rule.
+        DiscoveredNode node = node(
+                discover(
+                        objects(workload("payments-api", Map.of(
+                                TopologyAnnotations.NODE, "payments-api",
+                                TopologyAnnotations.GRAFANA, "javascript:alert(1)//"))),
+                        config(List.of(), new KubernetesConfig.Links(null, null, null, "{value}/d", null))),
+                "payments-api");
+
+        assertThat(links(node)).isEmpty();
+    }
+
+    @Test
     void an_id_plus_a_per_environment_template_renders_correctly_in_both_environments() {
         String staging = "https://grafana-staging.acme.io/d/{value}";
 
