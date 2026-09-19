@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.nodqora.core.config;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.nodqora.core.registry.PluginOrder;
 import io.nodqora.plugin.api.DiscoveryCapability;
@@ -82,8 +83,16 @@ public class BoundConfiguration {
      * has been looked up and a constraint on the value would otherwise see {@code "${env:...}"}.
      */
     private Object validated(String environmentKey, Plugin<?> plugin, Map<String, Object> slice) {
-        Object config = mapper.convertValue(
-                ConfigLists.restore(secrets.resolveConfig(slice)), plugin.configType());
+        Object config;
+        try {
+            config = mapper.convertValue(ConfigLists.restore(secrets.resolveConfig(slice)), plugin.configType());
+        } catch (IllegalArgumentException e) {
+            // Jackson quotes the value it could not read, and references have resolved by now, so
+            // that value may be a secret on its way into the startup log. The refusal names the
+            // key, which is what an operator needs, and the cause is deliberately not chained.
+            throw new IllegalStateException("environment %s, plugin %s: %s does not fit the type the plugin declares"
+                    .formatted(environmentKey, plugin.id(), misfit(e)));
+        }
         Set<ConstraintViolation<Object>> violations = validator.validate(config);
         if (!violations.isEmpty()) {
             throw new IllegalStateException("environment %s, plugin %s: %s".formatted(
@@ -95,6 +104,17 @@ public class BoundConfiguration {
                             .collect(Collectors.joining("; "))));
         }
         return config;
+    }
+
+    /** The dotted key a conversion failed at, or a plain phrase when Jackson does not say. */
+    private static String misfit(IllegalArgumentException failure) {
+        if (failure.getCause() instanceof JsonMappingException mapping && !mapping.getPath().isEmpty()) {
+            return mapping.getPath().stream()
+                    .map(step -> step.getFieldName() == null ? "[" + step.getIndex() + "]" : step.getFieldName())
+                    .collect(Collectors.joining("."))
+                    .replace(".[", "[");
+        }
+        return "a value";
     }
 
     /**

@@ -51,6 +51,16 @@ public record KubernetesConfig(
         prometheus = prometheus == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(prometheus));
     }
 
+    /**
+     * A resolved kubeconfig carries a client key or a token, and a record's {@code toString} ends
+     * up in logs — so it says whether there is one and never what it is.
+     */
+    @Override
+    public String toString() {
+        return "KubernetesConfig[namespaces=%s, kubeconfig=%s, context=%s, ignore=%s, links=%s, prometheus=%s]"
+                .formatted(namespaces, kubeconfig == null ? "<none>" : "<redacted>", context, ignore, links, prometheus);
+    }
+
     public boolean denies(ObservedWorkload workload) {
         return ignore.contains(workload.denyListEntry());
     }
