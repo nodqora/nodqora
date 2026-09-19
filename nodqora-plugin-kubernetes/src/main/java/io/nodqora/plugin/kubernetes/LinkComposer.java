@@ -16,13 +16,18 @@ import org.slf4j.LoggerFactory;
  * a {@link Link} needs a URL — so something has to compose one. That is the whole reason the
  * vocabulary is shaped the way it is rather than being a matter of taste.
  *
- * <p>Two rules run everything here:
+ * <p>Three rules run everything here:
  *
  * <ul>
  *   <li><b>No template configured ⇒ no link.</b> Never a half-composed URL — which is also why a
  *       template naming a placeholder this plugin cannot fill yields nothing but a warning.
  *   <li><b>Labels are plugin constants</b>, not configurable. A per-environment label would let one
  *       environment call the same link something else.
+ *   <li><b>A link is {@code http} or {@code https}, or it is not a link.</b> An annotation is
+ *       written by whoever may edit a workload, and its URL becomes an {@code href} in a viewer's
+ *       browser, where {@code javascript:} is script in that viewer's session. The rule is applied
+ *       to what was composed rather than to what was annotated, because a template may hand the
+ *       annotation the front of the URL.
  * </ul>
  *
  * <p>{@code repository} / {@code runbook} / {@code docs} need no template — their values are URLs,
@@ -34,6 +39,7 @@ final class LinkComposer {
 
     private static final Pattern UNFILLED = Pattern.compile("\\{[^}]*}");
     private static final Pattern SCHEME = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://");
+    private static final Pattern NAVIGABLE = Pattern.compile("^https?://", Pattern.CASE_INSENSITIVE);
 
     private final KubernetesConfig.Links templates;
 
@@ -78,9 +84,15 @@ final class LinkComposer {
     }
 
     private static void add(List<Link> links, String rel, String label, String url) {
-        if (url != null) {
-            links.add(new Link(rel, label, url));
+        if (url == null) {
+            return;
         }
+        if (!NAVIGABLE.matcher(url).find()) {
+            // The URL is the annotation author's, so it is not repeated into the log.
+            log.warn("the '{}' link is neither http nor https; no link composed", rel);
+            return;
+        }
+        links.add(new Link(rel, label, url));
     }
 
     /** {@code {value}} is the id half of ADR-0032's split: no id and no template alike mean no link. */

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { HealthGlyph, healthLabel } from '../canvas/HealthGlyph'
 import { connectionsOf } from './connections'
+import { navigable } from './links'
 import { sameKey } from '../api/keys'
 import { healthCaveat, retained } from '../outcome/marks'
 import { labeller, type Rosters } from '../outcome/plugins'
@@ -142,14 +143,22 @@ export function Drawer({
           <Empty>No links recorded.</Empty>
         ) : (
           <ul className="links">
-            {node.links.map((link) => (
-              <li key={`${link.rel} ${link.url}`}>
-                <a href={link.url} target="_blank" rel="noreferrer">
-                  {link.label ?? link.rel}
-                </a>
-                <span className="rel">{link.rel}</span>
-              </li>
-            ))}
+            {node.links.map((link) => {
+              // A URL that is neither http nor https is shown and not linked: see `navigable`.
+              const href = navigable(link.url)
+              return (
+                <li key={`${link.rel} ${link.url}`}>
+                  {href === null ? (
+                    <span title="Not an http or https URL, so it is not a link">{link.label ?? link.rel}</span>
+                  ) : (
+                    <a href={href} target="_blank" rel="noreferrer">
+                      {link.label ?? link.rel}
+                    </a>
+                  )}
+                  <span className="rel">{link.rel}</span>
+                </li>
+              )
+            })}
           </ul>
         )}
       </Section>
