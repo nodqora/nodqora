@@ -14,3 +14,15 @@ nodqora-app/src/main/resources/static
 *.iml
 *.log
 .DS_Store
+
+# `COPY . .` would carry an operator's own files into the backend stage's layers if the image is
+# built from a tree the install document was also followed in. None of them is an input to the build.
+config
+kubeconfig
+.env
+.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+**/*.bak
