@@ -55,7 +55,14 @@ public record ConnectConfig(
      * Basic auth, optional. The password is an ADR-0014 {@code ${env:}} / {@code ${file:}} reference
      * resolved before binding, so the file holds a reference and never a secret.
      */
-    public record Auth(@NotBlank String username, String password) {}
+    public record Auth(@NotBlank String username, String password) {
+
+        /** A resolved secret is a credential, and a record's {@code toString} ends up in logs. */
+        @Override
+        public String toString() {
+            return "Auth[username=%s, password=%s]".formatted(username, password == null ? "<none>" : "<redacted>");
+        }
+    }
 
     /**
      * ADR-0090's include-prefix list with an exact-name {@code ignore}.

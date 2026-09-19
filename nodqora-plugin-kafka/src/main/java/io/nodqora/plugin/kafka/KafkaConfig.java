@@ -67,6 +67,17 @@ public record KafkaConfig(
      * {@code connect-configs} / {@code connect-offsets} / {@code connect-status} are ordinary topics
      * as far as Kafka is concerned. {@code ignore} is what removes them.
      */
+    /**
+     * {@code properties} is the Kafka client's own map, and {@code sasl.jaas.config} or a keystore
+     * password is an ordinary entry in it. A record's {@code toString} ends up in logs, so the keys
+     * are named and no value is.
+     */
+    @Override
+    public String toString() {
+        return "KafkaConfig[bootstrap=%s, properties=%s, topics=%s, lag=%s, links=%s]"
+                .formatted(bootstrap, new java.util.TreeSet<>(properties.keySet()), topics, lag, links);
+    }
+
     public record Topics(@NotEmpty List<@NotBlank String> include, List<String> ignore) {
 
         public Topics {

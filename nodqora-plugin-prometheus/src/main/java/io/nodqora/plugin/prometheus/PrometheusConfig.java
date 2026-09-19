@@ -27,7 +27,21 @@ import jakarta.validation.constraints.NotBlank;
 public record PrometheusConfig(@NotBlank String url, @Valid Auth auth, String bearerToken) {
 
     /** Basic auth. */
-    public record Auth(@NotBlank String username, String password) {}
+    public record Auth(@NotBlank String username, String password) {
+
+        /** A resolved secret is a credential, and a record's {@code toString} ends up in logs. */
+        @Override
+        public String toString() {
+            return "Auth[username=%s, password=%s]".formatted(username, password == null ? "<none>" : "<redacted>");
+        }
+    }
+
+    /** As {@link Auth#toString()}: the bearer token is the credential here. */
+    @Override
+    public String toString() {
+        return "PrometheusConfig[url=%s, auth=%s, bearerToken=%s]"
+                .formatted(url, auth, bearerToken == null ? "<none>" : "<redacted>");
+    }
 
     /** Two credentials is a configuration nobody can mean, so it fails at startup. */
     @AssertTrue(message = "configure auth or bearerToken, not both")

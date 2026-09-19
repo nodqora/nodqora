@@ -10,6 +10,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,9 @@ import org.slf4j.LoggerFactory;
 public final class PluginCalls {
 
     private static final Logger log = LoggerFactory.getLogger(PluginCalls.class);
+
+    /** Userinfo ends at the first {@code @} before any {@code /}, {@code ?} or {@code #}. */
+    private static final Pattern USERINFO = Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\\s?#@]+@");
 
     private PluginCalls() {}
 
@@ -75,9 +79,18 @@ public final class PluginCalls {
             } catch (Exception e) {
                 Throwable cause = e.getCause() == null ? e : e.getCause();
                 return failed.apply("%s threw %s: %s"
-                        .formatted(what, cause.getClass().getSimpleName(), cause.getMessage()));
+                        .formatted(what, cause.getClass().getSimpleName(), withoutUserinfo(cause.getMessage())));
             }
         }
+    }
+
+    /**
+     * A reason is served by the API and shown in the shell, and a client that quotes the URL it
+     * could not reach quotes whatever userinfo an operator wrote into it. The host and path are
+     * what diagnose the failure, so they stay and {@code user:password@} does not.
+     */
+    static String withoutUserinfo(String message) {
+        return message == null ? null : USERINFO.matcher(message).replaceAll("$1****@");
     }
 
     private static void awaitQuietly(Future<?> task) {

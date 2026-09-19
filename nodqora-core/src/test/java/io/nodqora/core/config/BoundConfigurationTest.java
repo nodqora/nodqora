@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 class BoundConfigurationTest {
 
     /** A stand-in plugin. The core knows no plugin, so what it binds must work for any of them. */
-    private record ProbeConfig(@NotBlank String endpoint, List<String> scopes) {
+    private record ProbeConfig(@NotBlank String endpoint, List<String> scopes, Integer retries) {
 
         private ProbeConfig {
             scopes = scopes == null ? List.of() : List.copyOf(scopes);
@@ -85,7 +85,7 @@ class BoundConfigurationTest {
 
         assertThat(configuration.discoveryPairs("production"))
                 .singleElement()
-                .satisfies(pair -> assertThat(pair.config()).isEqualTo(new ProbeConfig("https://probe.internal", List.of())));
+                .satisfies(pair -> assertThat(pair.config()).isEqualTo(new ProbeConfig("https://probe.internal", List.of(), null)));
     }
 
     @Test
@@ -106,7 +106,21 @@ class BoundConfigurationTest {
                 new SecretReferences(name -> "PROBE_ENDPOINT".equals(name) ? "https://resolved" : null));
 
         assertThat(configuration.discoveryPairs("production").getFirst().config())
-                .isEqualTo(new ProbeConfig("https://resolved", List.of()));
+                .isEqualTo(new ProbeConfig("https://resolved", List.of(), null));
+    }
+
+    @Test
+    void a_resolved_secret_that_does_not_fit_its_field_is_named_by_key_and_never_quoted() {
+        // A reference resolves before it is bound, so by the time a value fails to fit its field
+        // it is the secret itself, and Jackson's own message quotes the value it could not read.
+        // That message is the startup log's, so the refusal names where and not what.
+        assertThatThrownBy(() -> bind(
+                        Map.of("endpoint", "https://probe.internal", "retries", "${env:PROBE_TOKEN}"),
+                        new SecretReferences(name -> "PROBE_TOKEN".equals(name) ? "hunter2-resolved" : null)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("environment production, plugin probe")
+                .hasMessageContaining("retries")
+                .hasMessageNotContaining("hunter2-resolved");
     }
 
     @Test
@@ -126,7 +140,7 @@ class BoundConfigurationTest {
         slice.put("scopes", Map.of("1", "second", "0", "first"));
 
         assertThat(bind(slice, noSecrets()).discoveryPairs("production").getFirst().config())
-                .isEqualTo(new ProbeConfig("https://probe.internal", List.of("first", "second")));
+                .isEqualTo(new ProbeConfig("https://probe.internal", List.of("first", "second"), null));
     }
 
     @Test
