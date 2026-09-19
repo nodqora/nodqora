@@ -241,8 +241,31 @@ fun ghcrTokenResponse(
         val basic = Base64.getEncoder().encodeToString("${it.username}:${it.secret}".toByteArray())
         request.header("Authorization", "Basic $basic")
     }
-    return HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+    // A redirect is followed only when nothing rides on the request: the JDK client carries a
+    // header the caller set to wherever it is sent next, and ghcr.io has no reason to send a
+    // credentialed exchange anywhere.
+    val redirects = if (credential == null) HttpClient.Redirect.NORMAL else HttpClient.Redirect.NEVER
+    return HttpClient.newBuilder().followRedirects(redirects).build()
         .send(request.build(), HttpResponse.BodyHandlers.ofString())
+}
+
+/**
+ * What ghcr.io said to a credentialed request, made fit to quote in a refusal.
+ *
+ * ADR-0171 found that ghcr.io's "token" is the credential in base64, and a base64 spelling is one
+ * that neither a reader nor GitHub's log masking recognises as a secret. A gate's refusal lands in
+ * a public Actions log, so a reply is quoted only with the secret, its base64 spellings and the
+ * bearer token struck out, and only its first few hundred characters at that.
+ */
+fun ghcrQuotable(reply: String, credential: GhcrCredential, token: String? = null): String {
+    fun base64(text: String) = Base64.getEncoder().encodeToString(text.toByteArray())
+    val secrets = listOfNotNull(
+        credential.secret,
+        base64(credential.secret),
+        base64("${credential.username}:${credential.secret}"),
+        token,
+    ).flatMap { listOf(it, it.trimEnd('=')) }.filter { it.isNotEmpty() }.distinct().sortedByDescending { it.length }
+    return secrets.fold(reply.trim()) { text, secret -> text.replace(secret, "****") }.take(300)
 }
 
 /** The `token` field of a ghcr.io token response, or null when the body carries none. */
@@ -274,14 +297,14 @@ fun ghcrMayPush(credential: GhcrCredential, repository: String): Result<GhcrPush
     if (exchange.statusCode() == 401 || exchange.statusCode() == 403) {
         return@runCatching GhcrPushProbe(false, "HTTP ${exchange.statusCode()} from ghcr.io/token")
     }
-    check(exchange.statusCode() == 200) {
-        "HTTP ${exchange.statusCode()} from ghcr.io/token — ${exchange.body().trim()}"
-    }
+    // The status and nothing else: this is the reply that carries the credential back, and a
+    // status this gate does not know is no promise about what the body holds.
+    check(exchange.statusCode() == 200) { "HTTP ${exchange.statusCode()} from ghcr.io/token" }
     val token = checkNotNull(ghcrTokenIn(exchange.body())) {
         "ghcr.io/token answered 200 with no token in it"
     }
 
-    val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+    val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
     val uploads = URI.create("https://ghcr.io/v2/$repository/blobs/uploads/")
     val opened = client.send(
         HttpRequest.newBuilder(uploads)
@@ -294,9 +317,11 @@ fun ghcrMayPush(credential: GhcrCredential, repository: String): Result<GhcrPush
         202 -> Unit
         401, 403 -> return@runCatching GhcrPushProbe(
             false,
-            "HTTP ${opened.statusCode()} opening an upload — ${opened.body().trim()}",
+            "HTTP ${opened.statusCode()} opening an upload — ${ghcrQuotable(opened.body(), credential, token)}",
         )
-        else -> error("HTTP ${opened.statusCode()} opening an upload — ${opened.body().trim()}")
+        else -> error(
+            "HTTP ${opened.statusCode()} opening an upload — ${ghcrQuotable(opened.body(), credential, token)}",
+        )
     }
 
     val location = opened.headers().firstValue("Location").orElse(null)
