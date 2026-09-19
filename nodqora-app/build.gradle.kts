@@ -72,7 +72,7 @@ val thirdPartyExtras: Configuration by configurations.creating {
 }
 
 dependencies {
-    thirdPartyExtras("org.springframework.boot:spring-boot-jarmode-tools:3.4.1")
+    thirdPartyExtras("org.springframework.boot:spring-boot-jarmode-tools:3.5.16")
 }
 
 licenseReport {

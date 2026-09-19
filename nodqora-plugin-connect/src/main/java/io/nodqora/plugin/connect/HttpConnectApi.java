@@ -47,7 +47,7 @@ class HttpConnectApi implements ConnectApi {
     public List<ConnectorInfo> connectors(ConnectConfig config) {
         JsonNode expanded = get(config, "/connectors?expand=info");
         List<ConnectorInfo> connectors = new ArrayList<>();
-        expanded.fields().forEachRemaining(entry -> {
+        expanded.properties().forEach(entry -> {
             JsonNode info = entry.getValue().path("info");
             String error = errorIn(info);
             connectors.add(error != null
@@ -61,7 +61,7 @@ class HttpConnectApi implements ConnectApi {
     public List<ConnectorStatus> statuses(ConnectConfig config) {
         JsonNode expanded = get(config, "/connectors?expand=status");
         List<ConnectorStatus> statuses = new ArrayList<>();
-        expanded.fields().forEachRemaining(entry -> {
+        expanded.properties().forEach(entry -> {
             JsonNode status = entry.getValue().path("status");
             String error = errorIn(status);
             if (error != null) {
@@ -131,7 +131,7 @@ class HttpConnectApi implements ConnectApi {
 
     private static Map<String, String> strings(JsonNode object) {
         Map<String, String> values = new LinkedHashMap<>();
-        object.fields().forEachRemaining(entry -> values.put(entry.getKey(), entry.getValue().asText()));
+        object.properties().forEach(entry -> values.put(entry.getKey(), entry.getValue().asText()));
         return values;
     }
 
