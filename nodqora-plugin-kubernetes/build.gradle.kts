@@ -24,7 +24,7 @@ dependencies {
     // BouncyCastle and fails the *listing*, not the connection, with "JcaPEMKeyConverter is
     // provided by BouncyCastle, an optional dependency". Runtime-only because nothing compiles
     // against it; it is reached reflectively by the client's key loader.
-    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.80")
+    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.86")
 
     // ADR-0099's recording, published as test fixtures so `nodqora-app`'s integration tests replay
     // the same objects through the same seam rather than keeping a second copy of them.
