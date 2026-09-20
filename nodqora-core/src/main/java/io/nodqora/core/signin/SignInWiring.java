@@ -11,7 +11,9 @@ import org.springframework.core.env.Environment;
  * from its scan drops this with it (ADR-0174 §3).
  *
  * <p>Binding is a bean, so a wrong declaration stops startup rather than the first sign-in
- * (ADR-0176 §3). Nothing acts on it yet: the chain, the session and discovery follow.
+ * (ADR-0176 §3). Nothing acts on it yet: the chain, the session and discovery follow. Until they
+ * do, {@link SignInIsNotEnforcedYet} refuses a declared provider, so that no install believes it is
+ * closed while it is not.
  */
 @Configuration
 public class SignInWiring {

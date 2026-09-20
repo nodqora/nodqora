@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -45,6 +46,20 @@ class UnconfiguredInstallTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    ApplicationContext context;
+
+    /**
+     * The refusal of a declared provider is a component the application's scan has to find; the
+     * core test that proves what it refuses imports it by name and would pass without the scan.
+     */
+    @Test
+    void the_assembly_carries_the_refusal_of_a_provider_nothing_enforces() {
+        assertThat(context.containsBean("signInIsNotEnforcedYet"))
+                .as("until the chain lands, a declared provider must stop this assembly starting")
+                .isTrue();
+    }
 
     /** ADR-0055's roster, served empty rather than not served. */
     @Test
