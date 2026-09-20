@@ -17,7 +17,7 @@ dependencies {
 
     // The only place a real cluster is spoken to (ADR-0099). No test reaches it: the plugin's
     // outbound seam is `KubernetesApi`, and everything above it is exercised against a recording.
-    implementation("io.fabric8:kubernetes-client:6.14.0")
+    implementation("io.fabric8:kubernetes-client:7.9.0")
 
     // k3s — and any cluster whose CA issues EC rather than RSA client certificates — hands back a
     // kubeconfig the Fabric8 client cannot read on its own: it defers EC key parsing to
