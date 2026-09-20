@@ -80,7 +80,7 @@ class HttpPrometheusApi implements PrometheusApi {
         List<Sample> samples = new ArrayList<>();
         for (JsonNode element : data.path("result")) {
             Map<String, String> labels = new LinkedHashMap<>();
-            element.path("metric").fields().forEachRemaining(label -> labels.put(label.getKey(), label.getValue().asText()));
+            element.path("metric").properties().forEach(label -> labels.put(label.getKey(), label.getValue().asText()));
             samples.add(new Sample(labels, value(element.path("value").path(1).asText())));
         }
         return samples;
