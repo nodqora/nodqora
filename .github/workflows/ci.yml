@@ -1,0 +1,82 @@
+# Every pull request and every push to `main` builds and tests here, because on 2026-09-20 nothing
+# did. Thirteen dependency pull requests sat open, each reporting "no checks reported" and a green
+# MERGEABLE, and that green means only "git found no conflict" — nothing had ever compiled them.
+# Three were merged on the strength of it: Spring Boot 4.1.1 (#178, #179) left `main` unable to
+# compile, kubernetes-client 7.9.0 (#180) broke a test fixture behind it, and vite 8 (#173) landed
+# without its paired plugin-react 6 (#177), which left `npm ci` unable to resolve at all.
+#
+# `release.yml` is `workflow_dispatch` and deliberately so — ADR-0159 makes the release a decision
+# someone takes. That leaves no automatic build anywhere in the repository, and this file is the
+# other half: the one that runs whether or not anyone asks.
+#
+# The two halves are separate jobs rather than one, because they fail for unrelated reasons and a
+# reviewer should be able to read which. ADR-0151 already keeps them apart in the image — the node
+# stage builds `frontend/dist` and `./gradlew build` on a laptop needs no Node — and this mirrors
+# that split rather than inventing a second arrangement.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A pull request that is pushed to twice should not pay for the first push. `main` is exempt: its
+# runs are the record of what each commit did, and cancelling one would leave a gap in it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Read-only, and stated rather than inherited. `release.yml` holds `contents: write` and
+# `packages: write` because it publishes; this job only ever looks at the tree, and a workflow that
+# runs on every pull request — including one from a fork — is the wrong place to hold more.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: ./gradlew build
+    runs-on: ubuntu-latest
+    steps:
+      # Every action is pinned to a commit with its version beside it, and `dependabot.yml` moves
+      # both together. A tag can be moved by whoever owns it; a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 21 is the toolchain `build.gradle.kts` asks for and the JDK the image's backend stage runs.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      # `nodqora.build.maxWorkers` is deliberately NOT set, for the reason `release.yml` gives:
+      # ADR-0157's serialisation answers one network that drops Gradle's parallel fetches, and a
+      # runner has no such fault.
+      - run: ./gradlew build
+
+  frontend:
+    name: npm test && npm run build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned to the major the Dockerfile's node stage runs and `@types/node` is written against.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` and not `npm install`: it installs the lockfile as written and fails when
+      # `package.json` and the lock disagree. That disagreement is exactly what vite 8 without
+      # plugin-react 6 was, and `npm install` would have papered over it.
+      - run: npm ci
+
+      - run: npm test
+
+      # `build` is `tsc --noEmit && vite build`. The type-check half is the point: TypeScript 7
+      # rejects source that every test still passes on, so a green test run is not a green build.
+      - run: npm run build
