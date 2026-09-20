@@ -53,6 +53,21 @@ honestly.
 
 If you see something else, jump to [Troubleshooting](#troubleshooting).
 
+### It listens on this machine only
+
+The compose file publishes the port as `127.0.0.1:8080:8080`, so Nodqora answers on the machine it
+runs on and nowhere else. That is deliberate: this release signs nobody in, and what it shows — your
+environments, your workloads, the URLs of your clusters — is a description of what you run.
+
+If Nodqora is on a server and you are not:
+
+- **Tunnel**, for one person: `ssh -L 8080:localhost:8080 <host>`, then open
+  `http://localhost:8080` as above.
+- **Put a reverse proxy that authenticates in front of it**, for a team, and leave the port on
+  loopback behind it.
+- **Remove `127.0.0.1:`** from the `ports` line only where everyone who can reach the host may see
+  everything Nodqora shows.
+
 ## 3. Declare an environment
 
 Write an `application.yaml` into the `config` directory beside your `compose.yaml`:
@@ -255,6 +270,11 @@ What the number promises (ADR-0153):
 | **minor** (`0.1.0` → `0.2.0`) | your `./config/application.yaml` **may need an edit**, and a schema migration **may run**. |
 
 Below `1.0` the config grammar is still settling; `1.0` is the point at which it stops moving.
+
+**Coming from `0.2.0` or earlier:** the `compose.yaml` you download now publishes the port on
+loopback, where the older one published it on every interface. If you open Nodqora from a machine
+other than the one it runs on, it will stop answering there after the upgrade — see
+[It listens on this machine only](#it-listens-on-this-machine-only).
 
 **`latest` is not for installs.** The image tag exists and is honest — the latest release is the
 entire support surface (ADR-0147) — so that `docker run ghcr.io/nodqora/nodqora` works for someone

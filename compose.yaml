@@ -30,7 +30,12 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # Loopback only. This release signs nobody in, so whoever can reach this port can read your
+      # topology, and `"8080:8080"` would publish it on every interface the host has. To reach it
+      # from another machine, put a reverse proxy that authenticates in front of it, or tunnel
+      # (`ssh -L 8080:localhost:8080 <host>`). Remove `127.0.0.1:` only on a network where everyone
+      # who can reach the host may see everything Nodqora shows.
+      - "127.0.0.1:8080:8080"
     environment:
       # ADR-0150: the documented way to point at an existing PostgreSQL instead of the one below.
       NODQORA_DB_URL: jdbc:postgresql://postgres:5432/nodqora
