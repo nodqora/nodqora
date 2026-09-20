@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# `release.yml` pins every action to a commit, because a tag can be moved and that job holds
+# `contents: write` and `packages: write`. A pin that nobody moves is a pin that goes stale, and
+# this is what moves it: Dependabot rewrites the SHA and the version comment beside it together.
+#
+# The two build ecosystems are here for the other half of the same problem — Spring Boot sat at
+# 3.4.1 for nine months after its line stopped receiving fixes, and nothing said so. Minor and patch
+# updates arrive as one grouped pull request per ecosystem a week, so that this is a thing to read on
+# a Monday and not a queue. A major is never grouped: it is a decision, and it gets its own.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gradle-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
