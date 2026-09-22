@@ -58,8 +58,8 @@ export default defineConfig({
     rollupOptions: { plugins: [thirdPartyNpm] },
   },
   server: {
-    // ADR-0053's three GETs, served by the Spring Boot app next door.
-    proxy: { '/api': 'http://localhost:8080' },
+    // ADR-0053's three GETs, and ADR-0177's session state, served by the Spring Boot app next door.
+    proxy: { '/api': 'http://localhost:8080', '/session': 'http://localhost:8080' },
   },
   test: {
     globals: true,

@@ -147,6 +147,15 @@ body {
    controls it is about rather than alone in the corner. */
 .theme-picker { margin-left: auto; }
 .error { margin-left: auto; color: var(--health-unhealthy); }
+/* ADR-0177 §3: the session at the trailing edge, after the theme picker, as plain text — the theme
+   picker keeps the gap and this simply follows it. Sign-out is a submit button styled as a link,
+   because a form is what carries the CSRF token and a button would be the bar's only one. */
+.session { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-quiet); white-space: nowrap; }
+.session-name { color: var(--ink); }
+.session-sign-out { margin: 0; }
+.session-sign-out button {
+  padding: 0; border: none; background: none; cursor: pointer; color: var(--accent); font: inherit;
+}
 
 .workspace { display: flex; flex: 1 1 auto; min-height: 0; }
 .canvas { flex: 1 1 auto; min-width: 0; }

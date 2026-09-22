@@ -151,6 +151,31 @@ The realm is re-imported whenever the pod starts and lives on an `emptyDir`. Use
 `nodqora-realm.json`, so `sub` survives a restart; the signing key does not, and neither do sessions
 at the provider. Restarting Keycloak is therefore also the way to see a key rotation.
 
+### Checking it by hand before a tag
+
+The browser round trip is proven here, once, before a release is tagged, and the results are recorded
+on the release's ticket (ADR-0178 §6). Everything else about sign-in has a test. Start from
+`bootRun` with `local.yaml` layered on, as above, in a private window each time:
+
+1. **A deep link comes back to itself.** Open `http://localhost:8080/environments/homelab?node=market-aggregator`.
+   It reaches Keycloak's login form; sign in as `ada`, and it lands on that URL with the drawer open.
+2. **The name falls back.** `ada`'s top bar ends in *Ada Lovelace · Sign out*. Sign out, sign in as
+   `nameless`, and it ends in *nameless*.
+3. **Sign-out ends at the provider.** *Sign out* ends at `http://localhost:8080/`, which goes straight
+   to Keycloak's login form. Signing in again asks for a password.
+4. **An ended session re-navigates once, and does not loop.** Restart with
+   `--nodqora.authentication.session.absolute=2m` added to `--args`, and sign in. Within two and a half
+   minutes the canvas gives way to *Your session has ended. Signing in again…*, and the page comes
+   back to the same URL without a password, because Keycloak's own session is still live. It does this
+   once per two minutes, not continuously.
+5. **An unreachable provider leaves a signed-in tab reading.** Sign in, then
+   `kubectl -n market-demo scale deployment/keycloak --replicas=0`. The signed-in tab keeps polling
+   and stays current; a new private window gets the `503` page naming the issuer. Scale back to `1`
+   and the new window signs in.
+
+Step 4 uses the absolute limit rather than `session.idle`: the canvas polls `/state` every thirty
+seconds, so an open tab is never idle, and `session.idle: 1m` would never fire in front of it.
+
 ## Making it say something other than green
 
 ```bash

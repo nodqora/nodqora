@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
-import { api } from './api/client'
+import { Unauthorized, api } from './api/client'
 import { sameKey } from './api/keys'
 import { Canvas } from './canvas/Canvas'
 import { EdgelessHint } from './canvas/EdgelessHint'
@@ -26,7 +26,20 @@ import {
   type Route,
 } from './routing/route'
 import { needsCanonicalizing, resolveNode, unresolvedStateOf } from './routing/resolve'
-import type { Graph, Meta, PluginOutcome, State } from './api/types'
+import type { Graph, Meta, PluginOutcome, SessionState, State } from './api/types'
+import { NoIdentityProvider, SessionEnded } from './session/NoIdentityProvider'
+import { SessionArea } from './session/SessionArea'
+import { renavigate } from './session/navigate'
+import { answerUnauthorized, type Answer, type Stamps } from './session/unauthorized'
+
+/** `sessionStorage`, or `null` where reading the property itself throws. */
+function stamps(): Stamps | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage
+  } catch {
+    return null
+  }
+}
 
 /**
  * The mark and the wordmark. `alt=""` because the word beside it says the same thing, and a reader
@@ -49,6 +62,47 @@ export function App() {
   const [showMetrics, setShowMetrics] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [theme, chooseTheme] = useTheme()
+  const [session, setSession] = useState<SessionState | null>(null)
+
+  /**
+   * ADR-0177 §4: **a `401` stops polling and asks `/session` why, once.** `ASKING` is the pause
+   * between the two; the other values are the answers that take the shell off screen. A
+   * contradiction is not one of them — it puts the error in the bar and polling resumes.
+   *
+   * The ref, not the state, is what makes it once: three GETs can answer `401` in the same tick, and
+   * a state update is not visible to the second of them.
+   */
+  const [halt, setHalt] = useState<'ASKING' | Exclude<Answer, 'CONTRADICTION'> | null>(null)
+  const asking = useRef(false)
+
+  const fail = useCallback((cause: Error) => {
+    if (!(cause instanceof Unauthorized)) return setError(cause.message)
+    if (asking.current) return
+    asking.current = true
+    setHalt('ASKING')
+    const contradicted = () => {
+      asking.current = false
+      setHalt(null)
+      setError(cause.message)
+    }
+    api
+      .session()
+      .then((now) => {
+        setSession(now)
+        const answer = answerUnauthorized(now, stamps())
+        if (answer === 'CONTRADICTION') contradicted()
+        else setHalt(answer)
+      })
+      // `/session` never answers 401, so a failure here is the server being down, and that is
+      // ADR-0060's error path rather than a reason to navigate anywhere.
+      .catch(contradicted)
+  }, [])
+
+  // The navigation is an effect of the answer rather than part of it, so the message is on screen
+  // before the page unloads.
+  useEffect(() => {
+    if (halt === 'RENAVIGATE') renavigate()
+  }, [halt])
 
   /**
    * ADR-0092: the URL is the state. There are exactly two pieces of it — the environment as a path
@@ -78,12 +132,16 @@ export function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
+  // ADR-0177 §4: the session state is read beside `meta`, not after it fails. The session area needs
+  // it, and `NOT_CONFIGURED` shows its screen without waiting for the 401. A failure leaves it `null`,
+  // which renders no session area; the 401 path asks again if it matters.
   useEffect(() => {
     api
-      .meta()
-      .then(setMeta)
-      .catch((cause: Error) => setError(cause.message))
-  }, [])
+      .session()
+      .then(setSession)
+      .catch(() => {})
+    api.meta().then(setMeta).catch(fail)
+  }, [fail])
 
   // ADR-0093: bare `/` redirects to the first configured environment, so the root's ambiguity lasts
   // zero screens and the address bar is explicit immediately afterwards. `replace`, because the
@@ -113,8 +171,8 @@ export function App() {
       if (!environmentKey) return
       setGraph(await api.graph(environmentKey))
     }, [environmentKey]),
-    meta ? meta.refresh.graphSeconds * 1000 : null,
-    setError,
+    meta && halt === null ? meta.refresh.graphSeconds * 1000 : null,
+    fail,
   )
 
   usePoll(
@@ -122,8 +180,8 @@ export function App() {
       if (!environmentKey) return
       setState(await api.state(environmentKey))
     }, [environmentKey]),
-    meta ? meta.refresh.stateSeconds * 1000 : null,
-    setError,
+    meta && halt === null ? meta.refresh.stateSeconds * 1000 : null,
+    fail,
   )
 
   /**
@@ -220,6 +278,16 @@ export function App() {
    * writes their config, restarts, reloads, and it resolves. A carried `?node=` is a deliberate
    * no-op, not a dropped input.
    */
+  // ADR-0173: no identity provider is checked before the empty roster, because an install without
+  // `nodqora.authentication` serves no roster to be empty — `meta` answers 401.
+  if (session?.state === 'NOT_CONFIGURED' || halt === 'NO_IDENTITY_PROVIDER') {
+    return <NoIdentityProvider />
+  }
+
+  if (halt === 'RENAVIGATE' || halt === 'DID_NOT_SUCCEED') {
+    return <SessionEnded renavigating={halt === 'RENAVIGATE'} />
+  }
+
   if (isFirstRun(meta)) {
     return <FirstRun />
   }
@@ -259,6 +327,7 @@ export function App() {
         </label>
         {error && <span className="error">{error}</span>}
         <ThemePicker choice={theme} onChoose={chooseTheme} />
+        <SessionArea session={session} />
       </header>
 
       <div className="workspace">
@@ -359,13 +428,13 @@ function UnknownEnvironment({
 }
 
 /** Polls immediately, then on the server's own interval. */
-function usePoll(fetcher: () => Promise<void>, intervalMs: number | null, onError: (message: string) => void) {
+function usePoll(fetcher: () => Promise<void>, intervalMs: number | null, onError: (cause: Error) => void) {
   useEffect(() => {
     if (intervalMs === null) return
     let live = true
     const run = () => {
       fetcher().catch((cause: Error) => {
-        if (live) onError(cause.message)
+        if (live) onError(cause)
       })
     }
     run()
