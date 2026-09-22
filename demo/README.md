@@ -164,7 +164,9 @@ on the release's ticket (ADR-0178 §6). Everything else about sign-in has a test
 3. **Sign-out ends at the provider.** *Sign out* ends at `http://localhost:8080/`, which goes straight
    to Keycloak's login form. Signing in again asks for a password.
 4. **An ended session re-navigates once, and does not loop.** Restart with
-   `--nodqora.authentication.session.absolute=2m` added to `--args`, and sign in. Within two and a half
+   `--nodqora.authentication.session.absolute=2m --nodqora.authentication.session.idle=2m` added to
+   `--args`, and sign in. Both are needed: an idle limit longer than the absolute one refuses to start
+   (ADR-0176), and the default idle is thirty minutes. Within two and a half
    minutes the canvas gives way to *Your session has ended. Signing in again…*, and the page comes
    back to the same URL without a password, because Keycloak's own session is still live. It does this
    once per two minutes, not continuously.

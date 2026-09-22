@@ -16,7 +16,7 @@ plugins {
 
 allprojects {
     group = "io.nodqora"
-    version = "0.2.0"
+    version = "0.3.0"
 
     repositories {
         mavenCentral()
@@ -791,6 +791,7 @@ tasks.register("release") {
     dependsOn(releaseVerifyPublic, releaseCompose)
     val releaseVersion = version.toString()
     val asset = releaseComposeFile
+    val notes = layout.projectDirectory.file("docs/releases/v$releaseVersion.md")
     outputs.upToDateWhen { false }
 
     doLast {
@@ -804,14 +805,19 @@ tasks.register("release") {
         }
 
         // `--generate-notes` would title the Release too; `--title` is passed anyway so the name
-        // is the tag whatever the API decides to call it. What goes *in* the notes is left to
-        // GitHub — the prose a stranger reads is the install documentation, a different artifact
-        // for a different audience, and ADR-0155 is explicit that the release owns neither.
+        // is the tag whatever the API decides to call it. The list of what changed is left to
+        // GitHub. Prose is optional and committed with the version (ADR-0179): when
+        // `docs/releases/v<version>.md` exists, gh puts it above the generated list, so a sentence
+        // an upgrade owes is reviewed with the bump and published in the same act as the tag.
+        val notesArgs = notes.asFile.takeIf { it.isFile }
+            ?.let { listOf("--notes-file", it.absolutePath) }
+            ?: emptyList()
         val status = releaseExec(
             "gh", "release", "create", tag,
             "--target", sha,
             "--title", tag,
             "--generate-notes",
+            *notesArgs.toTypedArray(),
             asset.get().asFile.absolutePath,
         )
         if (status != 0) {
