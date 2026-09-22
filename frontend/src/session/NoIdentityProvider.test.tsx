@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { NoIdentityProvider, SIGNING_IN_DOC, signingInDocUrl } from './NoIdentityProvider'
 
 afterEach(cleanup)
@@ -41,7 +41,13 @@ describe('the sign-in documentation link', () => {
   })
 
   it('names a document that is actually in the tree', () => {
-    // The section itself is the release's to write (ADR-0177's consequences); the file already is.
     expect(existsSync(`../${SIGNING_IN_DOC}`)).toBe(true)
+  })
+
+  it('lands on a section titled exactly Signing in', () => {
+    // GitHub derives `#signing-in` from the heading's text, so a reworded heading breaks every
+    // pinned link from that tag on, silently.
+    const headings = readFileSync(`../${SIGNING_IN_DOC}`, 'utf8').match(/^#+ .*$/gm) ?? []
+    expect(headings).toContain('## Signing in')
   })
 })

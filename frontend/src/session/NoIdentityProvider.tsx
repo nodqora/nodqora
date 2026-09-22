@@ -3,8 +3,7 @@ import { VERSION, docUrl } from '../docs/link'
 
 /**
  * ADR-0177 §5: the section of the install documentation this screen sends a reader to, pinned to the
- * tag as ADR-0156's link is. The file is in the tree; the `#signing-in` section is the release's to
- * write, and it has to be titled *Signing in* for the anchor to land.
+ * tag as ADR-0156's link is. The section has to stay titled *Signing in* for the anchor to land.
  */
 export const SIGNING_IN_DOC = 'docs/install.md'
 

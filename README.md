@@ -60,13 +60,19 @@ mkdir -p config topology
 docker compose up -d
 ```
 
-Then open **http://localhost:8080**, which will tell you that no environments are configured. That is
-a working install: the image ships zero environments on purpose (ADR-0152), because a baked-in one
-could be overridden by your config but never removed. Declare one in `./config/application.yaml` and
+Then open **http://localhost:8080**, which will tell you that no identity provider is configured.
+That is a working install: an install nobody has told who may read it serves nothing (ADR-0173), and
+the image ships zero environments on purpose (ADR-0152), because a baked-in one could be overridden
+by your config but never removed. Declare both in `./config/application.yaml` and
 `docker compose restart nodqora`:
 
 ```yaml
 nodqora:
+  authentication:
+    oidc:
+      base-url: http://localhost:8080
+      issuer: https://idp.example.com/realms/acme
+      client-id: nodqora
   environments:
     homelab:
       display-name: Homelab
@@ -74,6 +80,10 @@ nodqora:
         kubernetes:
           namespaces: [n8n, monitoring, actual]
 ```
+
+`authentication` names your identity provider, which sends everyone to sign in first, or says
+`none`, which lets anyone who can reach the install read it without signing in.
+[docs/install.md](docs/install.md#signing-in) has what your provider needs to be told.
 
 The container cannot see your `~/.kube/config`, so `kubectl` working on the same machine does not
 mean Nodqora can list anything. Unless it runs inside the cluster it observes, give it a kubeconfig
@@ -140,11 +150,18 @@ docker run -d --name nodqora-db -p 5432:5432 \
   -e POSTGRES_DB=nodqora -e POSTGRES_USER=nodqora -e POSTGRES_PASSWORD=nodqora \
   postgres:16-alpine
 
-./gradlew :nodqora-app:bootRun          # http://localhost:8080
-cd frontend && npm install && npm run dev   # http://localhost:5173, proxying /api
+./gradlew :nodqora-app:bootRun --args="--nodqora.authentication=none --server.address=127.0.0.1"
+                                            # http://localhost:8080
+cd frontend && npm install && npm run dev   # http://localhost:5173, proxying /api and /session
 ```
 
 `NODQORA_DB_URL`, `NODQORA_DB_USER` and `NODQORA_DB_PASSWORD` override the connection.
+
+Without `--nodqora.authentication=none`, `bootRun` shows *No identity provider is configured*. The
+demo configuration declares no sign-in on purpose, so that an open install is always something
+someone asked for (ADR-0178). `none` serves everything to anyone who can reach the port, which is why
+the command binds to loopback. To sign in against a real provider from a clone, layer
+`demo/nodqora/local.yaml` on as [demo/README.md](demo/README.md#signing-in-against-it) does.
 
 Out of the box this renders the reference pipeline and nothing else: the `kubernetes`, `kafka` and
 `connect` blocks point at hosts that do not exist, so the canvas shows the declared topology in grey

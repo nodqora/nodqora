@@ -30,11 +30,13 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      # Loopback only. This release signs nobody in, so whoever can reach this port can read your
-      # topology, and `"8080:8080"` would publish it on every interface the host has. To reach it
-      # from another machine, put a reverse proxy that authenticates in front of it, or tunnel
-      # (`ssh -L 8080:localhost:8080 <host>`). Remove `127.0.0.1:` only on a network where everyone
-      # who can reach the host may see everything Nodqora shows.
+      # Loopback only, so that `nodqora.authentication: none` means anyone on this machine rather
+      # than anyone on the network; `"8080:8080"` would publish it on every interface the host has.
+      # To reach it from another machine, declare an identity provider and put a proxy that
+      # terminates TLS in front of it, or tunnel (`ssh -L 8080:localhost:8080 <host>`). Remove
+      # `127.0.0.1:` only where a provider is declared, or where everyone who can reach the host may
+      # see everything Nodqora shows.
+      # https://github.com/nodqora/nodqora/blob/main/docs/install.md#it-listens-on-this-machine-only
       - "127.0.0.1:8080:8080"
     environment:
       # ADR-0150: the documented way to point at an existing PostgreSQL instead of the one below.
@@ -43,12 +45,13 @@ services:
       NODQORA_DB_PASSWORD: nodqora
     volumes:
       # ADR-0152. Your configuration: put an `application.yaml` in `./config` declaring
-      # `nodqora.environments` and nothing else — it merges with the one inside the image, so the
-      # plugin orders, the refresh cadences and the cache and error settings all inherit. This is
-      # Spring Boot's own default search location, which is why no flag names it.
+      # `nodqora.authentication` and `nodqora.environments` and nothing else — it merges with the one
+      # inside the image, so the plugin orders, the refresh cadences and the cache and error settings
+      # all inherit. This is Spring Boot's own default search location, which is why no flag names it.
       #
-      # With this directory empty, Nodqora starts and serves an empty roster. That is the honest
-      # state of an unconfigured install, not a failure.
+      # With this directory empty, Nodqora starts, serves nothing, and says that no identity provider
+      # is configured (ADR-0173). That is the honest state of a new install, not a failure.
+      # https://github.com/nodqora/nodqora/blob/main/docs/install.md#signing-in
       - ./config:/app/config
       # Your YAML topology, if you declare the `yaml` plugin: one directory per environment
       # (ADR-0061), so `./topology/production/*.yaml` for an environment keyed `production`.
