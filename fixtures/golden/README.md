@@ -21,6 +21,11 @@ order-blind by construction.
 | `state-production-incident.json` | §8 incident: the enricher 3 desired / 0 ready |
 | `layout-production.json` | ADR-0016's claim: longest-path layering reproduces §1's shape |
 | `layout-staging.json` | the same, re-flowing to a straight line with no hand-placed positions |
+| `api-401.json` | ADR-0175 §4: any `/api` GET before sign-in, or after a session ends — here `/api/meta` |
+| `session-not-configured.json` | `GET /session` with no `nodqora.authentication` at all (ADR-0173 §1) |
+| `session-open.json` | `GET /session` with `nodqora.authentication: none` |
+| `session-signed-out.json` | `GET /session` with a provider and no session |
+| `session-signed-in.json` | `GET /session` signed in, as `ada` against the stub provider |
 
 **All five assertion documents match the fixture in full.** Every earlier slice qualified this
 paragraph — the goldens were stated for the plugin set that existed, and a value §8 derives from
@@ -29,6 +34,17 @@ There is nothing left to qualify. §2's inventory, §3's nine edges, §8's norma
 scenarios and §9's owners and composed links are all asserted here against what the application
 actually serves, and the only remaining `UNKNOWN`s are the four declared nodes that nothing in the
 MVP will ever observe.
+
+## The sign-in documents
+
+The last five are not ADR-0053's read API and are not about the fixture. They are the contract
+between the chain and the shell (ADR-0178 §5): Java asserts that the chain produces each, and the
+shell's vitest suite feeds the same files to `client.ts` and the session area, so neither side can
+drift from what the other reads. `name` and `csrf` are absent outside `SIGNED_IN`, never `null`.
+
+`session-signed-in.json`'s CSRF `token` differs per session, so it reads `"<token>"`: its position
+is asserted and its value is not. The header and parameter names are Spring Security's, carried
+rather than hard-coded by the shell (ADR-0177 §2).
 
 ## Timestamps
 
