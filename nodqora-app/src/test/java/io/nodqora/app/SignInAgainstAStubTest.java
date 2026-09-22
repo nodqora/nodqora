@@ -152,7 +152,11 @@ class SignInAgainstAStubTest {
     @Test
     void assets_the_session_state_and_the_probe_are_served_without_sign_in() {
         assertThat(browser.get(app("/assets/index-a1b2c3.js")).status()).isEqualTo(200);
-        assertThat(browser.get(app("/icon.png")).status()).isEqualTo(200);
+        // The icons are Vite output, gitignored and absent from a clean checkout, so a 404 is fine here:
+        // what matters is that the chain lets the path through rather than sending it to sign in.
+        for (String icon : List.of("/icon.png", "/mark.png", "/apple-touch-icon.png")) {
+            assertThat(browser.get(app(icon)).status()).as(icon).isIn(200, 404);
+        }
 
         Browser.Response probe = browser.get(app("/healthz"));
         assertThat(probe.status()).isEqualTo(200);
