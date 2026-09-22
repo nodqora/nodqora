@@ -129,3 +129,14 @@ export interface State {
   nodes: NodeState[]
   plugins: PluginOutcome[]
 }
+
+/**
+ * ADR-0177 §2: `GET /session`, outside ADR-0053's read API. `name` and `csrf` exist only when signed
+ * in — absent, never `null` — so this is the one wire shape here that is a union rather than a row of
+ * `| null` scalars.
+ */
+export type SessionState =
+  | { state: 'SIGNED_IN'; name: string; csrf: { headerName: string; parameterName: string; token: string } }
+  | { state: 'SIGNED_OUT' }
+  | { state: 'OPEN' }
+  | { state: 'NOT_CONFIGURED' }

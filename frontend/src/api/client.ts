@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { Graph, Meta, State } from './types'
+import type { Graph, Meta, SessionState, State } from './types'
 
 /**
  * ADR-0059: polling, with the intervals published by the server rather than held as client-side
@@ -12,12 +12,20 @@ import type { Graph, Meta, State } from './types'
  * wrong", implemented as a status code.
  */
 
+/**
+ * ADR-0177 §4: a `401` is not an error string but a question to `/session`, so it is the one status
+ * the shell has to tell apart. It still carries ADR-0060's `detail`, which is what the top bar shows
+ * when the session state contradicts it.
+ */
+export class Unauthorized extends Error {}
+
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { Accept: 'application/json' } })
   if (!response.ok) {
     // ADR-0060: errors are problem+json, so there is a `detail` worth surfacing.
     const problem = await response.json().catch(() => null)
-    throw new Error(problem?.detail ?? `${response.status} from ${path}`)
+    const message = problem?.detail ?? `${response.status} from ${path}`
+    throw response.status === 401 ? new Unauthorized(message) : new Error(message)
   }
   return response.json() as Promise<T>
 }
@@ -26,4 +34,6 @@ export const api = {
   meta: () => get<Meta>('/api/meta'),
   graph: (environmentKey: string) => get<Graph>(`/api/environments/${encodeURIComponent(environmentKey)}/graph`),
   state: (environmentKey: string) => get<State>(`/api/environments/${encodeURIComponent(environmentKey)}/state`),
+  // ADR-0177 §1: outside `/api`, and never a 401 — it is what the shell asks to learn why it got one.
+  session: () => get<SessionState>('/session'),
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * What jsdom does not give XYFlow, and the two canvas tests that need a DOM both install.
+ * What jsdom does not give XYFlow, and every test that mounts the canvas installs.
  *
  * XYFlow reads three things jsdom does not provide: the pane's size, each node's size, and a
  * `ResizeObserver` to be told when either changes. Everything here supplies exactly those, and
