@@ -23,6 +23,8 @@ dependencies {
     implementation(project(":nodqora-plugin-prometheus"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
+    // ADR-0174 §4: the assembly declares its own public paths as a chain ahead of core's.
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // ADR-0099: the recording is replayed through the plugin's own outbound seam, so the
     // integration tests exercise the real plugin against the real fixture objects.
@@ -33,6 +35,10 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    // ADR-0178 §2–3: the stub provider signs ID tokens with the nimbus-jose-jwt the OAuth2 client
+    // already brings, and the sign-in tests read what the session holds through Spring's own types.
+    testImplementation("org.springframework.boot:spring-boot-starter-oauth2-client")
+    testImplementation("org.springframework.session:spring-session-jdbc")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

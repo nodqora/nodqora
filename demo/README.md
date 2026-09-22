@@ -128,15 +128,16 @@ no key in any connector config names a third-party HTTP API. That is ADR-0063 in
 
 ## Signing in against it
 
-`70-keycloak.yaml` is an identity provider for Nodqora's sign-in to redirect to. Until sign-in ships
-nothing in Nodqora points at it, and `local.yaml` carries no `nodqora.authentication` block; what it
-offers is recorded here so that block has something real to be written against.
+`70-keycloak.yaml` is the identity provider Nodqora's sign-in redirects to, and `local.yaml`'s
+`nodqora.authentication.oidc` block points at it. With that file layered on, an unauthenticated
+browser goes to Keycloak's login form and comes back to the page it asked for.
 
 | | |
 |---|---|
 | Issuer | `http://192.168.0.222:8080/realms/nodqora` |
 | Client | `nodqora`, confidential, secret `nodqora-demo-client-secret`, authorization code flow only |
-| Redirect and post-logout URIs | `http://localhost:8080/*` |
+| Redirect URI | `http://localhost:8080/login/oauth2/code/oidc` — `base-url` plus Nodqora's fixed callback, and nothing else |
+| Post-logout redirect URI | `http://localhost:8080/` |
 | Users (password = username) | `ada`, `grace` — full profile · `nameless` — username only |
 | Admin console | `http://192.168.0.222:8080/admin`, `admin` / `admin` |
 

@@ -47,6 +47,9 @@ public abstract class NodqoraIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // ADR-0178 §1: the canvas is blind to who is asking (ADR-0174 §2), so the tests about what it
+        // shows run open. Tests that exercise sign-in declare a provider themselves.
+        registry.add("nodqora.authentication", () -> "none");
     }
 
     @Autowired

@@ -5,6 +5,16 @@
 # Environments merge by key, so `homelab` joins the demo `production` and `staging` in the
 # switcher rather than replacing them.
 nodqora:
+  # ADR-0176: the homelab Keycloak (demo/k8s/70-keycloak.yaml), whose `nodqora` client registers
+  # exactly `http://localhost:8080/login/oauth2/code/oidc` — which is `base-url` plus the fixed
+  # callback. Users and passwords are in demo/README.md, under "Signing in against it". The secret is
+  # the demo realm's own and is published there; a real one goes through `${file:}` or `${env:}`.
+  authentication:
+    oidc:
+      base-url: http://localhost:8080
+      issuer: http://192.168.0.222:8080/realms/nodqora
+      client-id: nodqora
+      client-secret: nodqora-demo-client-secret
   refresh:
     # The shipped cadence is 5m/30s. This is a pipeline you are watching, not one you are running.
     discovery: 30s

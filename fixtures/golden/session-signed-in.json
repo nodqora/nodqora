@@ -1,0 +1,9 @@
+{
+  "state": "SIGNED_IN",
+  "name": "Ada Lovelace",
+  "csrf": {
+    "headerName": "X-CSRF-TOKEN",
+    "parameterName": "_csrf",
+    "token": "<token>"
+  }
+}
