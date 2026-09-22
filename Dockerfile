@@ -199,6 +199,6 @@ EXPOSE 8080
 # environment source maps `_` to `.`, so that key is not expressible as a variable at all.
 #
 # Neither directory is created here. A bind mount makes its own, and an install with neither starts
-# and serves an empty roster rather than crash-looping (UnconfiguredInstallTest).
+# and says no identity provider is configured rather than crash-looping (UnconfiguredInstallTest).
 
 ENTRYPOINT ["java", "-jar", "/app/nodqora.jar"]

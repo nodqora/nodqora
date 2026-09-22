@@ -26,7 +26,9 @@ field written there that a plugin also knows is a silent, permanent override of 
 ## File 1 — the configuration
 
 One environment, and the plugins that observe it. It goes in the config directory beside your
-`compose.yaml`, which the shipped `compose.yaml` mounts at `/app/config`:
+`compose.yaml`, which the shipped `compose.yaml` mounts at `/app/config`, in the same file as the
+`nodqora.authentication` your install already declares
+([Signing in](install.md#signing-in)) — left out below for brevity:
 
 ```yaml
 # ./config/application.yaml
@@ -335,7 +337,8 @@ logs `prometheus binding '...'` in either the discovering plugin or this one.
 
 ## What you should see
 
-Within one discovery cadence:
+Within one discovery cadence — with `nodqora.authentication: none`, since `/api` answers `401` to a
+request that has not signed in; with a provider, read the same counts off the canvas:
 
 ```bash
 curl -s localhost:8080/api/environments/homelab/graph | python3 -c 'import json,sys; g=json.load(sys.stdin); print(len(g["nodes"]), "nodes,", len(g["edges"]), "edges,", [(p["plugin"], p["outcome"]) for p in g["plugins"]])'
