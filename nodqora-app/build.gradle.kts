@@ -10,7 +10,7 @@ plugins {
     // ADR-0154: identifies the licence of each bundled jar. Chosen over a hand-rolled reader
     // because 39 of the 80 bundled POMs declare no <licenses> element of their own and inherit it
     // from a parent, and walking that chain correctly is the whole job.
-    id("com.github.jk1.dependency-license-report") version "2.9"
+    id("com.github.jk1.dependency-license-report") version "3.1.4"
 }
 
 dependencies {
