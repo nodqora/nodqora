@@ -20,7 +20,7 @@ dependencies {
 
     // The only place a real broker is spoken to (ADR-0099). No test reaches it: the plugin's
     // outbound seam is `KafkaApi`, and everything above it is exercised against a recording.
-    implementation("org.apache.kafka:kafka-clients:3.9.2")
+    implementation("org.apache.kafka:kafka-clients:4.3.1")
 
     // ADR-0099's recording, published as test fixtures so `nodqora-app`'s integration tests replay
     // the same objects through the same seam rather than keeping a second copy of them.
