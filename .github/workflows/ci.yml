@@ -47,7 +47,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       # `nodqora.build.maxWorkers` is deliberately NOT set, for the reason `release.yml` gives:
       # ADR-0157's serialisation answers one network that drops Gradle's parallel fetches, and a
